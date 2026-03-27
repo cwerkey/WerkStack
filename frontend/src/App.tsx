@@ -9,7 +9,7 @@ import { useTypesStore }    from './store/useTypesStore';
 import { useTemplateStore } from './store/useTemplateStore';
 import { useRackStore }     from './store/useRackStore';
 import { api }              from './utils/api';
-import type { TypesData, DeviceTemplate, PcieTemplate, Rack, DeviceInstance } from '@werkstack/shared';
+import type { TypesData, DeviceTemplate, PcieTemplate, Rack, DeviceInstance, Connection, Drive } from '@werkstack/shared';
 
 import { LoginPage }    from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
@@ -136,7 +136,9 @@ function RacksHydrator() {
     Promise.all([
       api.get<Rack[]>(`/api/sites/${activeSite}/racks`),
       api.get<DeviceInstance[]>(`/api/sites/${activeSite}/devices`),
-    ]).then(([r, d]) => setAll(r, d)).catch(() => {
+      api.get<Connection[]>(`/api/sites/${activeSite}/connections`),
+      api.get<Drive[]>(`/api/sites/${activeSite}/drives`),
+    ]).then(([r, d, c, dr]) => setAll(r, d, c, dr)).catch(() => {
       // Non-fatal: store retains empty arrays
     });
   }, [userId, activeSite, setAll, reset]);

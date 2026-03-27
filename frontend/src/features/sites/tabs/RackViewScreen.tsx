@@ -240,6 +240,7 @@ export function RackViewScreen() {
               gridCols={template.formFactor === 'rack' ? 96 : (template.gridCols ?? 96)}
               gridRows={template.formFactor === 'rack' ? template.uHeight * 12 : (template.gridRows ?? 12)}
               width={RACK_WIDTH}
+              height={height}
               showLabels={mapOverlay === 'none'}
             />
           </ErrorBoundary>

@@ -12,12 +12,23 @@ interface TemplateOverlayProps {
   gridCols:       number;
   gridRows:       number;
   width:          number;
+  /** When provided, cells become rectangular (cellH ≠ cellW). Used by rack view to match U-height. */
+  height?:        number;
   selectedId?:    string | null;
   onBlockClick?:  (block: PlacedBlock) => void;
+  onBlockContextMenu?: (block: PlacedBlock, e: React.MouseEvent) => void;
+  onBlockMouseEnter?:  (block: PlacedBlock, e: React.MouseEvent) => void;
+  onBlockMouseLeave?:  () => void;
   showLabels?:    boolean;
   interactive?:   boolean;
   /** Override background color per block id — used by storage screen bay visualization */
   blockColors?:   Record<string, string>;
+  /** Override border color per block id */
+  blockBorderColors?: Record<string, string>;
+  /** Override opacity per block id — used for ghosting empty ports/bays */
+  blockOpacity?:  Record<string, number>;
+  /** Override label text per block id */
+  blockLabels?:   Record<string, string>;
 }
 
 export function TemplateOverlay({
@@ -25,16 +36,24 @@ export function TemplateOverlay({
   gridCols,
   gridRows,
   width,
+  height: heightProp,
   selectedId,
   onBlockClick,
+  onBlockContextMenu,
+  onBlockMouseEnter,
+  onBlockMouseLeave,
   showLabels = true,
   interactive = false,
   blockColors,
+  blockBorderColors,
+  blockOpacity,
+  blockLabels,
 }: TemplateOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const cellW = width / gridCols;
-  const height = cellW * gridRows;
+  const cellH = heightProp != null ? heightProp / gridRows : cellW;
+  const height = cellH * gridRows;
 
   const renderedBlocks = useMemo(() =>
     blocks.map(block => {
@@ -42,20 +61,24 @@ export function TemplateOverlay({
       const bw = block.rotated ? block.h : block.w;
       const bh = block.rotated ? block.w : block.h;
       const x = block.col * cellW;
-      const y = block.row * cellW;
+      const y = block.row * cellH;
       const w = bw * cellW;
-      const h = bh * cellW;
+      const h = bh * cellH;
 
       const color       = blockColors?.[block.id] ?? def?.color ?? '#1e2022';
-      const borderColor = def?.borderColor ?? '#3a4248';
+      const borderColor = blockBorderColors?.[block.id] ?? def?.borderColor ?? '#3a4248';
+      const opacity     = blockOpacity?.[block.id] ?? 1;
       const isSelected  = selectedId === block.id;
-      const label       = block.label || def?.label || block.type;
+      const label       = blockLabels?.[block.id] ?? (block.label || def?.label || block.type);
 
       return (
         <div
           key={block.id}
           data-block-id={block.id}
           onClick={onBlockClick ? () => onBlockClick(block) : undefined}
+          onContextMenu={onBlockContextMenu ? (e) => { e.preventDefault(); onBlockContextMenu(block, e); } : undefined}
+          onMouseEnter={onBlockMouseEnter ? (e) => onBlockMouseEnter(block, e) : undefined}
+          onMouseLeave={onBlockMouseLeave || undefined}
           style={{
             position: 'absolute',
             left: x,
@@ -73,6 +96,7 @@ export function TemplateOverlay({
             overflow: 'hidden',
             boxShadow: isSelected ? '0 0 0 1px var(--accent, #c47c5a)' : undefined,
             zIndex: isSelected ? 2 : 1,
+            opacity,
           }}
         >
           {showLabels && w > 14 && h > 10 && (
@@ -93,7 +117,7 @@ export function TemplateOverlay({
         </div>
       );
     }),
-  [blocks, cellW, selectedId, onBlockClick, showLabels, interactive, blockColors]);
+  [blocks, cellW, cellH, selectedId, onBlockClick, onBlockContextMenu, onBlockMouseEnter, onBlockMouseLeave, showLabels, interactive, blockColors, blockBorderColors, blockOpacity, blockLabels]);
 
   return (
     <div

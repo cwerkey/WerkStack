@@ -173,6 +173,20 @@ const PRESET_MAP: Record<string, Preset[]> = {
   'qsfp28':   netPresets('qsfp28', 6, 4),
 };
 
+/** Offset all blocks so the group's top-left corner sits at (col, row) */
+export function offsetPresetBlocks(blocks: PlacedBlock[], col: number, row: number): PlacedBlock[] {
+  if (blocks.length === 0) return blocks;
+  let minCol = Infinity, minRow = Infinity;
+  for (const b of blocks) {
+    if (b.col < minCol) minCol = b.col;
+    if (b.row < minRow) minRow = b.row;
+  }
+  const dc = col - minCol;
+  const dr = row - minRow;
+  if (dc === 0 && dr === 0) return blocks;
+  return blocks.map(b => ({ ...b, col: b.col + dc, row: b.row + dr }));
+}
+
 /** Get available presets for a block type, filtered by grid size */
 export function getPresetsForType(
   blockType: string,

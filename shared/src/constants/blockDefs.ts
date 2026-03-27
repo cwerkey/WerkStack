@@ -66,15 +66,15 @@ export const BLOCK_DEFS: BlockDef[] = [
 
   // ── Drive Bays ─────────────────────────────────────────────────────────────
   {
-    type: 'bay-3.5',    label: '3.5" Bay',     w: 22, h: 7,  panel: 'front', isPort: false, isNet: false, isSlot: true,  canRotate: false,
+    type: 'bay-3.5',    label: '3.5" Bay',     w: 22, h: 7,  panel: 'all',   isPort: false, isNet: false, isSlot: true,  canRotate: false,
     color: '#1a2a1a', borderColor: '#3a6a3a',
   },
   {
-    type: 'bay-2.5',    label: '2.5" Bay',     w: 16, h: 4,  panel: 'front', isPort: false, isNet: false, isSlot: true,  canRotate: true,
+    type: 'bay-2.5',    label: '2.5" Bay',     w: 16, h: 4,  panel: 'all',   isPort: false, isNet: false, isSlot: true,  canRotate: true,
     color: '#1a2a2a', borderColor: '#3a6a6a',
   },
   {
-    type: 'bay-2.5v',   label: '2.5" Bay (V)', w: 6,  h: 16, panel: 'front', isPort: false, isNet: false, isSlot: true,  canRotate: false,
+    type: 'bay-2.5v',   label: '2.5" Bay (V)', w: 6,  h: 16, panel: 'all',   isPort: false, isNet: false, isSlot: true,  canRotate: false,
     color: '#1a2a2a', borderColor: '#4a7a7a',
   },
   {

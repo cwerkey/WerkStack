@@ -61,7 +61,7 @@ export function DeployModal({ open, onClose, template, accent, siteId }: DeployM
         serial:     form.serial.trim() || undefined,
         assetTag:   form.assetTag.trim() || undefined,
         notes:      form.notes.trim() || undefined,
-        isDraft:    true,
+        isDraft:    false,
       };
       const device = await api.post<DeviceInstance>(`/api/sites/${siteId}/devices`, payload);
       if (device) {
@@ -104,7 +104,7 @@ export function DeployModal({ open, onClose, template, accent, siteId }: DeployM
                 fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
                 color: 'var(--text3, #4e5560)', textAlign: 'center',
               }}>
-                The device has been added as a draft. Drag it into a rack in Rack View.
+                The device is now active. Drag it into a rack in Rack View.
               </span>
             </div>
           ) : (

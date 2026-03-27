@@ -5,6 +5,7 @@ import { GridEditor } from './GridEditor';
 import { BlockPalette } from './BlockPalette';
 import { api } from '../../../../utils/api';
 import { useTemplateStore } from '../../../../store/useTemplateStore';
+import { offsetPresetBlocks } from './presets';
 import type { DeviceTemplate, PlacedBlock, GridLayout, FormFactor, BlockDef } from '@werkstack/shared';
 import { DEFAULT_DEVICE_TYPES } from '@werkstack/shared';
 
@@ -52,6 +53,7 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [pendingPreset, setPendingPreset] = useState<PlacedBlock[] | null>(null);
+  const [presetToPlace, setPresetToPlace] = useState<PlacedBlock[] | null>(null);
 
   const upsertDeviceTemplate = useTemplateStore(s => s.upsertDeviceTemplate);
 
@@ -77,6 +79,7 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
     setStep('info');
     setPanel('front');
     setActiveTool(null);
+    setPresetToPlace(null);
     setError('');
     setSaving(false);
   }, [open, initial]);
@@ -153,12 +156,27 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
   };
 
   const handleApplyPreset = (presetBlocks: PlacedBlock[]) => {
-    if (currentBlocks.length > 0 && hasPresetConflicts(presetBlocks)) {
-      setPendingPreset(presetBlocks);
+    // Enter preset placement mode — user clicks grid to place
+    setPresetToPlace(presetBlocks);
+    setActiveTool(null);
+  };
+
+  const handlePlacePresetAt = (col: number, row: number) => {
+    if (!presetToPlace) return;
+    const offset = offsetPresetBlocks(presetToPlace, col, row);
+    // Check bounds
+    const oob = offset.some(b => {
+      const bw = b.rotated ? b.h : b.w;
+      const bh = b.rotated ? b.w : b.h;
+      return b.col < 0 || b.row < 0 || b.col + bw > effectiveCols || b.row + bh > effectiveRows;
+    });
+    if (oob) return;
+    if (currentBlocks.length > 0 && hasPresetConflicts(offset)) {
+      setPendingPreset(offset);
     } else {
-      // No conflicts — just add to existing blocks
-      setCurrentBlocks([...currentBlocks, ...presetBlocks]);
+      setCurrentBlocks([...currentBlocks, ...offset]);
     }
+    setPresetToPlace(null);
   };
 
   const handleConflictResolve = (mode: 'replace' | 'fill' | 'cancel') => {
@@ -300,13 +318,13 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
                 <div className="view-toggle">
                   <button
                     className={`view-toggle-btn${panel === 'front' ? ' on' : ''}`}
-                    onClick={() => { setPanel('front'); setActiveTool(null); }}
+                    onClick={() => { setPanel('front'); setActiveTool(null); setPresetToPlace(null); }}
                   >
                     Front
                   </button>
                   <button
                     className={`view-toggle-btn${panel === 'rear' ? ' on' : ''}`}
-                    onClick={() => { setPanel('rear'); setActiveTool(null); }}
+                    onClick={() => { setPanel('rear'); setActiveTool(null); setPresetToPlace(null); }}
                   >
                     Rear
                   </button>
@@ -319,6 +337,9 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
                     onChange={setCurrentBlocks}
                     activeTool={activeTool}
                     onClearTool={() => setActiveTool(null)}
+                    presetToPlace={presetToPlace}
+                    onPlacePresetAt={handlePlacePresetAt}
+                    onCancelPreset={() => setPresetToPlace(null)}
                   />
                 </ErrorBoundary>
               </div>

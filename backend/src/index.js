@@ -24,6 +24,7 @@ const monitorRoutes     = require('./routes/monitor');
 const gitSyncRoutes     = require('./routes/git_sync');
 const conflictsRoutes   = require('./routes/conflicts');
 const auditLogRoutes    = require('./routes/audit_log');
+const modulesRoutes     = require('./routes/modules');
 const startWorkers      = require('./workers');
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -99,6 +100,7 @@ async function start() {
   app.use('/api/sites/:siteId/git-sync',    gitSyncRoutes(db));
   app.use('/api/sites/:siteId/conflicts',   conflictsRoutes(db));
   app.use('/api/sites/:siteId/audit-log',   auditLogRoutes(db));
+  app.use('/api/sites',                     modulesRoutes(db));
 
   // Start background workers (heartbeat checker, draft cleanup, git-sync)
   startWorkers(db);

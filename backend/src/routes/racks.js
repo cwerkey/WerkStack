@@ -27,7 +27,7 @@ const DeviceInstanceSchema = z.object({
   serial:      z.string().max(200).optional(),
   assetTag:    z.string().max(200).optional(),
   notes:       z.string().max(2000).optional(),
-  isDraft:     z.boolean().default(true),
+  isDraft:     z.boolean().default(false),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -273,7 +273,7 @@ module.exports = function racksRoutes(db) {
              RETURNING *`,
             [orgId, siteId, zoneId ?? null, rackId ?? null, templateId ?? null,
              typeId, name, rackU ?? null, uHeight ?? null, face || 'front',
-             ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? true]
+             ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false]
           )
         );
         res.status(201).json(toDevice(result.rows[0]));
@@ -322,7 +322,7 @@ module.exports = function racksRoutes(db) {
              RETURNING *`,
             [templateId ?? null, typeId, name, rackId ?? null, zoneId ?? null,
              rackU ?? null, uHeight ?? null, face || 'front',
-             ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? true,
+             ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false,
              deviceId, siteId, orgId]
           )
         );

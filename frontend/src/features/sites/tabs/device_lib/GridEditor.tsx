@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { BLOCK_DEF_MAP } from '@werkstack/shared';
 import { uid } from '../../../../utils/uid';
 import { Icon } from '../../../../components/ui/Icon';
+import { offsetPresetBlocks } from './presets';
 import type { PlacedBlock, BlockDef, BlockMeta } from '@werkstack/shared';
 
 interface GridEditorProps {
@@ -11,6 +12,10 @@ interface GridEditorProps {
   onChange:       (blocks: PlacedBlock[]) => void;
   activeTool?:   BlockDef | null;
   onClearTool?:  () => void;
+  /** Preset blocks awaiting click-to-place */
+  presetToPlace?:    PlacedBlock[] | null;
+  onPlacePresetAt?:  (col: number, row: number) => void;
+  onCancelPreset?:   () => void;
 }
 
 // Client-side collision detection
@@ -51,15 +56,15 @@ function isNetBlock(type: string): boolean {
   return def?.isNet ?? false;
 }
 
-export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, onClearTool }: GridEditorProps) {
+export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, onClearTool, presetToPlace, onPlacePresetAt, onCancelPreset }: GridEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [hoverCell, setHoverCell] = useState<{ col: number; row: number } | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [placeRotated, setPlaceRotated] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
 
-  // Drag state
+  // Drag state (supports multi-block drag)
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ col: number; row: number }>({ col: 0, row: 0 });
   const dragStartCell = useRef<{ col: number; row: number } | null>(null);
@@ -138,14 +143,20 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
     if (!cell) return;
     const hit = blockAtCell(cell.col, cell.row);
     if (hit) {
+      // If the hit block is already selected, drag the whole selection
+      // If not selected and not shift, select only this block
+      if (!selectedIds.has(hit.id) && !e.shiftKey) {
+        setSelectedIds(new Set([hit.id]));
+      } else if (!selectedIds.has(hit.id) && e.shiftKey) {
+        setSelectedIds(prev => new Set([...prev, hit.id]));
+      }
       setDragId(hit.id);
       setDragOffset({ col: cell.col - hit.col, row: cell.row - hit.row });
       dragStartCell.current = cell;
       didDrag.current = false;
-      setSelectedId(hit.id);
       e.preventDefault(); // prevent text selection while dragging
     }
-  }, [activeTool, getCellFromEvent, blockAtCell]);
+  }, [activeTool, getCellFromEvent, blockAtCell, selectedIds]);
 
   const handleGridClick = useCallback((e: React.MouseEvent) => {
     // If we just finished a drag, don't fire click logic
@@ -159,8 +170,14 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
       const target = blockAtCell(cell.col, cell.row);
       if (target) {
         onChange(blocks.filter(b => b.id !== target.id));
-        if (selectedId === target.id) setSelectedId(null);
+        setSelectedIds(prev => { const next = new Set(prev); next.delete(target.id); return next; });
       }
+      return;
+    }
+
+    // If preset placement mode, place the preset group at click position
+    if (presetToPlace && onPlacePresetAt) {
+      onPlacePresetAt(cell.col, cell.row);
       return;
     }
 
@@ -187,8 +204,22 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
 
     // Otherwise, try to select a block at this cell
     const clicked = blockAtCell(cell.col, cell.row);
-    setSelectedId(clicked?.id ?? null);
-  }, [getCellFromEvent, activeTool, canRotateActive, blocks, blockAtCell, gridCols, gridRows, onChange, placeRotated, ctxMenu, selectedId]);
+    if (clicked) {
+      if (e.shiftKey) {
+        // Toggle in/out of selection
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          if (next.has(clicked.id)) next.delete(clicked.id);
+          else next.add(clicked.id);
+          return next;
+        });
+      } else {
+        setSelectedIds(new Set([clicked.id]));
+      }
+    } else {
+      setSelectedIds(new Set());
+    }
+  }, [getCellFromEvent, activeTool, canRotateActive, blocks, blockAtCell, gridCols, gridRows, onChange, placeRotated, ctxMenu, selectedIds, presetToPlace, onPlacePresetAt]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -197,10 +228,12 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
 
     const clicked = blockAtCell(cell.col, cell.row);
     if (clicked) {
-      setSelectedId(clicked.id);
+      if (!selectedIds.has(clicked.id)) {
+        setSelectedIds(new Set([clicked.id]));
+      }
       setCtxMenu({ x: e.clientX, y: e.clientY, blockId: clicked.id });
     }
-  }, [getCellFromEvent, blockAtCell]);
+  }, [getCellFromEvent, blockAtCell, selectedIds]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const cell = getCellFromEvent(e);
@@ -218,20 +251,58 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
     if (!dragId) return;
     const cell = getCellFromEvent(e);
     if (cell && didDrag.current) {
-      const block = blocks.find(b => b.id === dragId);
-      if (block) {
-        const bw = block.rotated ? block.h : block.w;
-        const bh = block.rotated ? block.w : block.h;
-        const newCol = cell.col - dragOffset.col;
-        const newRow = cell.row - dragOffset.row;
-        if (inBounds(newCol, newRow, bw, bh, gridCols, gridRows) &&
-            !hasCollision(blocks, newCol, newRow, bw, bh, block.id)) {
-          onChange(blocks.map(b => b.id === dragId ? { ...b, col: newCol, row: newRow } : b));
+      const anchor = blocks.find(b => b.id === dragId);
+      if (anchor) {
+        const dc = (cell.col - dragOffset.col) - anchor.col;
+        const dr = (cell.row - dragOffset.row) - anchor.row;
+        if (dc !== 0 || dr !== 0) {
+          // Determine which blocks to move (all selected, or just the dragged one)
+          const moveIds = selectedIds.has(dragId) && selectedIds.size > 1
+            ? selectedIds
+            : new Set([dragId]);
+
+          // Check if all moved blocks land in valid positions
+          const movedBlocks = blocks.filter(b => moveIds.has(b.id)).map(b => ({
+            ...b, col: b.col + dc, row: b.row + dr,
+          }));
+          const stayBlocks = blocks.filter(b => !moveIds.has(b.id));
+
+          // Separate blocks that fit vs those that fall out of bounds
+          const fits: typeof movedBlocks = [];
+          const drops: string[] = [];
+          for (const mb of movedBlocks) {
+            const bw = mb.rotated ? mb.h : mb.w;
+            const bh = mb.rotated ? mb.w : mb.h;
+            if (inBounds(mb.col, mb.row, bw, bh, gridCols, gridRows)) {
+              fits.push(mb);
+            } else {
+              drops.push(mb.id);
+            }
+          }
+
+          // Check collisions of fitting blocks against stay blocks
+          const noCollision = fits.every(mb => {
+            const bw = mb.rotated ? mb.h : mb.w;
+            const bh = mb.rotated ? mb.w : mb.h;
+            return !hasCollision(stayBlocks, mb.col, mb.row, bw, bh);
+          });
+
+          if (noCollision && fits.length > 0) {
+            const updated = [...stayBlocks, ...fits];
+            onChange(updated);
+            if (drops.length > 0) {
+              setSelectedIds(prev => {
+                const next = new Set(prev);
+                for (const id of drops) next.delete(id);
+                return next;
+              });
+            }
+          }
         }
       }
     }
     setDragId(null);
-  }, [dragId, dragOffset, getCellFromEvent, blocks, gridCols, gridRows, onChange]);
+  }, [dragId, dragOffset, getCellFromEvent, blocks, gridCols, gridRows, onChange, selectedIds]);
 
   const handleMouseLeave = useCallback(() => {
     setHoverCell(null);
@@ -242,27 +313,29 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
   }, [dragId]);
 
   const handleDeleteSelected = useCallback(() => {
-    if (!selectedId) return;
-    onChange(blocks.filter(b => b.id !== selectedId));
-    setSelectedId(null);
-  }, [selectedId, blocks, onChange]);
+    if (selectedIds.size === 0) return;
+    onChange(blocks.filter(b => !selectedIds.has(b.id)));
+    setSelectedIds(new Set());
+  }, [selectedIds, blocks, onChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.size > 0) {
       e.preventDefault();
       handleDeleteSelected();
     }
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (activeTool) {
+      if (presetToPlace && onCancelPreset) {
+        onCancelPreset();
+      } else if (activeTool) {
         if (onClearTool) onClearTool();
         setPlaceRotated(false);
       } else {
-        setSelectedId(null);
+        setSelectedIds(new Set());
       }
       setCtxMenu(null);
     }
-  }, [selectedId, handleDeleteSelected, onClearTool, activeTool]);
+  }, [selectedIds, handleDeleteSelected, onClearTool, activeTool, presetToPlace, onCancelPreset]);
 
   // Helper to update a block's properties
   const updateBlock = useCallback((blockId: string, patch: Partial<PlacedBlock>) => {
@@ -293,25 +366,38 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
     };
   }, [activeTool, canRotateActive, hoverCell, cellW, gridCols, gridRows, blocks, placeRotated]);
 
-  // Drag ghost for block being moved
-  const dragGhost = useMemo(() => {
+  // Preset group ghost for click-to-place
+  const presetGhostBlocks = useMemo(() => {
+    if (!presetToPlace || !hoverCell || cellW === 0) return null;
+    const offset = offsetPresetBlocks(presetToPlace, hoverCell.col, hoverCell.row);
+    const allInBounds = offset.every(b => {
+      const bw = b.rotated ? b.h : b.w;
+      const bh = b.rotated ? b.w : b.h;
+      return inBounds(b.col, b.row, bw, bh, gridCols, gridRows);
+    });
+    return { blocks: offset, valid: allInBounds };
+  }, [presetToPlace, hoverCell, cellW, gridCols, gridRows]);
+
+  // Drag ghost for block(s) being moved
+  const dragGhosts = useMemo(() => {
     if (!dragId || !hoverCell || cellW === 0 || !didDrag.current) return null;
-    const block = blocks.find(b => b.id === dragId);
-    if (!block) return null;
-    const bw = block.rotated ? block.h : block.w;
-    const bh = block.rotated ? block.w : block.h;
-    const newCol = hoverCell.col - dragOffset.col;
-    const newRow = hoverCell.row - dragOffset.row;
-    const valid = inBounds(newCol, newRow, bw, bh, gridCols, gridRows) &&
-                  !hasCollision(blocks, newCol, newRow, bw, bh, block.id);
-    return {
-      x: newCol * cellW,
-      y: newRow * cellW,
-      w: bw * cellW,
-      h: bh * cellW,
-      valid,
-    };
-  }, [dragId, hoverCell, cellW, blocks, dragOffset, gridCols, gridRows]);
+    const anchor = blocks.find(b => b.id === dragId);
+    if (!anchor) return null;
+    const dc = (hoverCell.col - dragOffset.col) - anchor.col;
+    const dr = (hoverCell.row - dragOffset.row) - anchor.row;
+    const moveIds = selectedIds.has(dragId) && selectedIds.size > 1 ? selectedIds : new Set([dragId]);
+    const stayBlocks = blocks.filter(b => !moveIds.has(b.id));
+
+    return blocks.filter(b => moveIds.has(b.id)).map(b => {
+      const nc = b.col + dc;
+      const nr = b.row + dr;
+      const bw = b.rotated ? b.h : b.w;
+      const bh = b.rotated ? b.w : b.h;
+      const valid = inBounds(nc, nr, bw, bh, gridCols, gridRows) &&
+                    !hasCollision(stayBlocks, nc, nr, bw, bh);
+      return { x: nc * cellW, y: nr * cellW, w: bw * cellW, h: bh * cellW, valid };
+    });
+  }, [dragId, hoverCell, cellW, blocks, dragOffset, gridCols, gridRows, selectedIds]);
 
   // Grid lines
   const gridLines = useMemo(() => {
@@ -341,7 +427,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
     return lines;
   }, [cellW, gridCols, gridRows, height, containerWidth]);
 
-  const selectedBlock = selectedId ? blocks.find(b => b.id === selectedId) : null;
+  const selectedBlock = selectedIds.size === 1 ? blocks.find(b => selectedIds.has(b.id)) : null;
   const ctxBlock = ctxMenu ? blocks.find(b => b.id === ctxMenu.blockId) : null;
 
   return (
@@ -356,7 +442,18 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
         <span>{gridCols}x{gridRows} grid</span>
         <span style={{ color: 'var(--border2, #262c30)' }}>|</span>
         <span>{blocks.length} blocks</span>
-        {activeTool && (
+        {presetToPlace && (
+          <>
+            <span style={{ color: 'var(--border2, #262c30)' }}>|</span>
+            <span style={{ color: 'var(--accent, #c47c5a)' }}>
+              placing preset ({presetToPlace.length} blocks) — click to place, Esc to cancel
+            </span>
+            <button className="modal-close-btn" onClick={onCancelPreset} style={{ padding: '1px 4px' }}>
+              <Icon name="x" size={10} />
+            </button>
+          </>
+        )}
+        {activeTool && !presetToPlace && (
           <>
             <span style={{ color: 'var(--border2, #262c30)' }}>|</span>
             <span style={{ color: 'var(--accent, #c47c5a)' }}>
@@ -370,17 +467,19 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
             </button>
           </>
         )}
-        {selectedBlock && !activeTool && (
+        {selectedIds.size > 0 && !activeTool && !presetToPlace && (
           <>
             <span style={{ color: 'var(--border2, #262c30)' }}>|</span>
             <span style={{ color: 'var(--text2, #8a9299)' }}>
-              selected: {selectedBlock.label || BLOCK_DEF_MAP.get(selectedBlock.type)?.label || selectedBlock.type}
+              {selectedIds.size === 1 && selectedBlock
+                ? `selected: ${selectedBlock.label || BLOCK_DEF_MAP.get(selectedBlock.type)?.label || selectedBlock.type}`
+                : `${selectedIds.size} blocks selected`}
             </span>
             <button
               className="modal-close-btn"
               onClick={handleDeleteSelected}
               style={{ padding: '1px 4px', color: 'var(--red, #c07070)' }}
-              title="Delete block (Del)"
+              title={`Delete ${selectedIds.size > 1 ? 'blocks' : 'block'} (Del)`}
             >
               <Icon name="trash" size={10} />
             </button>
@@ -407,7 +506,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
           border: '1px solid var(--border2, #262c30)',
           borderRadius: 4,
           overflow: 'hidden',
-          cursor: dragId ? 'grabbing' : activeTool ? 'crosshair' : 'default',
+          cursor: dragId ? 'grabbing' : (activeTool || presetToPlace) ? 'crosshair' : 'default',
           outline: 'none',
         }}
       >
@@ -427,7 +526,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
           const def = BLOCK_DEF_MAP.get(block.type);
           const bw = block.rotated ? block.h : block.w;
           const bh = block.rotated ? block.w : block.h;
-          const isSelected = selectedId === block.id;
+          const isSelected = selectedIds.has(block.id);
           const isDragging = dragId === block.id && didDrag.current;
           const label = block.label || def?.label || block.type;
 
@@ -491,23 +590,47 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
           />
         )}
 
-        {/* Ghost preview (drag move) */}
-        {dragGhost && (
+        {/* Ghost preview (drag move — supports multi-block) */}
+        {dragGhosts && dragGhosts.map((dg, i) => (
           <div
+            key={`dg-${i}`}
             style={{
               position: 'absolute',
-              left: dragGhost.x,
-              top: dragGhost.y,
-              width: dragGhost.w,
-              height: dragGhost.h,
-              background: dragGhost.valid ? 'var(--accent-tint, #c47c5a22)' : 'rgba(192, 112, 112, 0.2)',
-              border: `1px dashed ${dragGhost.valid ? 'var(--accent, #c47c5a)' : 'var(--red, #c07070)'}`,
+              left: dg.x,
+              top: dg.y,
+              width: dg.w,
+              height: dg.h,
+              background: dg.valid ? 'var(--accent-tint, #c47c5a22)' : 'rgba(192, 112, 112, 0.2)',
+              border: `1px dashed ${dg.valid ? 'var(--accent, #c47c5a)' : 'var(--red, #c07070)'}`,
               borderRadius: 2,
               pointerEvents: 'none',
               zIndex: 3,
             }}
           />
-        )}
+        ))}
+
+        {/* Ghost preview (preset group placement) */}
+        {presetGhostBlocks && presetGhostBlocks.blocks.map((b, i) => {
+          const bw = b.rotated ? b.h : b.w;
+          const bh = b.rotated ? b.w : b.h;
+          return (
+            <div
+              key={`pg-${i}`}
+              style={{
+                position: 'absolute',
+                left: b.col * cellW,
+                top: b.row * cellW,
+                width: bw * cellW,
+                height: bh * cellW,
+                background: presetGhostBlocks.valid ? 'var(--accent-tint, #c47c5a22)' : 'rgba(192, 112, 112, 0.2)',
+                border: `1px dashed ${presetGhostBlocks.valid ? 'var(--accent, #c47c5a)' : 'var(--red, #c07070)'}`,
+                borderRadius: 2,
+                pointerEvents: 'none',
+                zIndex: 3,
+              }}
+            />
+          );
+        })}
       </div>
 
       {/* ── Right-click context menu ──────────────────────────────────── */}
@@ -519,7 +642,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
           onClose={() => setCtxMenu(null)}
           onUpdateBlock={updateBlock}
           onUpdateMeta={updateBlockMeta}
-          onDelete={() => { onChange(blocks.filter(b => b.id !== ctxMenu.blockId)); setSelectedId(null); setCtxMenu(null); }}
+          onDelete={() => { onChange(blocks.filter(b => b.id !== ctxMenu.blockId)); setSelectedIds(prev => { const n = new Set(prev); n.delete(ctxMenu.blockId); return n; }); setCtxMenu(null); }}
         />
       )}
     </div>
