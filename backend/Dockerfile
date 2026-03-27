@@ -1,7 +1,16 @@
 FROM node:20-alpine
 WORKDIR /app
-COPY package*.json ./
-RUN npm install --omit=dev
-COPY src/ ./src/
+
+# Copy workspace root manifest + workspace packages
+COPY package.json ./
+COPY shared/ ./shared/
+COPY backend/ ./backend/
+
+# Install all deps (shared needs typescript to build)
+RUN npm install --workspaces
+
+# Compile shared TypeScript → dist/
+RUN npm run build --workspace=shared
+
 EXPOSE 3001
-CMD ["node", "src/index.js"]
+CMD ["node", "backend/src/index.js"]
