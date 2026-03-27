@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//private/tmp/**)",
+      "Bash(unzip -q \"/Users/calebwerkmeister/Documents/WerkStack/Project Guidelines/Proposal and Technical Reference.docx\" -d proposal_extracted)",
+      "Bash(/usr/local/bin/npm install:*)",
+      "Read(//Users/calebwerkmeister/**)",
+      "Read(//usr/local/lib/**)",
+      "Bash(command -v node)",
+      "Bash(find /Users/calebwerkmeister/Documents/WerkStack/app -not -path */node_modules/* -not -path */.vite/* -not -path */dist/* -type f)",
+      "Bash(grep -E \"\\\\.js$\")",
+      "Bash(find /Users/calebwerkmeister/Documents/WerkStack/app/frontend/src/utils /Users/calebwerkmeister/Documents/WerkStack/app/frontend/src/styles -type f \\\\\\(-name *.tsx -o -name *.ts \\\\\\))",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(grep \"\\\\.js$\")",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?|md\\)$\")",
+      "Bash(wc -l /Users/calebwerkmeister/Documents/WerkStack/app/backend/src/routes/*.js)",
+      "Bash(grep -l \"conflict\\\\|power\\\\|audit\\\\|export\\\\|warning\" /Users/calebwerkmeister/Documents/WerkStack/app/backend/src/routes/*.js)",
+      "Bash(find /Users/calebwerkmeister/Documents/WerkStack/app/backend/src/db/migrations -name *.sql)"
+    ]
+  }
+}
