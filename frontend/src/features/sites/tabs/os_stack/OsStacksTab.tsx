@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type {
-  OsHost, OsVm, OsApp, DeviceInstance, VmType, AppType,
+  OsHost, OsVm, OsApp, DeviceInstance, VmType, AppType, Rack,
 } from '@werkstack/shared';
 import type { OsThemeTokens } from '../../../../store/useThemeStore';
 import { HostEditorModal } from './HostEditorModal';
@@ -12,6 +12,7 @@ interface Props {
   vms:        OsVm[];
   apps:       OsApp[];
   devices:    DeviceInstance[];
+  racks:      Rack[];
   vmTypes:    VmType[];
   appTypes:   AppType[];
   th:         OsThemeTokens;
@@ -97,65 +98,183 @@ function StackBlock({
     >{label}</button>
   );
 
+  // App card used inside VM sections and bare-metal
+  const appCard = (app: OsApp) => {
+    const at = appTypeMap[app.typeId];
+    return (
+      <div key={app.id} style={{
+        background: th.appTint + '12', border: `1px solid ${th.appTint}30`,
+        borderRadius: 4, padding: '6px 10px', minWidth: 140, flex: '0 0 auto',
+        display: 'flex', flexDirection: 'column', gap: 2,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ ...pillStyle(th.appTint), fontSize: 8 }}>
+            {at?.name ?? app.typeId}
+          </span>
+          <div style={{ display: 'flex', gap: 2 }}>
+            <button
+              style={{
+                padding: '1px 5px', borderRadius: 2, border: `1px solid ${th.border2}`,
+                background: 'transparent', color: th.text3,
+                fontFamily: th.fontLabel, fontSize: 9, cursor: 'pointer',
+              }}
+              onClick={() => onEditApp(app)}
+            >e</button>
+            <button
+              style={{
+                padding: '1px 5px', borderRadius: 2, border: `1px solid ${th.border2}`,
+                background: 'transparent', color: th.red,
+                fontFamily: th.fontLabel, fontSize: 9, cursor: 'pointer',
+              }}
+              onClick={() => onDeleteApp(app.id)}
+            >×</button>
+          </div>
+        </div>
+        <span style={{ fontFamily: th.fontMain, fontSize: 11, color: th.text, fontWeight: 600 }}>
+          {app.name}
+        </span>
+        {(app.ip || app.url) && (
+          <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>
+            {app.ip ?? ''}{app.url ? ` ↗` : ''}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const hasVmLayer = hostVms.length > 0;
+
   return (
     <div style={{
       background: th.cardBg, border: `1px solid ${th.border}`,
       borderRadius: 6, overflow: 'hidden', minWidth: 320,
+      display: 'flex', flexDirection: 'column',
     }}>
-      {/* Device header */}
-      <div style={{
-        padding: '8px 12px', background: th.hdrBg,
-        borderBottom: `1px solid ${th.hdrBorder}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontFamily: th.fontMain, fontSize: 12, color: th.hdrText, fontWeight: 600 }}>
-            {device.name}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {host
-            ? iconBtn('edit host', th.text3, onEditHost)
-            : iconBtn('+ host os', accent, onConfigureHost)
-          }
-        </div>
-      </div>
+      {/* ── VM / Container Runtime layer (top) ─────────────────────────────── */}
+      {host && hasVmLayer && (
+        <>
+          <div style={{
+            padding: '4px 12px', background: th.vmTint + '20',
+            borderBottom: `1px solid ${th.vmTint}30`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{
+              fontFamily: th.fontLabel, fontSize: 9, color: th.vmTint,
+              textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600,
+            }}>vm / container runtime</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {iconBtn('+ vm', th.vmTint, onAddVm)}
+              {iconBtn('+ app', th.appTint, () => onAddApp(undefined, host.id))}
+            </div>
+          </div>
 
-      {/* Infra row */}
-      <div style={{
-        padding: '4px 12px', background: th.infraBg,
-        borderBottom: `1px solid ${th.border}`,
-        display: 'flex', gap: 12, alignItems: 'center',
-      }}>
-        {device.rackId && (
-          <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>
-            {device.rackU != null ? `U${device.rackU}` : 'rack'}
-          </span>
-        )}
-        {device.ip && (
-          <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>
-            {device.ip}
-          </span>
-        )}
-        {device.serial && (
-          <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>
-            s/n: {device.serial}
-          </span>
-        )}
-        {!device.rackId && !device.ip && !device.serial && (
-          <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>infrastructure</span>
-        )}
-      </div>
+          {/* VM cards laid out horizontally with gaps */}
+          <div style={{
+            display: 'flex', gap: 10, overflowX: 'auto', padding: '10px 12px',
+            borderBottom: `1px solid ${th.border}`,
+          }}>
+            {hostVms.map(vm => {
+              const vmApps = apps.filter(a => a.vmId === vm.id);
+              const vmt = vmTypeMap[vm.typeId];
+              return (
+                <div key={vm.id} style={{
+                  flex: '1 1 0', minWidth: 220,
+                  border: `1px solid ${th.vmTint}30`,
+                  borderRadius: 5, overflow: 'hidden',
+                  background: th.vmTint + '08',
+                  display: 'flex', flexDirection: 'column',
+                }}>
+                  {/* Applications area — cards laid out horizontally */}
+                  <div style={{ padding: '8px 10px', flex: 1 }}>
+                    <div style={{
+                      fontFamily: th.fontLabel, fontSize: 9, color: th.text3,
+                      textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
+                    }}>applications</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {vmApps.map(app => appCard(app))}
+                      <button
+                        style={{
+                          minWidth: 60, padding: '6px 10px', borderRadius: 4,
+                          border: `1px dashed ${th.border2}`,
+                          background: 'transparent', color: th.text3,
+                          fontFamily: th.fontLabel, fontSize: 10, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                        onClick={() => onAddApp(vm.id, undefined)}
+                      >+ app</button>
+                    </div>
+                  </div>
 
-      {/* Host OS row */}
+                  {/* VM info bar at bottom of VM card */}
+                  <div style={{
+                    padding: '5px 10px', background: th.vmTint + '18',
+                    borderTop: `1px solid ${th.vmTint}25`,
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    {vmt && <span style={{ ...pillStyle(th.vmTint), marginRight: 0 }}>{vmt.name}</span>}
+                    <span style={{ fontFamily: th.fontMain, fontSize: 11, color: th.text, fontWeight: 600 }}>
+                      {vm.name}
+                    </span>
+                    <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>
+                      {[
+                        vm.vmOs && `${vm.vmOs}${vm.osVersion ? ` ${vm.osVersion}` : ''}`,
+                        vm.ip,
+                        vm.cpus != null || vm.ramGb != null
+                          ? [vm.cpus != null && `${vm.cpus}c`, vm.ramGb != null && `${vm.ramGb}GB`].filter(Boolean).join(' · ')
+                          : null,
+                      ].filter(Boolean).join(' | ')}
+                    </span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                      <button
+                        style={{
+                          padding: '1px 6px', borderRadius: 3, border: `1px solid ${th.border2}`,
+                          background: 'transparent', color: th.text3,
+                          fontFamily: th.fontLabel, fontSize: 10, cursor: 'pointer',
+                        }}
+                        onClick={() => onEditVm(vm)}
+                      >edit</button>
+                      <button
+                        style={{
+                          padding: '1px 6px', borderRadius: 3, border: `1px solid ${th.border2}`,
+                          background: 'transparent', color: th.red,
+                          fontFamily: th.fontLabel, fontSize: 10, cursor: 'pointer',
+                        }}
+                        onClick={() => onDeleteVm(vm.id)}
+                      >×</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ── Bare metal apps (shown when host has apps but no VMs, or alongside VMs) */}
+      {host && bareApps.length > 0 && (
+        <div style={{
+          padding: '8px 12px',
+          borderBottom: `1px solid ${th.border}`,
+        }}>
+          <div style={{
+            fontFamily: th.fontLabel, fontSize: 9, color: th.text3,
+            textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
+          }}>applications (bare metal)</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {bareApps.map(app => appCard(app))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Host OS row ────────────────────────────────────────────────────── */}
       {host && (
         <div style={{
           padding: '5px 12px', background: th.hostTint + '18',
           borderBottom: `1px solid ${th.border}`,
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          <span style={{ ...pillStyle(th.hostTint) }}>host</span>
-          <span style={{ fontFamily: th.fontData, fontSize: 11, color: th.text }}>
+          <span style={{ ...pillStyle(th.hostTint) }}>host os</span>
+          <span style={{ fontFamily: th.fontMain, fontSize: 11, color: th.text, fontWeight: 600 }}>
             {host.hostOs}{host.osVersion ? ` ${host.osVersion}` : ''}
           </span>
           {host.kernel && (
@@ -163,180 +282,44 @@ function StackBlock({
               · {host.kernel}
             </span>
           )}
+          {device.ip && (
+            <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>
+              {device.ip}
+            </span>
+          )}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-            {iconBtn('+ vm', th.vmTint, onAddVm)}
-            {iconBtn('+ app', th.appTint, () => onAddApp(undefined, host.id))}
+            {!hasVmLayer && iconBtn('+ vm', th.vmTint, onAddVm)}
+            {!hasVmLayer && iconBtn('+ app', th.appTint, () => onAddApp(undefined, host.id))}
+            {iconBtn('edit', th.text3, onEditHost)}
           </div>
         </div>
       )}
 
-      {/* VM columns area */}
-      {(hostVms.length > 0 || bareApps.length > 0) && (
-        <div style={{
-          display: 'flex', gap: 0, overflowX: 'auto',
-          borderBottom: hostVms.length > 0 || bareApps.length > 0 ? `1px solid ${th.border}` : undefined,
-        }}>
-          {/* VM columns */}
-          {hostVms.map(vm => {
-            const vmApps = apps.filter(a => a.vmId === vm.id);
-            const vmt = vmTypeMap[vm.typeId];
-            return (
-              <div key={vm.id} style={{
-                minWidth: 180, borderRight: `1px solid ${th.border}`,
-                background: th.vmTint + '0e',
-                flex: '0 0 auto',
-              }}>
-                {/* VM header */}
-                <div style={{
-                  padding: '5px 10px', background: th.vmTint + '20',
-                  borderBottom: `1px solid ${th.vmTint}30`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                }}>
-                  <div>
-                    <span style={{ fontFamily: th.fontMain, fontSize: 11, color: th.text, display: 'block' }}>
-                      {vm.name}
-                    </span>
-                    {vmt && (
-                      <span style={{ ...pillStyle(th.vmTint), marginRight: 0 }}>{vmt.name}</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button
-                      style={{
-                        padding: '1px 6px', borderRadius: 3, border: `1px solid ${th.border2}`,
-                        background: 'transparent', color: th.text3,
-                        fontFamily: th.fontLabel, fontSize: 10, cursor: 'pointer',
-                      }}
-                      onClick={() => onEditVm(vm)}
-                    >edit</button>
-                    <button
-                      style={{
-                        padding: '1px 6px', borderRadius: 3, border: `1px solid ${th.border2}`,
-                        background: 'transparent', color: th.red,
-                        fontFamily: th.fontLabel, fontSize: 10, cursor: 'pointer',
-                      }}
-                      onClick={() => onDeleteVm(vm.id)}
-                    >×</button>
-                  </div>
-                </div>
-                {/* VM info */}
-                <div style={{ padding: '4px 10px', borderBottom: `1px solid ${th.border}` }}>
-                  {vm.vmOs && (
-                    <div style={{ fontFamily: th.fontData, fontSize: 10, color: th.text2 }}>
-                      {vm.vmOs}{vm.osVersion ? ` ${vm.osVersion}` : ''}
-                    </div>
-                  )}
-                  <div style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3, display: 'flex', gap: 8 }}>
-                    {vm.cpus != null && <span>{vm.cpus}c</span>}
-                    {vm.ramGb != null && <span>{vm.ramGb}GB</span>}
-                    {vm.ip && <span>{vm.ip}</span>}
-                  </div>
-                </div>
-                {/* VM apps */}
-                <div style={{ padding: '4px 10px' }}>
-                  {vmApps.map(app => {
-                    const at = appTypeMap[app.typeId];
-                    return (
-                      <div key={app.id} style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '2px 0', borderBottom: `1px solid ${th.border}`,
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ ...pillStyle(th.appTint), fontSize: 8 }}>
-                            {at?.name ?? app.typeId}
-                          </span>
-                          <span style={{ fontFamily: th.fontData, fontSize: 11, color: th.text }}>
-                            {app.name}
-                          </span>
-                          {app.version && (
-                            <span style={{ fontFamily: th.fontData, fontSize: 9, color: th.text3 }}>
-                              v{app.version}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', gap: 2 }}>
-                          <button
-                            style={{
-                              padding: '1px 5px', borderRadius: 2, border: `1px solid ${th.border2}`,
-                              background: 'transparent', color: th.text3,
-                              fontFamily: th.fontLabel, fontSize: 9, cursor: 'pointer',
-                            }}
-                            onClick={() => onEditApp(app)}
-                          >e</button>
-                          <button
-                            style={{
-                              padding: '1px 5px', borderRadius: 2, border: `1px solid ${th.border2}`,
-                              background: 'transparent', color: th.red,
-                              fontFamily: th.fontLabel, fontSize: 9, cursor: 'pointer',
-                            }}
-                            onClick={() => onDeleteApp(app.id)}
-                          >×</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <button
-                    style={{
-                      display: 'block', width: '100%', marginTop: 4,
-                      padding: '2px 0', borderRadius: 3,
-                      border: `1px dashed ${th.border2}`,
-                      background: 'transparent', color: th.text3,
-                      fontFamily: th.fontLabel, fontSize: 10, cursor: 'pointer', textAlign: 'center',
-                    }}
-                    onClick={() => onAddApp(vm.id, undefined)}
-                  >+ app</button>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Bare metal apps column */}
-          {bareApps.length > 0 && (
-            <div style={{ minWidth: 160, padding: '8px 10px', flex: '0 0 auto' }}>
-              <div style={{
-                fontFamily: th.fontLabel, fontSize: 9, color: th.text3,
-                textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6,
-              }}>bare metal</div>
-              {bareApps.map(app => {
-                const at = appTypeMap[app.typeId];
-                return (
-                  <div key={app.id} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '2px 0', borderBottom: `1px solid ${th.border}`,
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ ...pillStyle(th.appTint), fontSize: 8 }}>
-                        {at?.name ?? app.typeId}
-                      </span>
-                      <span style={{ fontFamily: th.fontData, fontSize: 11, color: th.text }}>
-                        {app.name}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 2 }}>
-                      <button
-                        style={{
-                          padding: '1px 5px', borderRadius: 2, border: `1px solid ${th.border2}`,
-                          background: 'transparent', color: th.text3,
-                          fontFamily: th.fontLabel, fontSize: 9, cursor: 'pointer',
-                        }}
-                        onClick={() => onEditApp(app)}
-                      >e</button>
-                      <button
-                        style={{
-                          padding: '1px 5px', borderRadius: 2, border: `1px solid ${th.border2}`,
-                          background: 'transparent', color: th.red,
-                          fontFamily: th.fontLabel, fontSize: 9, cursor: 'pointer',
-                        }}
-                        onClick={() => onDeleteApp(app.id)}
-                      >×</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      {/* ── Infra row (bottom) ─────────────────────────────────────────────── */}
+      <div style={{
+        padding: '5px 12px', background: th.infraBg,
+        display: 'flex', gap: 8, alignItems: 'center',
+      }}>
+        <span style={{ ...pillStyle(th.text3) }}>infra</span>
+        <span style={{ fontFamily: th.fontMain, fontSize: 11, color: th.text, fontWeight: 600 }}>
+          {device.name}
+        </span>
+        {device.rackId && device.rackU != null && (
+          <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>
+            U{device.rackU}
+          </span>
+        )}
+        {device.ip && (
+          <span style={{ fontFamily: th.fontData, fontSize: 10, color: th.text3 }}>
+            {device.ip}
+          </span>
+        )}
+        {!host && (
+          <div style={{ marginLeft: 'auto' }}>
+            {iconBtn('+ host os', accent, onConfigureHost)}
+          </div>
+        )}
+      </div>
 
       {/* Empty state for unconfigured device */}
       {!host && (
@@ -353,7 +336,7 @@ function StackBlock({
 // ── Main OsStacksTab ──────────────────────────────────────────────────────────
 
 export function OsStacksTab({
-  hosts, vms, apps, devices, vmTypes, appTypes, th, accent,
+  hosts, vms, apps, devices, racks, vmTypes, appTypes, th, accent,
   onHostAdd, onHostUpdate, onVmAdd, onVmUpdate, onVmDelete,
   onAppAdd, onAppUpdate, onAppDelete, apiBase,
 }: Props) {
@@ -361,14 +344,14 @@ export function OsStacksTab({
   const [vmModal, setVmModal]         = useState<{ open: boolean; initial?: OsVm | null; defaultHostId?: string }>({ open: false });
   const [appModal, setAppModal]       = useState<{ open: boolean; initial?: OsApp | null; defaultVmId?: string; defaultHostId?: string }>({ open: false });
 
-  // Filter state
-  const [deviceFilter, setDeviceFilter] = useState<FilterSet>(null);
+  // Filter state — filter by rack
+  const [rackFilter, setRackFilter] = useState<FilterSet>(null);
 
-  const allDeviceIds = devices.map(d => d.id);
+  const allRackIds = racks.map(r => r.id);
 
-  // Filtered device list — only show devices that have a host or are active in filter
+  // Filtered device list — filter by rack membership
   const visibleDevices = devices.filter(d =>
-    deviceFilter === null || deviceFilter.has(d.id)
+    rackFilter === null || (d.rackId && rackFilter.has(d.rackId))
   );
 
   // ── Modal save handlers ────────────────────────────────────────────────────
@@ -443,22 +426,22 @@ export function OsStacksTab({
         display: 'flex', gap: 6, padding: '10px 16px', flexShrink: 0,
         borderBottom: `1px solid ${th.border2}`, flexWrap: 'wrap', alignItems: 'center',
       }}>
-        <span style={{ fontFamily: th.fontLabel, fontSize: 10, color: th.text3, marginRight: 4 }}>device</span>
+        <span style={{ fontFamily: th.fontLabel, fontSize: 10, color: th.text3, marginRight: 4 }}>rack:</span>
         <button
-          className={`rpill${deviceFilter === null ? ' on' : ''}`}
+          className={`rpill${rackFilter === null ? ' on' : ''}`}
           style={{
             padding: '2px 10px', borderRadius: 12, border: `1px solid ${th.border2}`,
-            background: deviceFilter === null ? accent : 'transparent',
-            color: deviceFilter === null ? '#fff' : th.text2,
+            background: rackFilter === null ? accent : 'transparent',
+            color: rackFilter === null ? '#fff' : th.text2,
             fontFamily: th.fontLabel, fontSize: 10, cursor: 'pointer',
           }}
-          onClick={() => setDeviceFilter(deviceFilter === null ? new Set() : null)}
+          onClick={() => setRackFilter(rackFilter === null ? new Set() : null)}
         >all</button>
-        {devices.map(d => {
-          const isOn = deviceFilter === null || deviceFilter.has(d.id);
+        {racks.map(r => {
+          const isOn = rackFilter === null || rackFilter.has(r.id);
           return (
             <button
-              key={d.id}
+              key={r.id}
               className={`rpill${isOn ? ' on' : ''}`}
               style={{
                 padding: '2px 10px', borderRadius: 12, border: `1px solid ${th.border2}`,
@@ -466,16 +449,16 @@ export function OsStacksTab({
                 color: isOn ? '#fff' : th.text2,
                 fontFamily: th.fontLabel, fontSize: 10, cursor: 'pointer',
               }}
-              onClick={() => setDeviceFilter(toggleFilter(deviceFilter, d.id, allDeviceIds))}
-            >{d.name}</button>
+              onClick={() => setRackFilter(toggleFilter(rackFilter, r.id, allRackIds))}
+            >{r.name}</button>
           );
         })}
       </div>
 
-      {/* StackBlock grid */}
+      {/* StackBlock list — full width, stacked vertically */}
       <div style={{
         flex: 1, overflowY: 'auto', padding: 16,
-        display: 'flex', flexWrap: 'wrap', gap: 16, alignContent: 'flex-start',
+        display: 'flex', flexDirection: 'column', gap: 16,
       }}>
         {visibleDevices.map(device => {
           const host = hosts.find(h => h.deviceId === device.id);
@@ -528,17 +511,20 @@ export function OsStacksTab({
       <VmEditorModal
         open={vmModal.open}
         initial={vmModal.initial}
+        defaultHostId={vmModal.defaultHostId}
         hosts={hosts}
         vms={vms}
         vmTypes={vmTypes}
         th={th}
         accent={accent}
-        onSave={d => saveVm({ ...d, hostId: d.hostId || vmModal.defaultHostId || d.hostId })}
+        onSave={saveVm}
         onClose={() => setVmModal({ open: false })}
       />
       <AppEditorModal
         open={appModal.open}
         initial={appModal.initial}
+        defaultVmId={appModal.defaultVmId}
+        defaultHostId={appModal.defaultHostId}
         vms={vms}
         hosts={hosts}
         appTypes={appTypes}

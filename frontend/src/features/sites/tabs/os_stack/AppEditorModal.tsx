@@ -6,6 +6,8 @@ import { sanitizeUrl } from '../../../../utils/sanitize';
 interface Props {
   open:      boolean;
   initial?:  OsApp | null;
+  defaultVmId?:   string;
+  defaultHostId?: string;
   vms:       OsVm[];
   hosts:     OsHost[];
   appTypes:  AppType[];
@@ -22,7 +24,7 @@ const blankForm = () => ({
   version: '', url: '', ip: '', notes: '',
 });
 
-export function AppEditorModal({ open, initial, vms, hosts, appTypes, th, accent, onSave, onClose }: Props) {
+export function AppEditorModal({ open, initial, defaultVmId, defaultHostId, vms, hosts, appTypes, th, accent, onSave, onClose }: Props) {
   const [f, setF]               = useState(blankForm());
   const [extraIps, setExtraIps] = useState<OsExtraIp[]>([]);
   const [saving, setSaving]     = useState(false);
@@ -45,7 +47,12 @@ export function AppEditorModal({ open, initial, vms, hosts, appTypes, th, accent
         });
         setExtraIps(initial.extraIps ?? []);
       } else {
-        setF(blankForm());
+        setF({
+          ...blankForm(),
+          parentType: defaultVmId ? 'vm' : defaultHostId ? 'host' : 'vm',
+          vmId: defaultVmId ?? '',
+          hostId: defaultHostId ?? '',
+        });
         setExtraIps([]);
       }
     }

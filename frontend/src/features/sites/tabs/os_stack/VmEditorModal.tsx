@@ -5,6 +5,7 @@ import type { OsThemeTokens } from '../../../../store/useThemeStore';
 interface Props {
   open:      boolean;
   initial?:  OsVm | null;
+  defaultHostId?: string;
   hosts:     OsHost[];
   vms:       OsVm[];
   vmTypes:   VmType[];
@@ -19,7 +20,7 @@ const blankForm = () => ({
   vmOs: '', osVersion: '', cpus: '', ramGb: '', ip: '', notes: '',
 });
 
-export function VmEditorModal({ open, initial, hosts, vms, vmTypes, th, accent, onSave, onClose }: Props) {
+export function VmEditorModal({ open, initial, defaultHostId, hosts, vms, vmTypes, th, accent, onSave, onClose }: Props) {
   const [f, setF]           = useState(blankForm());
   const [extraIps, setExtraIps] = useState<OsExtraIp[]>([]);
   const [drives, setDrives]     = useState<OsVmDrive[]>([]);
@@ -45,7 +46,7 @@ export function VmEditorModal({ open, initial, hosts, vms, vmTypes, th, accent, 
         setExtraIps(initial.extraIps ?? []);
         setDrives(initial.drives ?? []);
       } else {
-        setF(blankForm());
+        setF({ ...blankForm(), hostId: defaultHostId ?? '' });
         setExtraIps([]);
         setDrives([]);
       }

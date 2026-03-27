@@ -41,6 +41,7 @@ export function OsStackScreen() {
   const thVars     = themeToVars(th) as React.CSSProperties;
 
   const devices  = useRackStore(s => s.devices);
+  const racks    = useRackStore(s => s.racks);
   const vmTypes  = useTypesStore(s => s.vmTypes);
   const appTypes = useTypesStore(s => s.appTypes);
 
@@ -242,6 +243,7 @@ export function OsStackScreen() {
               vms={vms}
               apps={apps}
               devices={devices}
+              racks={racks}
               vmTypes={vmTypes}
               appTypes={appTypes}
               th={th}
