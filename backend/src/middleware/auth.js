@@ -70,7 +70,9 @@ function setSessionCookie(res, token) {
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    // Set COOKIE_SECURE=true only when serving over HTTPS.
+    // Leaving it unset (default) allows HTTP deployments to work.
+    secure: process.env.COOKIE_SECURE === 'true',
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   });
 }
