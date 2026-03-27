@@ -154,6 +154,11 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent }: Dev
     return () => window.removeEventListener('click', close);
   }, [portCtx]);
 
+  // Connections for this device
+  const deviceConns = useMemo(() => device ? getDeviceConnections(device.id, connections) : [], [device?.id, connections]);
+  // Drives for this device
+  const deviceDrives = useMemo(() => device ? drives.filter(d => d.deviceId === device.id) : [], [device?.id, drives]);
+
   if (!open || !device) return null;
 
   const template = device.templateId
@@ -165,11 +170,6 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent }: Dev
     setF(p => ({ ...p, [k]: v }));
     setSaved(false);
   };
-
-  // Connections for this device
-  const deviceConns = useMemo(() => getDeviceConnections(device.id, connections), [device.id, connections]);
-  // Drives for this device
-  const deviceDrives = useMemo(() => drives.filter(d => d.deviceId === device.id), [device.id, drives]);
 
   // ── Info Tab Handlers ──────────────────────────────────────────────────────
 

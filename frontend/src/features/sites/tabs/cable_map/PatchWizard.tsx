@@ -164,7 +164,7 @@ export function PatchWizard({ siteId, initial, onSave, onClose }: Props) {
         label:        w.label        || undefined,
         notes:        w.notes        || undefined,
       };
-      const conn = initial
+      const conn = initial?.id
         ? await api.patch<Connection>(`/api/sites/${siteId}/connections/${initial.id}`, body)
         : await api.post<Connection>(`/api/sites/${siteId}/connections`, body);
       onSave(conn);

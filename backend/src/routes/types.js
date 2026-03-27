@@ -29,7 +29,7 @@ function toType(row) {
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
   try {
-    await client.query('SET LOCAL app.current_org_id = $1', [orgId]);
+    await client.query('SELECT set_config($1, $2, true)', ['app.current_org_id', orgId]);
     return await fn(client);
   } finally {
     client.release();
