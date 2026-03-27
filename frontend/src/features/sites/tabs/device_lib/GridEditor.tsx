@@ -59,8 +59,26 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
   const [placeRotated, setPlaceRotated] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
 
-  // Reset rotation when tool changes
-  useEffect(() => { setPlaceRotated(false); }, [activeTool]);
+  // Reset rotation when tool changes; auto-focus grid so key events work immediately
+  useEffect(() => {
+    setPlaceRotated(false);
+    if (activeTool) {
+      containerRef.current?.focus();
+    }
+  }, [activeTool]);
+
+  // Global R key listener for rotation — works even when grid doesn't have focus
+  useEffect(() => {
+    if (!activeTool?.canRotate) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        setPlaceRotated(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeTool]);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -176,10 +194,6 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
         setSelectedId(null);
       }
       setCtxMenu(null);
-    }
-    if ((e.key === 'r' || e.key === 'R') && activeTool && activeTool.canRotate) {
-      e.preventDefault();
-      setPlaceRotated(prev => !prev);
     }
   }, [selectedId, handleDeleteSelected, onClearTool, activeTool]);
 
