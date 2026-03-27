@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { BLOCK_DEFS } from '@werkstack/shared';
-import type { BlockDef } from '@werkstack/shared';
+import type { BlockDef, PlacedBlock } from '@werkstack/shared';
+import { getPresetsForType, Preset } from './presets';
 
 interface BlockPaletteProps {
   activeTool:  BlockDef | null;
   onSelect:    (def: BlockDef) => void;
   panelFilter: 'front' | 'rear';
+  gridCols:    number;
+  gridRows:    number;
+  onApplyPreset: (blocks: PlacedBlock[]) => void;
 }
 
 const CATEGORIES: { label: string; filter: (d: BlockDef) => boolean }[] = [
@@ -21,8 +25,38 @@ function panelAllows(def: BlockDef, panel: 'front' | 'rear'): boolean {
   return def.panel === 'all' || def.panel === panel;
 }
 
-export function BlockPalette({ activeTool, onSelect, panelFilter }: BlockPaletteProps) {
+interface PresetMenuState {
+  x: number;
+  y: number;
+  blockType: string;
+  presets: Preset[];
+}
+
+export function BlockPalette({ activeTool, onSelect, panelFilter, gridCols, gridRows, onApplyPreset }: BlockPaletteProps) {
   const [expandedCat, setExpandedCat] = useState<string | null>('Network');
+  const [presetMenu, setPresetMenu] = useState<PresetMenuState | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close preset menu on click outside
+  useEffect(() => {
+    if (!presetMenu) return;
+    const close = () => setPresetMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [presetMenu]);
+
+  const handleBlockContextMenu = (e: React.MouseEvent, def: BlockDef) => {
+    e.preventDefault();
+    const presets = getPresetsForType(def.type, gridCols, gridRows);
+    if (presets.length === 0) return;
+    setPresetMenu({ x: e.clientX, y: e.clientY, blockType: def.type, presets });
+  };
+
+  const handlePresetSelect = (preset: Preset) => {
+    const blocks = preset.generate(gridCols, gridRows);
+    onApplyPreset(blocks);
+    setPresetMenu(null);
+  };
 
   return (
     <div style={{
@@ -78,10 +112,13 @@ export function BlockPalette({ activeTool, onSelect, panelFilter }: BlockPalette
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {items.map(def => {
                     const isActive = activeTool?.type === def.type;
+                    const hasPresets = getPresetsForType(def.type, gridCols, gridRows).length > 0;
                     return (
                       <button
                         key={def.type}
                         onClick={() => onSelect(def)}
+                        onContextMenu={e => handleBlockContextMenu(e, def)}
+                        title={hasPresets ? 'Right-click for presets' : undefined}
                         style={{
                           width: '100%', textAlign: 'left',
                           padding: '4px 10px 4px 18px',
@@ -116,6 +153,63 @@ export function BlockPalette({ activeTool, onSelect, panelFilter }: BlockPalette
           );
         })}
       </div>
+
+      {/* Preset context menu */}
+      {presetMenu && (
+        <div
+          ref={menuRef}
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: presetMenu.x,
+            top: presetMenu.y,
+            zIndex: 2000,
+            minWidth: 200,
+            background: 'var(--cardBg, #141618)',
+            border: '1px solid var(--border2, #262c30)',
+            borderRadius: 6,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            padding: '6px 0',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 11,
+            color: 'var(--text, #d4d9dd)',
+          }}
+        >
+          <div style={{
+            padding: '4px 12px 6px',
+            borderBottom: '1px solid var(--border, #1d2022)',
+            fontSize: 9,
+            fontWeight: 700,
+            color: 'var(--accent, #c47c5a)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}>
+            Quick Fill Presets
+          </div>
+          {presetMenu.presets.map((preset, i) => (
+            <button
+              key={i}
+              onClick={() => handlePresetSelect(preset)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '5px 12px',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10,
+                color: 'var(--text, #d4d9dd)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--inputBg, #1a1d20)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -223,6 +223,9 @@ export function PcieWizard({ open, onClose, initial, accent }: PcieWizardProps) 
                 activeTool={activeTool}
                 onSelect={d => setActiveTool(activeTool?.type === d.type ? null : d)}
                 panelFilter="rear"
+                gridCols={grid.cols}
+                gridRows={grid.rows}
+                onApplyPreset={newBlocks => setBlocks(prev => [...prev, ...newBlocks])}
               />
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
                 <div style={{

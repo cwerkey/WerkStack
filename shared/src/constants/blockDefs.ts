@@ -6,7 +6,7 @@ import type { BlockDef } from '../types';
 export const BLOCK_DEFS: BlockDef[] = [
   // ── Network Ports ──────────────────────────────────────────────────────────
   {
-    type: 'rj45',    label: 'RJ45',    w: 4,  h: 4,  panel: 'all',   isPort: false, isNet: true,  isSlot: false, canRotate: false,
+    type: 'rj45',    label: 'RJ45',    w: 3,  h: 3,  panel: 'all',   isPort: false, isNet: true,  isSlot: false, canRotate: false,
     color: '#1a3a4a', borderColor: '#2a6a8a',
   },
   {
@@ -70,7 +70,7 @@ export const BLOCK_DEFS: BlockDef[] = [
     color: '#1a2a1a', borderColor: '#3a6a3a',
   },
   {
-    type: 'bay-2.5',    label: '2.5" Bay',     w: 16, h: 5,  panel: 'front', isPort: false, isNet: false, isSlot: true,  canRotate: false,
+    type: 'bay-2.5',    label: '2.5" Bay',     w: 16, h: 4,  panel: 'front', isPort: false, isNet: false, isSlot: true,  canRotate: true,
     color: '#1a2a2a', borderColor: '#3a6a6a',
   },
   {

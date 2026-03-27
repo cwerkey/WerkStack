@@ -59,6 +59,12 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
   const [placeRotated, setPlaceRotated] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
 
+  // Drag state
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ col: number; row: number }>({ col: 0, row: 0 });
+  const dragStartCell = useRef<{ col: number; row: number } | null>(null);
+  const didDrag = useRef(false);
+
   // Reset rotation when tool changes; auto-focus grid so key events work immediately
   useEffect(() => {
     setPlaceRotated(false);
@@ -67,9 +73,10 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
     }
   }, [activeTool]);
 
-  // Global R key listener for rotation — works even when grid doesn't have focus
+  // Global R key listener for rotation — works for any non-square block
+  const canRotateActive = activeTool ? activeTool.w !== activeTool.h : false;
   useEffect(() => {
-    if (!activeTool?.canRotate) return;
+    if (!canRotateActive) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
@@ -78,7 +85,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeTool]);
+  }, [canRotateActive]);
 
   // Close context menu on click outside
   useEffect(() => {
@@ -114,14 +121,52 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
     return { col: Math.floor(x / cellW), row: Math.floor(y / cellW) };
   }, [cellW]);
 
+  // Find block at a given cell
+  const blockAtCell = useCallback((col: number, row: number) => {
+    return blocks.find(b => {
+      const bw = b.rotated ? b.h : b.w;
+      const bh = b.rotated ? b.w : b.h;
+      return col >= b.col && col < b.col + bw && row >= b.row && row < b.row + bh;
+    });
+  }, [blocks]);
+
+  // Mouse down — start drag if clicking on a placed block (no tool, no ctrl)
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return; // left button only
+    if (activeTool || e.ctrlKey || e.metaKey) return;
+    const cell = getCellFromEvent(e);
+    if (!cell) return;
+    const hit = blockAtCell(cell.col, cell.row);
+    if (hit) {
+      setDragId(hit.id);
+      setDragOffset({ col: cell.col - hit.col, row: cell.row - hit.row });
+      dragStartCell.current = cell;
+      didDrag.current = false;
+      setSelectedId(hit.id);
+      e.preventDefault(); // prevent text selection while dragging
+    }
+  }, [activeTool, getCellFromEvent, blockAtCell]);
+
   const handleGridClick = useCallback((e: React.MouseEvent) => {
+    // If we just finished a drag, don't fire click logic
+    if (didDrag.current) { didDrag.current = false; return; }
     if (ctxMenu) { setCtxMenu(null); return; }
     const cell = getCellFromEvent(e);
     if (!cell) return;
 
+    // Ctrl+Click (or Cmd+Click on Mac) deletes block under cursor
+    if (e.ctrlKey || e.metaKey) {
+      const target = blockAtCell(cell.col, cell.row);
+      if (target) {
+        onChange(blocks.filter(b => b.id !== target.id));
+        if (selectedId === target.id) setSelectedId(null);
+      }
+      return;
+    }
+
     // If active tool, place a block
     if (activeTool) {
-      const canRot = activeTool.canRotate && placeRotated;
+      const canRot = canRotateActive && placeRotated;
       const w = canRot ? activeTool.h : activeTool.w;
       const h = canRot ? activeTool.w : activeTool.h;
       if (!inBounds(cell.col, cell.row, w, h, gridCols, gridRows)) return;
@@ -141,38 +186,60 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
     }
 
     // Otherwise, try to select a block at this cell
-    const clicked = blocks.find(b => {
-      const bw = b.rotated ? b.h : b.w;
-      const bh = b.rotated ? b.w : b.h;
-      return cell.col >= b.col && cell.col < b.col + bw && cell.row >= b.row && cell.row < b.row + bh;
-    });
+    const clicked = blockAtCell(cell.col, cell.row);
     setSelectedId(clicked?.id ?? null);
-  }, [getCellFromEvent, activeTool, blocks, gridCols, gridRows, onChange, placeRotated, ctxMenu]);
+  }, [getCellFromEvent, activeTool, canRotateActive, blocks, blockAtCell, gridCols, gridRows, onChange, placeRotated, ctxMenu, selectedId]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const cell = getCellFromEvent(e);
     if (!cell) return;
 
-    const clicked = blocks.find(b => {
-      const bw = b.rotated ? b.h : b.w;
-      const bh = b.rotated ? b.w : b.h;
-      return cell.col >= b.col && cell.col < b.col + bw && cell.row >= b.row && cell.row < b.row + bh;
-    });
+    const clicked = blockAtCell(cell.col, cell.row);
     if (clicked) {
       setSelectedId(clicked.id);
       setCtxMenu({ x: e.clientX, y: e.clientY, blockId: clicked.id });
     }
-  }, [getCellFromEvent, blocks]);
+  }, [getCellFromEvent, blockAtCell]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const cell = getCellFromEvent(e);
     setHoverCell(cell);
-  }, [getCellFromEvent]);
+
+    // Track drag movement — mark as dragging once cursor moves to a different cell
+    if (dragId && cell && dragStartCell.current) {
+      if (cell.col !== dragStartCell.current.col || cell.row !== dragStartCell.current.row) {
+        didDrag.current = true;
+      }
+    }
+  }, [getCellFromEvent, dragId]);
+
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    if (!dragId) return;
+    const cell = getCellFromEvent(e);
+    if (cell && didDrag.current) {
+      const block = blocks.find(b => b.id === dragId);
+      if (block) {
+        const bw = block.rotated ? block.h : block.w;
+        const bh = block.rotated ? block.w : block.h;
+        const newCol = cell.col - dragOffset.col;
+        const newRow = cell.row - dragOffset.row;
+        if (inBounds(newCol, newRow, bw, bh, gridCols, gridRows) &&
+            !hasCollision(blocks, newCol, newRow, bw, bh, block.id)) {
+          onChange(blocks.map(b => b.id === dragId ? { ...b, col: newCol, row: newRow } : b));
+        }
+      }
+    }
+    setDragId(null);
+  }, [dragId, dragOffset, getCellFromEvent, blocks, gridCols, gridRows, onChange]);
 
   const handleMouseLeave = useCallback(() => {
     setHoverCell(null);
-  }, []);
+    if (dragId) {
+      setDragId(null);
+      didDrag.current = false;
+    }
+  }, [dragId]);
 
   const handleDeleteSelected = useCallback(() => {
     if (!selectedId) return;
@@ -212,7 +279,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
   // Preview ghost for active tool (respects rotation)
   const ghost = useMemo(() => {
     if (!activeTool || !hoverCell || cellW === 0) return null;
-    const canRot = activeTool.canRotate && placeRotated;
+    const canRot = canRotateActive && placeRotated;
     const w = canRot ? activeTool.h : activeTool.w;
     const h = canRot ? activeTool.w : activeTool.h;
     const valid = inBounds(hoverCell.col, hoverCell.row, w, h, gridCols, gridRows) &&
@@ -224,7 +291,27 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
       h: h * cellW,
       valid,
     };
-  }, [activeTool, hoverCell, cellW, gridCols, gridRows, blocks, placeRotated]);
+  }, [activeTool, canRotateActive, hoverCell, cellW, gridCols, gridRows, blocks, placeRotated]);
+
+  // Drag ghost for block being moved
+  const dragGhost = useMemo(() => {
+    if (!dragId || !hoverCell || cellW === 0 || !didDrag.current) return null;
+    const block = blocks.find(b => b.id === dragId);
+    if (!block) return null;
+    const bw = block.rotated ? block.h : block.w;
+    const bh = block.rotated ? block.w : block.h;
+    const newCol = hoverCell.col - dragOffset.col;
+    const newRow = hoverCell.row - dragOffset.row;
+    const valid = inBounds(newCol, newRow, bw, bh, gridCols, gridRows) &&
+                  !hasCollision(blocks, newCol, newRow, bw, bh, block.id);
+    return {
+      x: newCol * cellW,
+      y: newRow * cellW,
+      w: bw * cellW,
+      h: bh * cellW,
+      valid,
+    };
+  }, [dragId, hoverCell, cellW, blocks, dragOffset, gridCols, gridRows]);
 
   // Grid lines
   const gridLines = useMemo(() => {
@@ -275,7 +362,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
             <span style={{ color: 'var(--accent, #c47c5a)' }}>
               placing: {activeTool.label}{placeRotated ? ' (rotated)' : ''}
             </span>
-            {activeTool.canRotate && (
+            {canRotateActive && (
               <span style={{ color: 'var(--text3, #4e5560)', fontSize: 9 }}>[R] rotate</span>
             )}
             <button className="modal-close-btn" onClick={onClearTool} style={{ padding: '1px 4px' }}>
@@ -306,7 +393,9 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
         ref={measureRef}
         tabIndex={0}
         onKeyDown={handleKeyDown}
+        onMouseDown={handleMouseDown}
         onClick={handleGridClick}
+        onMouseUp={handleMouseUp}
         onContextMenu={handleContextMenu}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
@@ -318,7 +407,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
           border: '1px solid var(--border2, #262c30)',
           borderRadius: 4,
           overflow: 'hidden',
-          cursor: activeTool ? 'crosshair' : 'default',
+          cursor: dragId ? 'grabbing' : activeTool ? 'crosshair' : 'default',
           outline: 'none',
         }}
       >
@@ -339,6 +428,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
           const bw = block.rotated ? block.h : block.w;
           const bh = block.rotated ? block.w : block.h;
           const isSelected = selectedId === block.id;
+          const isDragging = dragId === block.id && didDrag.current;
           const label = block.label || def?.label || block.type;
 
           return (
@@ -359,6 +449,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
                 justifyContent: 'center',
                 overflow: 'hidden',
                 boxShadow: isSelected ? '0 0 0 1px var(--accent, #c47c5a)' : undefined,
+                opacity: isDragging ? 0.3 : 1,
                 zIndex: isSelected ? 2 : 1,
                 pointerEvents: 'none',
               }}
@@ -382,7 +473,7 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
           );
         })}
 
-        {/* Ghost preview */}
+        {/* Ghost preview (placement) */}
         {ghost && (
           <div
             style={{
@@ -393,6 +484,24 @@ export function GridEditor({ blocks, gridCols, gridRows, onChange, activeTool, o
               height: ghost.h,
               background: ghost.valid ? 'var(--accent-tint, #c47c5a22)' : 'rgba(192, 112, 112, 0.2)',
               border: `1px dashed ${ghost.valid ? 'var(--accent, #c47c5a)' : 'var(--red, #c07070)'}`,
+              borderRadius: 2,
+              pointerEvents: 'none',
+              zIndex: 3,
+            }}
+          />
+        )}
+
+        {/* Ghost preview (drag move) */}
+        {dragGhost && (
+          <div
+            style={{
+              position: 'absolute',
+              left: dragGhost.x,
+              top: dragGhost.y,
+              width: dragGhost.w,
+              height: dragGhost.h,
+              background: dragGhost.valid ? 'var(--accent-tint, #c47c5a22)' : 'rgba(192, 112, 112, 0.2)',
+              border: `1px dashed ${dragGhost.valid ? 'var(--accent, #c47c5a)' : 'var(--red, #c07070)'}`,
               borderRadius: 2,
               pointerEvents: 'none',
               zIndex: 3,

@@ -51,6 +51,7 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
   const [activeTool, setActiveTool] = useState<BlockDef | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pendingPreset, setPendingPreset] = useState<PlacedBlock[] | null>(null);
 
   const upsertDeviceTemplate = useTemplateStore(s => s.upsertDeviceTemplate);
 
@@ -126,9 +127,63 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
     }
   };
 
+  const effectiveCols = info.formFactor === 'rack' && !info.isShelf ? 96 : info.gridCols;
+  const effectiveRows = info.formFactor === 'rack' && !info.isShelf ? info.uHeight * 12 : info.gridRows;
+
   const currentBlocks = panel === 'front' ? layout.front : layout.rear;
   const setCurrentBlocks = (blocks: PlacedBlock[]) => {
     setLayout(prev => ({ ...prev, [panel]: blocks }));
+  };
+
+  // Check if preset blocks conflict with existing blocks
+  const hasPresetConflicts = (presetBlocks: PlacedBlock[]) => {
+    for (const pb of presetBlocks) {
+      const bw = pb.rotated ? pb.h : pb.w;
+      const bh = pb.rotated ? pb.w : pb.h;
+      for (const existing of currentBlocks) {
+        const ew = existing.rotated ? existing.h : existing.w;
+        const eh = existing.rotated ? existing.w : existing.h;
+        if (pb.col < existing.col + ew && pb.col + bw > existing.col &&
+            pb.row < existing.row + eh && pb.row + bh > existing.row) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  const handleApplyPreset = (presetBlocks: PlacedBlock[]) => {
+    if (currentBlocks.length > 0 && hasPresetConflicts(presetBlocks)) {
+      setPendingPreset(presetBlocks);
+    } else {
+      // No conflicts — just add to existing blocks
+      setCurrentBlocks([...currentBlocks, ...presetBlocks]);
+    }
+  };
+
+  const handleConflictResolve = (mode: 'replace' | 'fill' | 'cancel') => {
+    if (!pendingPreset) return;
+    if (mode === 'cancel') {
+      setPendingPreset(null);
+      return;
+    }
+    if (mode === 'replace') {
+      setCurrentBlocks(pendingPreset);
+    } else {
+      // Fill around — only add blocks that don't conflict
+      const safe = pendingPreset.filter(pb => {
+        const bw = pb.rotated ? pb.h : pb.w;
+        const bh = pb.rotated ? pb.w : pb.h;
+        return !currentBlocks.some(existing => {
+          const ew = existing.rotated ? existing.h : existing.w;
+          const eh = existing.rotated ? existing.w : existing.h;
+          return pb.col < existing.col + ew && pb.col + bw > existing.col &&
+                 pb.row < existing.row + eh && pb.row + bh > existing.row;
+        });
+      });
+      setCurrentBlocks([...currentBlocks, ...safe]);
+    }
+    setPendingPreset(null);
   };
 
   return (
@@ -227,39 +282,6 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
                   <input className="wiz-input" type="number" min={0} value={info.wattageMax} onChange={e => setField('wattageMax', e.target.value)} placeholder="—" />
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button
-                  type="button"
-                  onClick={() => setField('isShelf', !info.isShelf)}
-                  style={{
-                    padding: '5px 14px',
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
-                    background: info.isShelf ? accent : 'transparent',
-                    color: info.isShelf ? '#fff' : 'var(--text2, #8a9299)',
-                    border: `1px solid ${info.isShelf ? accent : 'var(--border2, #262c30)'}`,
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  {info.isShelf ? 'Shelf Device' : 'Shelf Device'}
-                </button>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text3, #4e5560)' }}>
-                  {info.isShelf ? 'active — grid size adjustable' : 'inactive — passive, no ports'}
-                </span>
-              </div>
-              {info.isShelf && info.formFactor === 'rack' && (
-                <div className="wiz-grid2">
-                  <div className="wiz-field">
-                    <label className="wiz-label">Grid Cols</label>
-                    <input className="wiz-input" type="number" min={1} max={200} value={info.gridCols} onChange={e => setField('gridCols', Math.max(1, parseInt(e.target.value) || 1))} />
-                  </div>
-                  <div className="wiz-field">
-                    <label className="wiz-label">Grid Rows</label>
-                    <input className="wiz-input" type="number" min={1} max={200} value={info.gridRows} onChange={e => setField('gridRows', Math.max(1, parseInt(e.target.value) || 1))} />
-                  </div>
-                </div>
-              )}
             </>
           )}
 
@@ -269,6 +291,9 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
                 activeTool={activeTool}
                 onSelect={d => setActiveTool(activeTool?.type === d.type ? null : d)}
                 panelFilter={panel}
+                gridCols={effectiveCols}
+                gridRows={effectiveRows}
+                onApplyPreset={handleApplyPreset}
               />
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
                 {/* Panel toggle */}
@@ -289,8 +314,8 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
                 <ErrorBoundary>
                   <GridEditor
                     blocks={currentBlocks}
-                    gridCols={info.formFactor === 'rack' && !info.isShelf ? 96 : info.gridCols}
-                    gridRows={info.formFactor === 'rack' && !info.isShelf ? info.uHeight * 12 : info.gridRows}
+                    gridCols={effectiveCols}
+                    gridRows={effectiveRows}
                     onChange={setCurrentBlocks}
                     activeTool={activeTool}
                     onClearTool={() => setActiveTool(null)}
@@ -349,6 +374,44 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
           </div>
         </div>
       </div>
+
+      {/* Conflict resolution dialog */}
+      {pendingPreset && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 2000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.5)',
+        }}>
+          <div style={{
+            background: 'var(--cardBg, #141618)',
+            border: '1px solid var(--border2, #262c30)',
+            borderRadius: 8,
+            padding: '20px 24px',
+            minWidth: 360,
+            boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text, #d4d9dd)', marginBottom: 8 }}>
+              Placement Conflict
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text2, #8a9299)', marginBottom: 16, lineHeight: 1.5 }}>
+              The preset overlaps with existing blocks. How would you like to proceed?
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn-ghost" onClick={() => handleConflictResolve('cancel')}>
+                Cancel
+              </button>
+              <button className="btn-ghost" onClick={() => handleConflictResolve('fill')}
+                style={{ borderColor: 'var(--accent, #c47c5a)', color: 'var(--accent, #c47c5a)' }}>
+                Fill Around
+              </button>
+              <button className="act-primary" onClick={() => handleConflictResolve('replace')}>
+                Replace All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

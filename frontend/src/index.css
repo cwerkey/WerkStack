@@ -396,6 +396,13 @@ ul, ol { list-style: none; }
 .wiz-input::placeholder {
   color: var(--text3, #4e5560);
 }
+/* Theme number input spinner arrows */
+.wiz-input[type="number"]::-webkit-inner-spin-button,
+.wiz-input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: inner-spin-button;
+  opacity: 1;
+  filter: invert(0.7) sepia(0.3) saturate(2) hue-rotate(340deg);
+}
 .wiz-grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
