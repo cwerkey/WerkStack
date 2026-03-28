@@ -68,7 +68,7 @@ function DriveModal({
     setErr(''); setBusy(false);
     setF(initial
       ? {
-          deviceId:      initial.deviceId,
+          deviceId:      initial.deviceId ?? '',
           slotBlockId:   initial.slotBlockId ?? '',
           label:         initial.label ?? '',
           capacity:      initial.capacity,
@@ -402,7 +402,7 @@ export function StorageDrivesTab({
             </thead>
             <tbody>
               {drives.map(drive => {
-                const device = deviceById.get(drive.deviceId);
+                const device = drive.deviceId ? deviceById.get(drive.deviceId) : undefined;
                 const pool   = drive.poolId ? poolById.get(drive.poolId) : undefined;
                 return (
                   <tr key={drive.id} className="st-row">

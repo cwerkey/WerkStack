@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import type { SiteCtx } from '../../SiteShell';
 import { Icon } from '../../../components/ui/Icon';
@@ -7,7 +7,7 @@ import { ErrorBoundary } from '../../../components/ui/ErrorBoundary';
 import { TemplateOverlay } from '../../../components/ui/TemplateOverlay';
 import { TemplateWizard } from './device_lib/TemplateWizard';
 import { PcieWizard } from './device_lib/PcieWizard';
-import { DeployModal } from './device_lib/DeployModal';
+import { DeployWizard } from './device_lib/DeployWizard';
 import { ExportModal, ImportModal } from './device_lib/ImportExportModal';
 import { useTemplateStore } from '../../../store/useTemplateStore';
 import { useTypesStore } from '../../../store/useTypesStore';
@@ -78,6 +78,31 @@ export function DeviceLibScreen() {
   const filteredDevices = deviceTemplates.filter(t =>
     typeFilter === null || typeFilter.has(t.category)
   );
+
+  // Group templates by manufacturer for collapsible sections
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const groupedTemplates = useMemo(() => {
+    const map = new Map<string, DeviceTemplate[]>();
+    for (const t of filteredDevices) {
+      const key = t.manufacturer?.trim() || '__custom__';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    }
+    const entries = [...map.entries()].sort((a, b) => {
+      if (a[0] === '__custom__') return 1;
+      if (b[0] === '__custom__') return -1;
+      return a[0].localeCompare(b[0]);
+    });
+    return entries;
+  }, [filteredDevices]);
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
 
   // Get device type display info
   const getTypeColor = (catId: string) => {
@@ -204,7 +229,7 @@ export function DeviceLibScreen() {
           />
         )}
 
-        {/* ── Device Templates ───────────────────────────────────── */}
+        {/* ── Device Templates (grouped by manufacturer) ─────────── */}
         {tab === 'device_temps' && (
           filteredDevices.length === 0 ? (
             <EmptyState
@@ -218,63 +243,102 @@ export function DeviceLibScreen() {
               }
             />
           ) : (
-            <div className="tmpl-grid">
-              {filteredDevices.map(t => (
-                <div key={t.id} className="tmpl-card">
-                  {/* Mini preview */}
-                  <div style={{ marginBottom: 8 }}>
-                    <ErrorBoundary>
-                      <TemplateOverlay
-                        blocks={t.layout.front}
-                        gridCols={t.formFactor === 'rack' ? 96 : (t.gridCols ?? 96)}
-                        gridRows={t.formFactor === 'rack' ? t.uHeight * 12 : (t.gridRows ?? 12)}
-                        width={210}
-                        showLabels={false}
-                      />
-                    </ErrorBoundary>
-                  </div>
+            <div style={{ padding: '0 14px 14px' }}>
+              {groupedTemplates.map(([groupKey, templates]) => {
+                const isCollapsed = collapsedGroups.has(groupKey);
+                const groupLabel = groupKey === '__custom__' ? 'Custom' : groupKey;
+                return (
+                  <div key={groupKey} style={{ marginBottom: 12 }}>
+                    {/* Group header */}
+                    <button
+                      onClick={() => toggleGroup(groupKey)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        width: '100%', background: 'none', border: 'none',
+                        padding: '8px 0 6px', cursor: 'pointer',
+                        borderBottom: '1px solid var(--border, #1d2022)',
+                        marginBottom: isCollapsed ? 0 : 8,
+                      }}
+                    >
+                      <Icon name={isCollapsed ? 'chevron-right' : 'chevron-down'} size={12} />
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
+                        fontWeight: 700, color: 'var(--text, #d4d9dd)',
+                      }}>
+                        {groupLabel}
+                      </span>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                        color: 'var(--text3, #4e5560)',
+                      }}>
+                        ({templates.length})
+                      </span>
+                    </button>
 
-                  {/* Info */}
-                  <div style={{
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
-                    fontWeight: 700, color: 'var(--text, #d4d9dd)',
-                    marginBottom: 2,
-                  }}>
-                    {t.make} {t.model}
-                  </div>
-                  <div style={{
-                    display: 'flex', gap: 6, alignItems: 'center',
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
-                    color: 'var(--text3, #4e5560)', marginBottom: 6,
-                  }}>
-                    <span className="badge" style={{
-                      background: getTypeColor(t.category) + '22',
-                      color: getTypeColor(t.category),
-                    }}>
-                      {getTypeName(t.category)}
-                    </span>
-                    <span>{t.formFactor}</span>
-                    <span>{t.uHeight}U</span>
-                    <span>{t.layout.front.length + t.layout.rear.length} blocks</span>
-                  </div>
+                    {/* Group body */}
+                    {!isCollapsed && (
+                      <div className="tmpl-grid">
+                        {templates.map(t => (
+                          <div key={t.id} className="tmpl-card">
+                            {/* Mini preview */}
+                            <div style={{ marginBottom: 8 }}>
+                              <ErrorBoundary>
+                                <TemplateOverlay
+                                  blocks={t.layout.front}
+                                  gridCols={t.formFactor === 'rack' ? 96 : (t.gridCols ?? 96)}
+                                  gridRows={t.formFactor === 'rack' ? t.uHeight * 12 : (t.gridRows ?? 12)}
+                                  width={210}
+                                  showLabels={false}
+                                />
+                              </ErrorBoundary>
+                            </div>
 
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    <button className="btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => { setDeployTpl(t); setDeployOpen(true); }}>
-                      <Icon name="zap" size={10} /> Deploy
-                    </button>
-                    <button className="btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => { setWizEdit(t); setWizOpen(true); }}>
-                      <Icon name="edit" size={10} /> Edit
-                    </button>
-                    <button className="btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => { setExportTpl(t); setExportOpen(true); }}>
-                      <Icon name="download" size={10} /> Export
-                    </button>
-                    <button className="btn-ghost" style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red, #c07070)' }} onClick={() => handleDeleteDevice(t)}>
-                      <Icon name="trash" size={10} />
-                    </button>
+                            {/* Info */}
+                            <div style={{
+                              fontFamily: "'JetBrains Mono', monospace", fontSize: 12,
+                              fontWeight: 700, color: 'var(--text, #d4d9dd)',
+                              marginBottom: 2,
+                            }}>
+                              {t.make} {t.model}
+                            </div>
+                            <div style={{
+                              display: 'flex', gap: 6, alignItems: 'center',
+                              fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                              color: 'var(--text3, #4e5560)', marginBottom: 6,
+                            }}>
+                              <span className="badge" style={{
+                                background: getTypeColor(t.category) + '22',
+                                color: getTypeColor(t.category),
+                              }}>
+                                {getTypeName(t.category)}
+                              </span>
+                              <span>{t.formFactor}</span>
+                              <span>{t.uHeight}U</span>
+                              <span>{t.layout.front.length + t.layout.rear.length} blocks</span>
+                            </div>
+
+                            {/* Actions */}
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              <button className="btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => { setDeployTpl(t); setDeployOpen(true); }}>
+                                <Icon name="zap" size={10} /> Deploy
+                              </button>
+                              <button className="btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => { setWizEdit(t); setWizOpen(true); }}>
+                                <Icon name="edit" size={10} /> Edit
+                              </button>
+                              <button className="btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => { setExportTpl(t); setExportOpen(true); }}>
+                                <Icon name="download" size={10} /> Export
+                              </button>
+                              <button className="btn-ghost" style={{ fontSize: 10, padding: '3px 8px', color: 'var(--red, #c07070)' }} onClick={() => handleDeleteDevice(t)}>
+                                <Icon name="trash" size={10} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )
         )}
@@ -361,10 +425,10 @@ export function DeviceLibScreen() {
         initial={pcieEdit}
         accent={accent}
       />
-      <DeployModal
+      <DeployWizard
         open={deployOpen}
         onClose={() => setDeployOpen(false)}
-        template={deployTpl}
+        templateId={deployTpl?.id}
         accent={accent}
         siteId={site?.id ?? ''}
       />

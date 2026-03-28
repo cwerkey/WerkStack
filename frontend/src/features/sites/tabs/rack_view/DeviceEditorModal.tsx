@@ -20,11 +20,12 @@ const TABS: { key: EditorTab; label: string }[] = [
 ];
 
 interface DeviceEditorModalProps {
-  open:     boolean;
-  onClose:  () => void;
-  device:   DeviceInstance | null;
-  siteId:   string;
-  accent:   string;
+  open:          boolean;
+  onClose:       () => void;
+  device:        DeviceInstance | null;
+  siteId:        string;
+  accent:        string;
+  renderAsPane?: boolean;  // When true, renders as inline pane instead of modal overlay
 }
 
 interface InfoDraft {
@@ -86,7 +87,7 @@ interface PortCtxState {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
-export function DeviceEditorModal({ open, onClose, device, siteId, accent }: DeviceEditorModalProps) {
+export function DeviceEditorModal({ open, onClose, device, siteId, accent, renderAsPane }: DeviceEditorModalProps) {
   const [tab, setTab]     = useState<EditorTab>('info');
   const [f, setF]         = useState<InfoDraft>({ name: '', ip: '', serial: '', assetTag: '', notes: '', face: 'front', rackU: '' });
   const [busy, setBusy]   = useState(false);
@@ -372,7 +373,7 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent }: Dev
             blocks={filteredBlocks}
             gridCols={gridCols}
             gridRows={gridRows}
-            width={560}
+            width={overlayWidth}
             showLabels
             interactive
             blockColors={buildBlockColors(filteredBlocks, mode === 'pcie' ? 'ports' : mode)}
@@ -388,15 +389,27 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent }: Dev
   }
 
 
-  return (
-    <div className="modal-overlay">
-      <div style={{
+  // ── Pane mode rendering — inline in rack view right panel ──
+  const panelWidth = renderAsPane ? undefined : 640;
+  const panelStyle: React.CSSProperties = renderAsPane
+    ? {
+        background: 'var(--cardBg2, #0c0d0e)',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        flex: 1, minHeight: 0,
+      }
+    : {
         background: 'var(--cardBg2, #0c0d0e)',
         border: '1px solid var(--border2, #262c30)',
-        borderRadius: 14, width: 640, maxWidth: 'calc(100vw - 32px)',
+        borderRadius: 14, width: panelWidth, maxWidth: 'calc(100vw - 32px)',
         maxHeight: 'calc(100vh - 64px)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
-      }} onMouseDown={e => e.stopPropagation()}>
+      };
+
+  const overlayWidth = renderAsPane ? 380 : 560;
+
+  const content = (
+    <>
+      <div style={panelStyle} onMouseDown={e => e.stopPropagation()}>
         {/* Header */}
         <div style={{
           padding: '14px 18px 0', display: 'flex', flexDirection: 'column',
@@ -616,7 +629,7 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent }: Dev
                         blocks={pcieSlots}
                         gridCols={gridCols}
                         gridRows={gridRows}
-                        width={560}
+                        width={overlayWidth}
                         showLabels
                         interactive
                         blockColors={slotColors}
@@ -786,6 +799,16 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent }: Dev
           onClose={() => setDriveEditorSlot(null)}
         />
       )}
+    </>
+  );
+
+  // Pane mode: render inline content directly (no overlay)
+  if (renderAsPane) return content;
+
+  // Modal mode: wrap in overlay
+  return (
+    <div className="modal-overlay">
+      {content}
     </div>
   );
 }

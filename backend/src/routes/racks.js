@@ -15,19 +15,22 @@ const RackSchema = z.object({
 });
 
 const DeviceInstanceSchema = z.object({
-  templateId:  z.string().uuid().optional(),
-  typeId:      z.string().min(1),
-  name:        z.string().min(1).max(200),
-  rackId:      z.string().uuid().optional(),
-  zoneId:      z.string().uuid().optional(),
-  rackU:       z.number().int().min(1).optional(),
-  uHeight:     z.number().int().min(1).optional(),
-  face:        z.enum(['front', 'rear']).default('front'),
-  ip:          z.string().max(200).optional(),
-  serial:      z.string().max(200).optional(),
-  assetTag:    z.string().max(200).optional(),
-  notes:       z.string().max(2000).optional(),
-  isDraft:     z.boolean().default(false),
+  templateId:    z.string().uuid().optional(),
+  typeId:        z.string().min(1),
+  name:          z.string().min(1).max(200),
+  rackId:        z.string().uuid().optional(),
+  zoneId:        z.string().uuid().optional(),
+  rackU:         z.number().int().min(1).optional(),
+  uHeight:       z.number().int().min(1).optional(),
+  face:          z.enum(['front', 'rear']).default('front'),
+  ip:            z.string().max(200).optional(),
+  serial:        z.string().max(200).optional(),
+  assetTag:      z.string().max(200).optional(),
+  notes:         z.string().max(2000).optional(),
+  isDraft:       z.boolean().default(false),
+  shelfDeviceId: z.string().uuid().optional(),
+  shelfCol:      z.number().int().min(0).optional(),
+  shelfRow:      z.number().int().min(0).optional(),
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -57,24 +60,27 @@ function toRack(row) {
 
 function toDevice(row) {
   return {
-    id:         row.id,
-    orgId:      row.org_id,
-    siteId:     row.site_id,
-    zoneId:     row.zone_id,
-    rackId:     row.rack_id,
-    templateId: row.template_id,
-    typeId:     row.type_id,
-    name:       row.name,
-    rackU:      row.rack_u,
-    uHeight:    row.u_height,
-    face:       row.face,
-    ip:         row.ip,
-    serial:     row.serial,
-    assetTag:   row.asset_tag,
-    notes:      row.notes,
-    isDraft:       row.is_draft,
-    currentStatus: row.current_status ?? undefined,
-    createdAt:     row.created_at,
+    id:             row.id,
+    orgId:          row.org_id,
+    siteId:         row.site_id,
+    zoneId:         row.zone_id,
+    rackId:         row.rack_id,
+    templateId:     row.template_id,
+    typeId:         row.type_id,
+    name:           row.name,
+    rackU:          row.rack_u,
+    uHeight:        row.u_height,
+    face:           row.face,
+    ip:             row.ip,
+    serial:         row.serial,
+    assetTag:       row.asset_tag,
+    notes:          row.notes,
+    isDraft:        row.is_draft,
+    currentStatus:  row.current_status ?? undefined,
+    shelfDeviceId:  row.shelf_device_id ?? undefined,
+    shelfCol:       row.shelf_col ?? undefined,
+    shelfRow:       row.shelf_row ?? undefined,
+    createdAt:      row.created_at,
   };
 }
 
@@ -247,7 +253,7 @@ module.exports = function racksRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId } = req.params;
-      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft } = req.body;
+      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow } = req.body;
 
       try {
         // If placing in a rack, check for collision
@@ -268,12 +274,13 @@ module.exports = function racksRoutes(db) {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `INSERT INTO device_instances
-               (org_id, site_id, zone_id, rack_id, template_id, type_id, name, rack_u, u_height, face, ip, serial, asset_tag, notes, is_draft)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+               (org_id, site_id, zone_id, rack_id, template_id, type_id, name, rack_u, u_height, face, ip, serial, asset_tag, notes, is_draft, shelf_device_id, shelf_col, shelf_row)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
              RETURNING *`,
             [orgId, siteId, zoneId ?? null, rackId ?? null, templateId ?? null,
              typeId, name, rackU ?? null, uHeight ?? null, face || 'front',
-             ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false]
+             ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false,
+             shelfDeviceId ?? null, shelfCol ?? null, shelfRow ?? null]
           )
         );
         res.status(201).json(toDevice(result.rows[0]));
@@ -294,7 +301,7 @@ module.exports = function racksRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, deviceId } = req.params;
-      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft } = req.body;
+      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow } = req.body;
 
       try {
         // Collision check on update
@@ -317,12 +324,14 @@ module.exports = function racksRoutes(db) {
             `UPDATE device_instances
              SET template_id = $1, type_id = $2, name = $3, rack_id = $4, zone_id = $5,
                  rack_u = $6, u_height = $7, face = $8, ip = $9, serial = $10,
-                 asset_tag = $11, notes = $12, is_draft = $13
-             WHERE id = $14 AND site_id = $15 AND org_id = $16
+                 asset_tag = $11, notes = $12, is_draft = $13,
+                 shelf_device_id = $14, shelf_col = $15, shelf_row = $16
+             WHERE id = $17 AND site_id = $18 AND org_id = $19
              RETURNING *`,
             [templateId ?? null, typeId, name, rackId ?? null, zoneId ?? null,
              rackU ?? null, uHeight ?? null, face || 'front',
              ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false,
+             shelfDeviceId ?? null, shelfCol ?? null, shelfRow ?? null,
              deviceId, siteId, orgId]
           )
         );

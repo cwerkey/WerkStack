@@ -25,6 +25,7 @@ const FORM_FACTORS: { value: PcieFormFactor; label: string; cols: number; rows: 
 const BUS_SIZES: PcieBusSize[] = ['x1', 'x4', 'x8', 'x16'];
 
 interface InfoForm {
+  manufacturer: string;
   make:       string;
   model:      string;
   busSize:    PcieBusSize;
@@ -34,7 +35,7 @@ interface InfoForm {
 }
 
 function blankInfo(): InfoForm {
-  return { make: '', model: '', busSize: 'x16', formFactor: 'fh', laneDepth: 1, doubleSlot: false };
+  return { manufacturer: '', make: '', model: '', busSize: 'x16', formFactor: 'fh', laneDepth: 1, doubleSlot: false };
 }
 
 function getGrid(ff: PcieFormFactor, doubleSlot: boolean): { cols: number; rows: number } {
@@ -53,11 +54,17 @@ export function PcieWizard({ open, onClose, initial, accent }: PcieWizardProps) 
   const [error, setError] = useState('');
 
   const upsertPcieTemplate = useTemplateStore(s => s.upsertPcieTemplate);
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
+
+  useEffect(() => {
+    api.get<string[]>('/api/templates/manufacturers').then(setManufacturers).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     if (initial) {
       setInfo({
+        manufacturer: initial.manufacturer ?? '',
         make: initial.make,
         model: initial.model,
         busSize: initial.busSize,
@@ -89,6 +96,7 @@ export function PcieWizard({ open, onClose, initial, accent }: PcieWizardProps) 
     setError('');
     try {
       const payload = {
+        manufacturer: info.manufacturer.trim() || undefined,
         make: info.make.trim(),
         model: info.model.trim(),
         busSize: info.busSize,
@@ -153,14 +161,27 @@ export function PcieWizard({ open, onClose, initial, accent }: PcieWizardProps) 
         <div style={{ padding: '0 18px 16px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {step === 'info' && (
             <>
-              <div className="wiz-grid2">
+              <div className="wiz-grid3">
                 <div className="wiz-field">
-                  <label className="wiz-label">Make / Manufacturer</label>
-                  <input className="wiz-input" value={info.make} onChange={e => setField('make', e.target.value)} placeholder="Intel, Mellanox..." />
+                  <label className="wiz-label">Manufacturer</label>
+                  <input
+                    className="wiz-input"
+                    list="pcie-mfr-list"
+                    value={info.manufacturer}
+                    onChange={e => setField('manufacturer', e.target.value)}
+                    placeholder="Intel, Mellanox..."
+                  />
+                  <datalist id="pcie-mfr-list">
+                    {manufacturers.map(m => <option key={m} value={m} />)}
+                  </datalist>
+                </div>
+                <div className="wiz-field">
+                  <label className="wiz-label">Make</label>
+                  <input className="wiz-input" value={info.make} onChange={e => setField('make', e.target.value)} placeholder="ConnectX, X710..." />
                 </div>
                 <div className="wiz-field">
                   <label className="wiz-label">Model</label>
-                  <input className="wiz-input" value={info.model} onChange={e => setField('model', e.target.value)} placeholder="X710-DA2..." />
+                  <input className="wiz-input" value={info.model} onChange={e => setField('model', e.target.value)} placeholder="DA2, 4Lx EN..." />
                 </div>
               </div>
               <div className="wiz-grid3">

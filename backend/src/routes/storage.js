@@ -8,7 +8,7 @@ const { validate } = require('../middleware/validate');
 // ── Validation schemas ────────────────────────────────────────────────────────
 
 const DriveSchema = z.object({
-  deviceId:      z.string().uuid(),
+  deviceId:      z.string().uuid().optional().nullable(),
   slotBlockId:   z.string().max(200).optional(),
   label:         z.string().max(200).optional(),
   capacity:      z.string().min(1).max(50),
@@ -135,6 +135,76 @@ module.exports = function storageRoutes(db) {
       res.status(500).json({ error: 'server error' });
     }
   });
+
+  // ── GET /api/sites/:siteId/drives/inventory — uninstalled drives ─────────
+  router.get('/:siteId/drives/inventory', requireAuth, requireSiteAccess(db), async (req, res) => {
+    const { orgId } = req.user;
+    const { siteId } = req.params;
+    try {
+      const result = await withOrg(db, orgId, c =>
+        c.query(
+          `SELECT * FROM drives WHERE site_id = $1 AND org_id = $2 AND device_id IS NULL ORDER BY created_at`,
+          [siteId, orgId]
+        )
+      );
+      res.json(result.rows.map(toDrive));
+    } catch (err) {
+      console.error(`[GET /api/sites/${siteId}/drives/inventory]`, err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
+  // ── PATCH /api/sites/:siteId/drives/:driveId/assign — assign drive to device slot
+  router.patch(
+    '/:siteId/drives/:driveId/assign',
+    requireAuth, requireSiteAccess(db), requireRole('member'),
+    async (req, res) => {
+      const { orgId } = req.user;
+      const { siteId, driveId } = req.params;
+      const { deviceId, slotBlockId } = req.body;
+      if (!deviceId) return res.status(400).json({ error: 'deviceId is required' });
+      try {
+        const result = await withOrg(db, orgId, c =>
+          c.query(
+            `UPDATE drives SET device_id = $1, slot_block_id = $2
+             WHERE id = $3 AND site_id = $4 AND org_id = $5
+             RETURNING *`,
+            [deviceId, slotBlockId ?? null, driveId, siteId, orgId]
+          )
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'drive not found' });
+        res.json(toDrive(result.rows[0]));
+      } catch (err) {
+        console.error(`[PATCH /api/sites/${siteId}/drives/${driveId}/assign]`, err);
+        res.status(500).json({ error: 'server error' });
+      }
+    }
+  );
+
+  // ── PATCH /api/sites/:siteId/drives/:driveId/unassign — return drive to inventory
+  router.patch(
+    '/:siteId/drives/:driveId/unassign',
+    requireAuth, requireSiteAccess(db), requireRole('member'),
+    async (req, res) => {
+      const { orgId } = req.user;
+      const { siteId, driveId } = req.params;
+      try {
+        const result = await withOrg(db, orgId, c =>
+          c.query(
+            `UPDATE drives SET device_id = NULL, slot_block_id = NULL
+             WHERE id = $1 AND site_id = $2 AND org_id = $3
+             RETURNING *`,
+            [driveId, siteId, orgId]
+          )
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'drive not found' });
+        res.json(toDrive(result.rows[0]));
+      } catch (err) {
+        console.error(`[PATCH /api/sites/${siteId}/drives/${driveId}/unassign]`, err);
+        res.status(500).json({ error: 'server error' });
+      }
+    }
+  );
 
   router.post(
     '/:siteId/drives',

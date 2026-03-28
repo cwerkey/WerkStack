@@ -26,6 +26,7 @@ const GridLayoutSchema = z.object({
 });
 
 const DeviceTemplateSchema = z.object({
+  manufacturer: z.string().max(200).optional(),
   make:       z.string().min(1).max(200),
   model:      z.string().min(1).max(200),
   category:   z.string().min(1).max(100),
@@ -40,6 +41,7 @@ const DeviceTemplateSchema = z.object({
 });
 
 const PcieTemplateSchema = z.object({
+  manufacturer: z.string().max(200).optional(),
   make:       z.string().min(1).max(200),
   model:      z.string().min(1).max(200),
   busSize:    z.enum(['x1', 'x4', 'x8', 'x16']),
@@ -79,34 +81,36 @@ async function withOrg(db, orgId, fn) {
 
 function toDeviceTemplate(row) {
   return {
-    id:         row.id,
-    orgId:      row.org_id,
-    make:       row.make,
-    model:      row.model,
-    category:   row.category,
-    formFactor: row.form_factor,
-    uHeight:    row.u_height,
-    gridCols:   row.grid_cols,
-    gridRows:   row.grid_rows,
-    wattageMax: row.wattage_max,
-    layout:     typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
-    imageUrl:   row.image_url,
-    isShelf:    row.is_shelf,
-    createdAt:  row.created_at,
+    id:           row.id,
+    orgId:        row.org_id,
+    manufacturer: row.manufacturer ?? undefined,
+    make:         row.make,
+    model:        row.model,
+    category:     row.category,
+    formFactor:   row.form_factor,
+    uHeight:      row.u_height,
+    gridCols:     row.grid_cols,
+    gridRows:     row.grid_rows,
+    wattageMax:   row.wattage_max,
+    layout:       typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
+    imageUrl:     row.image_url,
+    isShelf:      row.is_shelf,
+    createdAt:    row.created_at,
   };
 }
 
 function toPcieTemplate(row) {
   return {
-    id:         row.id,
-    orgId:      row.org_id,
-    make:       row.make,
-    model:      row.model,
-    busSize:    row.bus_size,
-    formFactor: row.form_factor,
-    laneDepth:  row.lane_depth,
-    layout:     typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
-    createdAt:  row.created_at,
+    id:           row.id,
+    orgId:        row.org_id,
+    manufacturer: row.manufacturer ?? undefined,
+    make:         row.make,
+    model:        row.model,
+    busSize:      row.bus_size,
+    formFactor:   row.form_factor,
+    laneDepth:    row.lane_depth,
+    layout:       typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
+    createdAt:    row.created_at,
   };
 }
 
@@ -154,15 +158,15 @@ module.exports = function templatesRoutes(db) {
     validate(DeviceTemplateSchema),
     async (req, res) => {
       const { orgId } = req.user;
-      const { make, model, category, formFactor, uHeight, gridCols, gridRows, wattageMax, layout, imageUrl, isShelf } = req.body;
+      const { manufacturer, make, model, category, formFactor, uHeight, gridCols, gridRows, wattageMax, layout, imageUrl, isShelf } = req.body;
       try {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `INSERT INTO device_templates
-             (org_id, make, model, category, form_factor, u_height, grid_cols, grid_rows, wattage_max, layout, image_url, is_shelf)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+             (org_id, manufacturer, make, model, category, form_factor, u_height, grid_cols, grid_rows, wattage_max, layout, image_url, is_shelf)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
              RETURNING *`,
-            [orgId, make, model, category, formFactor, uHeight, gridCols ?? null, gridRows ?? null, wattageMax ?? null, JSON.stringify(layout), imageUrl ?? null, isShelf]
+            [orgId, manufacturer ?? null, make, model, category, formFactor, uHeight, gridCols ?? null, gridRows ?? null, wattageMax ?? null, JSON.stringify(layout), imageUrl ?? null, isShelf]
           )
         );
         res.status(201).json(toDeviceTemplate(result.rows[0]));
@@ -182,17 +186,17 @@ module.exports = function templatesRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { id } = req.params;
-      const { make, model, category, formFactor, uHeight, gridCols, gridRows, wattageMax, layout, imageUrl, isShelf } = req.body;
+      const { manufacturer, make, model, category, formFactor, uHeight, gridCols, gridRows, wattageMax, layout, imageUrl, isShelf } = req.body;
       try {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `UPDATE device_templates
-             SET make = $1, model = $2, category = $3, form_factor = $4, u_height = $5,
-                 grid_cols = $6, grid_rows = $7, wattage_max = $8, layout = $9,
-                 image_url = $10, is_shelf = $11
-             WHERE id = $12 AND org_id = $13
+             SET manufacturer = $1, make = $2, model = $3, category = $4, form_factor = $5, u_height = $6,
+                 grid_cols = $7, grid_rows = $8, wattage_max = $9, layout = $10,
+                 image_url = $11, is_shelf = $12
+             WHERE id = $13 AND org_id = $14
              RETURNING *`,
-            [make, model, category, formFactor, uHeight, gridCols ?? null, gridRows ?? null, wattageMax ?? null, JSON.stringify(layout), imageUrl ?? null, isShelf, id, orgId]
+            [manufacturer ?? null, make, model, category, formFactor, uHeight, gridCols ?? null, gridRows ?? null, wattageMax ?? null, JSON.stringify(layout), imageUrl ?? null, isShelf, id, orgId]
           )
         );
         if (result.rows.length === 0) {
@@ -348,15 +352,15 @@ module.exports = function templatesRoutes(db) {
     validate(PcieTemplateSchema),
     async (req, res) => {
       const { orgId } = req.user;
-      const { make, model, busSize, formFactor, laneDepth, layout } = req.body;
+      const { manufacturer, make, model, busSize, formFactor, laneDepth, layout } = req.body;
       try {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `INSERT INTO pcie_card_templates
-             (org_id, make, model, bus_size, form_factor, lane_depth, layout)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             (org_id, manufacturer, make, model, bus_size, form_factor, lane_depth, layout)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
-            [orgId, make, model, busSize, formFactor, laneDepth ?? 1, JSON.stringify(layout)]
+            [orgId, manufacturer ?? null, make, model, busSize, formFactor, laneDepth ?? 1, JSON.stringify(layout)]
           )
         );
         res.status(201).json(toPcieTemplate(result.rows[0]));
@@ -376,16 +380,16 @@ module.exports = function templatesRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { id } = req.params;
-      const { make, model, busSize, formFactor, laneDepth, layout } = req.body;
+      const { manufacturer, make, model, busSize, formFactor, laneDepth, layout } = req.body;
       try {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `UPDATE pcie_card_templates
-             SET make = $1, model = $2, bus_size = $3, form_factor = $4,
-                 lane_depth = $5, layout = $6
-             WHERE id = $7 AND org_id = $8
+             SET manufacturer = $1, make = $2, model = $3, bus_size = $4, form_factor = $5,
+                 lane_depth = $6, layout = $7
+             WHERE id = $8 AND org_id = $9
              RETURNING *`,
-            [make, model, busSize, formFactor, laneDepth ?? 1, JSON.stringify(layout), id, orgId]
+            [manufacturer ?? null, make, model, busSize, formFactor, laneDepth ?? 1, JSON.stringify(layout), id, orgId]
           )
         );
         if (result.rows.length === 0) {
@@ -424,6 +428,31 @@ module.exports = function templatesRoutes(db) {
       }
     }
   );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  MANUFACTURERS — /api/templates/manufacturers
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── GET /api/templates/manufacturers — distinct manufacturers for dropdowns
+  router.get('/manufacturers', requireAuth, async (req, res) => {
+    const { orgId } = req.user;
+    try {
+      const result = await withOrg(db, orgId, (c) =>
+        c.query(
+          `SELECT DISTINCT manufacturer FROM (
+             SELECT manufacturer FROM device_templates WHERE org_id = $1 AND manufacturer IS NOT NULL AND manufacturer != ''
+             UNION
+             SELECT manufacturer FROM pcie_card_templates WHERE org_id = $1 AND manufacturer IS NOT NULL AND manufacturer != ''
+           ) combined ORDER BY manufacturer`,
+          [orgId]
+        )
+      );
+      res.json(result.rows.map(r => r.manufacturer));
+    } catch (err) {
+      console.error('[GET /api/templates/manufacturers]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
 
   return router;
 };

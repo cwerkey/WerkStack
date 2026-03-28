@@ -63,20 +63,21 @@ export interface GridLayout {
 export type FormFactor = 'rack' | 'desktop' | 'wall-mount';
 
 export interface DeviceTemplate {
-  id:          string;
-  orgId:       string;
-  make:        string;
-  model:       string;
-  category:    string;
-  formFactor:  FormFactor;
-  uHeight:     number;
-  gridCols?:   number;
-  gridRows?:   number;
-  wattageMax?: number;
-  layout:      GridLayout;
-  imageUrl?:   string;
-  isShelf:     boolean;
-  createdAt:   string;
+  id:            string;
+  orgId:         string;
+  manufacturer?: string;
+  make:          string;
+  model:         string;
+  category:      string;
+  formFactor:    FormFactor;
+  uHeight:       number;
+  gridCols?:     number;
+  gridRows?:     number;
+  wattageMax?:   number;
+  layout:        GridLayout;
+  imageUrl?:     string;
+  isShelf:       boolean;
+  createdAt:     string;
 }
 
 // ─── PCIe Card Templates ──────────────────────────────────────────────────────
@@ -85,15 +86,16 @@ export type PcieFormFactor = 'fh' | 'lp' | 'dw';
 export type PcieBusSize = 'x1' | 'x4' | 'x8' | 'x16';
 
 export interface PcieTemplate {
-  id:         string;
-  orgId:      string;
-  make:       string;
-  model:      string;
-  busSize:    PcieBusSize;
-  formFactor: PcieFormFactor;
-  laneDepth:  number;
-  layout:     { rear: PlacedBlock[] };
-  createdAt:  string;
+  id:            string;
+  orgId:         string;
+  manufacturer?: string;
+  make:          string;
+  model:         string;
+  busSize:       PcieBusSize;
+  formFactor:    PcieFormFactor;
+  laneDepth:     number;
+  layout:        { rear: PlacedBlock[] };
+  createdAt:     string;
 }
 
 // ─── Organization / Auth ──────────────────────────────────────────────────────
@@ -155,23 +157,26 @@ export interface Rack {
 // ─── Device Instances ─────────────────────────────────────────────────────────
 
 export interface DeviceInstance {
-  id:           string;
-  orgId:        string;
-  siteId:       string;
-  zoneId?:      string;
-  rackId?:      string;
-  templateId?:  string;
-  typeId:       string;
-  name:         string;
-  rackU?:       number;
-  uHeight?:     number;
-  face?:        'front' | 'rear';
-  ip?:          string;
-  serial?:      string;
-  assetTag?:    string;
-  notes?:       string;
+  id:             string;
+  orgId:          string;
+  siteId:         string;
+  zoneId?:        string;
+  rackId?:        string;
+  templateId?:    string;
+  typeId:         string;
+  name:           string;
+  rackU?:         number;
+  uHeight?:       number;
+  face?:          'front' | 'rear';
+  ip?:            string;
+  serial?:        string;
+  assetTag?:      string;
+  notes?:         string;
   isDraft:        boolean;
   currentStatus?: DeviceStatus;
+  shelfDeviceId?: string;
+  shelfCol?:      number;
+  shelfRow?:      number;
   createdAt:      string;
 }
 
@@ -260,7 +265,7 @@ export interface Drive {
   id:             string;
   orgId:          string;
   siteId:         string;
-  deviceId:       string;
+  deviceId?:      string;   // null = inventory/ledger drive (not installed)
   slotBlockId?:   string;   // PlacedBlock.id in template layout; null = internal/unlisted
   label?:         string;
   capacity:       string;   // e.g. "4T", "960G"

@@ -19,25 +19,27 @@ export const GridLayoutSchema = z.object({
 });
 
 export const DeviceTemplateSchema = z.object({
-  make:        z.string().min(1),
-  model:       z.string().min(1),
-  category:    z.string().min(1),
-  formFactor:  z.enum(['rack', 'desktop', 'wall-mount']),
-  uHeight:     z.number().int().positive(),
-  gridCols:    z.number().int().positive().optional(),
-  gridRows:    z.number().int().positive().optional(),
-  wattageMax:  z.number().positive().optional(),
-  layout:      GridLayoutSchema,
-  imageUrl:    z.string().url().optional(),
-  isShelf:     z.boolean().default(false),
+  manufacturer: z.string().max(200).optional(),
+  make:         z.string().min(1),
+  model:        z.string().min(1),
+  category:     z.string().min(1),
+  formFactor:   z.enum(['rack', 'desktop', 'wall-mount']),
+  uHeight:      z.number().int().positive(),
+  gridCols:     z.number().int().positive().optional(),
+  gridRows:     z.number().int().positive().optional(),
+  wattageMax:   z.number().positive().optional(),
+  layout:       GridLayoutSchema,
+  imageUrl:     z.string().url().optional(),
+  isShelf:      z.boolean().default(false),
 });
 
 export const PcieTemplateSchema = z.object({
-  make:       z.string().min(1),
-  model:      z.string().min(1),
-  busSize:    z.enum(['x1', 'x4', 'x8', 'x16']),
-  formFactor: z.enum(['fh', 'lp', 'dw']),
-  layout:     z.object({ rear: z.array(PlacedBlockSchema) }),
+  manufacturer: z.string().max(200).optional(),
+  make:         z.string().min(1),
+  model:        z.string().min(1),
+  busSize:      z.enum(['x1', 'x4', 'x8', 'x16']),
+  formFactor:   z.enum(['fh', 'lp', 'dw']),
+  layout:       z.object({ rear: z.array(PlacedBlockSchema) }),
 });
 
 export const SiteSchema = z.object({
@@ -87,19 +89,22 @@ export const TicketCategorySchema = TypePayloadSchema;
 
 // ─── Device Instance CRUD ────────────────────────────────────────────────────
 export const DeviceInstanceSchema = z.object({
-  templateId:  z.string().uuid().optional(),
-  typeId:      z.string().min(1),
-  name:        z.string().min(1).max(200),
-  rackId:      z.string().uuid().optional(),
-  zoneId:      z.string().uuid().optional(),
-  rackU:       z.number().int().min(1).optional(),
-  uHeight:     z.number().int().min(1).optional(),
-  face:        z.enum(['front', 'rear']).default('front'),
-  ip:          z.string().max(200).optional(),
-  serial:      z.string().max(200).optional(),
-  assetTag:    z.string().max(200).optional(),
-  notes:       z.string().max(2000).optional(),
-  isDraft:     z.boolean().default(true),
+  templateId:    z.string().uuid().optional(),
+  typeId:        z.string().min(1),
+  name:          z.string().min(1).max(200),
+  rackId:        z.string().uuid().optional(),
+  zoneId:        z.string().uuid().optional(),
+  rackU:         z.number().int().min(1).optional(),
+  uHeight:       z.number().int().min(1).optional(),
+  face:          z.enum(['front', 'rear']).default('front'),
+  ip:            z.string().max(200).optional(),
+  serial:        z.string().max(200).optional(),
+  assetTag:      z.string().max(200).optional(),
+  notes:         z.string().max(2000).optional(),
+  isDraft:       z.boolean().default(true),
+  shelfDeviceId: z.string().uuid().optional(),
+  shelfCol:      z.number().int().min(0).optional(),
+  shelfRow:      z.number().int().min(0).optional(),
 });
 
 // ─── VPN Tunnel ─────────────────────────────────────────────────────────────

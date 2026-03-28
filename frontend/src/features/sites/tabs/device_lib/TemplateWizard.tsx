@@ -25,6 +25,7 @@ const FORM_FACTORS: { value: FormFactor; label: string }[] = [
 ];
 
 interface InfoForm {
+  manufacturer: string;
   make:       string;
   model:      string;
   category:   string;
@@ -38,7 +39,7 @@ interface InfoForm {
 
 function blankInfo(): InfoForm {
   return {
-    make: '', model: '', category: 'dt-server',
+    manufacturer: '', make: '', model: '', category: 'dt-server',
     formFactor: 'rack', uHeight: 1, gridCols: 96, gridRows: 12,
     wattageMax: '', isShelf: false,
   };
@@ -56,11 +57,18 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
   const [presetToPlace, setPresetToPlace] = useState<PlacedBlock[] | null>(null);
 
   const upsertDeviceTemplate = useTemplateStore(s => s.upsertDeviceTemplate);
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
+
+  // Fetch existing manufacturers for dropdown
+  useEffect(() => {
+    api.get<string[]>('/api/templates/manufacturers').then(setManufacturers).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     if (initial) {
       setInfo({
+        manufacturer: initial.manufacturer ?? '',
         make: initial.make,
         model: initial.model,
         category: initial.category,
@@ -103,6 +111,7 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
     setError('');
     try {
       const payload = {
+        manufacturer: info.manufacturer.trim() || undefined,
         make:       info.make.trim(),
         model:      info.model.trim(),
         category:   info.category.trim(),
@@ -244,14 +253,27 @@ export function TemplateWizard({ open, onClose, initial, accent }: TemplateWizar
         <div style={{ padding: '0 18px 16px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {step === 'info' && (
             <>
-              <div className="wiz-grid2">
+              <div className="wiz-grid3">
                 <div className="wiz-field">
-                  <label className="wiz-label">Make / Manufacturer</label>
-                  <input className="wiz-input" value={info.make} onChange={e => setField('make', e.target.value)} placeholder="Dell, Supermicro..." />
+                  <label className="wiz-label">Manufacturer</label>
+                  <input
+                    className="wiz-input"
+                    list="mfr-list"
+                    value={info.manufacturer}
+                    onChange={e => setField('manufacturer', e.target.value)}
+                    placeholder="Dell, Supermicro..."
+                  />
+                  <datalist id="mfr-list">
+                    {manufacturers.map(m => <option key={m} value={m} />)}
+                  </datalist>
+                </div>
+                <div className="wiz-field">
+                  <label className="wiz-label">Make</label>
+                  <input className="wiz-input" value={info.make} onChange={e => setField('make', e.target.value)} placeholder="PowerEdge, X11..." />
                 </div>
                 <div className="wiz-field">
                   <label className="wiz-label">Model</label>
-                  <input className="wiz-input" value={info.model} onChange={e => setField('model', e.target.value)} placeholder="R730xd, X11SSH..." />
+                  <input className="wiz-input" value={info.model} onChange={e => setField('model', e.target.value)} placeholder="R730xd, SSH-F..." />
                 </div>
               </div>
               <div className="wiz-grid2">

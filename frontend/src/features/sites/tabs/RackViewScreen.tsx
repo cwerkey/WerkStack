@@ -11,6 +11,8 @@ import { api } from '../../../utils/api';
 import { getDeviceDisplayInfo } from './rack_view/DeviceOverlay';
 import { DeviceEditorModal } from './rack_view/DeviceEditorModal';
 import { buildVirtualFaceplate } from './rack_view/portAggregator';
+import { DeployWizard } from './device_lib/DeployWizard';
+import { ShelfDetailModal } from './rack_view/ShelfDetailModal';
 import { BLOCK_DEF_MAP } from '@werkstack/shared';
 import type { SiteCtx } from '../../SiteShell';
 import type { DeviceInstance } from '@werkstack/shared';
@@ -38,12 +40,22 @@ export function RackViewScreen() {
   const [mapOverlay, setMapOverlay]         = useState<MapOverlay>('none');
   const [showDeviceRear, setShowDeviceRear] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<DeviceInstance | null>(null);
-  const [editorOpen, setEditorOpen]         = useState(false);
+  const [paneMode, setPaneMode]             = useState<'info' | 'inventory'>('inventory');
 
   // Drag state
   const [dragDevice, setDragDevice]   = useState<DeviceInstance | null>(null);
   const [dragGhostU, setDragGhostU]   = useState<number | null>(null);
   const rackBodyRef = useRef<HTMLDivElement>(null);
+
+  // Right-click context menu state
+  const [rackCtx, setRackCtx] = useState<{ x: number; y: number; u: number } | null>(null);
+
+  // Deploy wizard state
+  const [deployOpen, setDeployOpen] = useState(false);
+  const [deployPreU, setDeployPreU] = useState<number | undefined>();
+
+  // Shelf detail modal state
+  const [shelfDetailDevice, setShelfDetailDevice] = useState<DeviceInstance | null>(null);
 
   // Auto-select first rack
   const activeRack = racks.find(r => r.id === selectedRackId) ?? racks[0] ?? null;
@@ -68,6 +80,18 @@ export function RackViewScreen() {
   const unrackedDevices = useMemo(() =>
     devices.filter(d => !d.rackId),
   [devices]);
+
+  // Devices on shelves in this rack
+  const shelfChildren = useMemo(() => {
+    const map = new Map<string, DeviceInstance[]>();
+    for (const d of devices) {
+      if (d.shelfDeviceId) {
+        if (!map.has(d.shelfDeviceId)) map.set(d.shelfDeviceId, []);
+        map.get(d.shelfDeviceId)!.push(d);
+      }
+    }
+    return map;
+  }, [devices]);
 
   // U positions for the rack (bottom-up numbering: U1 at bottom)
   const uPositions = useMemo(() => {
@@ -194,8 +218,70 @@ export function RackViewScreen() {
   }
 
   function handleDeviceClick(device: DeviceInstance) {
-    setSelectedDevice(device);
-    setEditorOpen(true);
+    // Only racked devices open the editor pane
+    if (device.rackId) {
+      setSelectedDevice(device);
+      setPaneMode('info');
+    }
+  }
+
+  // Check if a U position is occupied by any device on the current face
+  function isUEmpty(u: number): boolean {
+    return !faceDevices.some(d => {
+      if (!d.rackU || !d.uHeight) return false;
+      return u >= d.rackU && u < d.rackU + d.uHeight;
+    });
+  }
+
+  // Right-click on empty rack row
+  function handleRowContextMenu(e: React.MouseEvent, u: number) {
+    if (!isUEmpty(u)) return; // only empty rows
+    e.preventDefault();
+    setRackCtx({ x: e.clientX, y: e.clientY, u });
+  }
+
+  // Rack-mountable unracked devices for context menu
+  const rackMountableUnracked = useMemo(() =>
+    unrackedDevices.filter(d => {
+      const tmpl = d.templateId ? deviceTemplates.find(t => t.id === d.templateId) : null;
+      return tmpl?.formFactor === 'rack' || (!tmpl && d.uHeight && d.uHeight > 0);
+    }),
+  [unrackedDevices, deviceTemplates]);
+
+  // Create a shelf at the right-clicked U position
+  function handleAddShelf(uHeight: number) {
+    if (!activeRackId || !site || !rackCtx) return;
+    api.post<DeviceInstance>(
+      `/api/sites/${site.id}/devices`,
+      {
+        typeId: 'dt-shelf',
+        name: `Shelf ${uHeight}U`,
+        rackId: activeRackId,
+        rackU: rackCtx.u,
+        uHeight,
+        face,
+        isDraft: false,
+      }
+    ).then(device => {
+      useRackStore.getState().upsertDevice(device);
+    }).catch(err => {
+      console.error('[add shelf]', err);
+    });
+    setRackCtx(null);
+  }
+
+  // Place an unracked device at the right-clicked U position
+  function handlePlaceFromContext(device: DeviceInstance) {
+    if (!activeRackId || !site || !rackCtx) return;
+    api.patch<DeviceInstance>(
+      `/api/sites/${site.id}/devices/${device.id}/position`,
+      { rackId: activeRackId, rackU: rackCtx.u, face }
+    ).then(updated => {
+      if (updated) useRackStore.getState().upsertDevice(updated);
+    }).catch(err => {
+      console.error('[context place]', err);
+    });
+    setRackCtx(null);
   }
 
   // Render a device at its U position
@@ -208,10 +294,100 @@ export function RackViewScreen() {
 
     const topOffset = (activeRack.uHeight - device.rackU - device.uHeight + 1) * RACK_U_HEIGHT;
     const height = device.uHeight * RACK_U_HEIGHT;
+    const isShelf = device.typeId === 'dt-shelf';
 
     // Determine which face's blocks to show
     const showFace = showDeviceRear && device.face === 'front' && face === 'front'
       ? 'rear' : (isGhost ? (face === 'front' ? 'rear' : 'front') : face);
+
+    // Shelf rendering
+    if (isShelf) {
+      const children = shelfChildren.get(device.id) ?? [];
+      const shelfGridCols = 96;
+      const shelfGridRows = device.uHeight * 12;
+      const cellW = RACK_WIDTH / shelfGridCols;
+      const cellH = height / shelfGridRows;
+
+      return (
+        <div
+          key={device.id}
+          style={{
+            position: 'absolute',
+            top: topOffset,
+            left: 0,
+            right: 0,
+            height,
+            opacity: isGhost ? 0.35 : 1,
+            cursor: isGhost ? 'default' : 'pointer',
+            zIndex: isGhost ? 1 : 2,
+            pointerEvents: isGhost ? 'none' : 'auto',
+          }}
+          onClick={isGhost ? undefined : () => handleDeviceClick(device)}
+          onDoubleClick={isGhost ? undefined : () => setShelfDetailDevice(device)}
+          draggable={!isGhost}
+          onDragStart={!isGhost ? () => handleDragStart(device) : undefined}
+        >
+          <div style={{
+            width: RACK_WIDTH,
+            height: height - 2,
+            background: '#8a929910',
+            border: '1px solid #8a929933',
+            borderRadius: 4,
+            position: 'relative',
+            overflow: 'hidden',
+          }}>
+            {/* Shelf label */}
+            <div style={{
+              position: 'absolute', top: 2, left: 6,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 8, color: '#8a929966',
+              userSelect: 'none', zIndex: 1,
+            }}>
+              {device.name}
+            </div>
+
+            {/* Shelf children devices */}
+            {children.map(child => {
+              if (child.shelfCol == null || child.shelfRow == null) return null;
+              const childTemplate = child.templateId
+                ? deviceTemplates.find(t => t.id === child.templateId)
+                : undefined;
+              const childCols = childTemplate?.gridCols ?? 10;
+              const childRows = childTemplate?.gridRows ?? 10;
+              const childDt = deviceTypes.find(t => t.id === child.typeId);
+              return (
+                <div
+                  key={child.id}
+                  style={{
+                    position: 'absolute',
+                    left: child.shelfCol * cellW,
+                    top: child.shelfRow * cellH,
+                    width: childCols * cellW,
+                    height: childRows * cellH,
+                    background: (childDt?.color ?? '#666') + '22',
+                    border: `1px solid ${(childDt?.color ?? '#666')}55`,
+                    borderRadius: 2,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    overflow: 'hidden',
+                    zIndex: 2,
+                  }}
+                  onClick={e => { e.stopPropagation(); handleDeviceClick(child); }}
+                >
+                  <span style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 7, color: childDt?.color ?? '#666',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    padding: '0 2px',
+                  }}>
+                    {child.name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div
@@ -433,6 +609,7 @@ export function RackViewScreen() {
                     }}
                     onDragOver={(e) => handleDragOver(e, u)}
                     onDrop={(e) => handleDrop(e, u)}
+                    onContextMenu={(e) => handleRowContextMenu(e, u)}
                   >
                     {/* Drop ghost indicator */}
                     {dragGhostU === u && dragDevice && (
@@ -474,88 +651,285 @@ export function RackViewScreen() {
           )}
         </div>
 
-        {/* ── Right sidebar: unracked devices ──────────────────────────────────── */}
+        {/* ── Right pane: Info (device editor) / Inventory (unracked) ────────── */}
         <div style={{
-          width: 220, flexShrink: 0,
+          width: 'min(450px, 35vw)', flexShrink: 0,
           borderLeft: '1px solid var(--border, #1d2022)',
-          overflowY: 'auto',
-          padding: '12px 10px',
-          display: 'flex', flexDirection: 'column', gap: 8,
+          display: 'flex', flexDirection: 'column',
+          minHeight: 0,
         }}>
-          <div style={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: 10, fontWeight: 700,
-            color: 'var(--text2, #8a9299)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            marginBottom: 4,
-          }}>
-            unracked ({unrackedDevices.length})
+          {/* Pane body */}
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            {paneMode === 'info' ? (
+              selectedDevice ? (
+                <DeviceEditorModal
+                  open={true}
+                  onClose={() => { setSelectedDevice(null); setPaneMode('inventory'); }}
+                  device={selectedDevice}
+                  siteId={site?.id ?? ''}
+                  accent={accent}
+                  renderAsPane
+                />
+              ) : (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  height: '100%', padding: 20,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11, color: 'var(--text3, #4e5560)',
+                  textAlign: 'center',
+                }}>
+                  select a device to edit
+                </div>
+              )
+            ) : (
+              <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, fontWeight: 700,
+                  color: 'var(--text2, #8a9299)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  marginBottom: 4,
+                }}>
+                  unracked ({unrackedDevices.length})
+                </div>
+
+                {unrackedDevices.length === 0 ? (
+                  <div style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10, color: 'var(--text3, #4e5560)',
+                    padding: '8px 0',
+                  }}>
+                    all devices are racked
+                  </div>
+                ) : (
+                  unrackedDevices.map(d => {
+                    const info = getDeviceDisplayInfo(d, deviceTypes);
+                    return (
+                      <div
+                        key={d.id}
+                        className="rv-unracked-item"
+                        draggable
+                        onDragStart={() => handleDragStart(d)}
+                        style={{
+                          background: 'var(--cardBg, #141618)',
+                          border: '1px solid var(--border2, #262c30)',
+                          borderRadius: 6, padding: '8px 10px',
+                          cursor: 'grab',
+                          transition: 'border-color 0.15s',
+                        }}
+                      >
+                        <div style={{
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11, fontWeight: 600,
+                          color: 'var(--text, #d4d9dd)',
+                          marginBottom: 2,
+                        }}>
+                          {d.name}
+                        </div>
+                        <div style={{
+                          display: 'flex', gap: 6, alignItems: 'center',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 9, color: 'var(--text3, #4e5560)',
+                        }}>
+                          <span className="badge" style={{
+                            background: info.color + '22', color: info.color,
+                            fontSize: 9, padding: '1px 5px',
+                          }}>
+                            {deviceTypes.find(t => t.id === d.typeId)?.name ?? d.typeId}
+                          </span>
+                          {d.uHeight && <span>{d.uHeight}U</span>}
+                          {d.isDraft && <span style={{ color: 'var(--gold, #b89870)' }}>draft</span>}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
 
-          {unrackedDevices.length === 0 ? (
-            <div style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 10, color: 'var(--text3, #4e5560)',
-              padding: '8px 0',
-            }}>
-              all devices are racked
+          {/* Bottom toggle */}
+          <div style={{
+            borderTop: '1px solid var(--border, #1d2022)',
+            padding: '6px 10px',
+            display: 'flex', gap: 0,
+            flexShrink: 0,
+          }}>
+            <div className="view-toggle" style={{ width: '100%' }}>
+              <button
+                className={`view-toggle-btn${paneMode === 'info' ? ' on' : ''}`}
+                onClick={() => setPaneMode('info')}
+                style={{ flex: 1 }}
+              >
+                Info
+              </button>
+              <button
+                className={`view-toggle-btn${paneMode === 'inventory' ? ' on' : ''}`}
+                onClick={() => setPaneMode('inventory')}
+                style={{ flex: 1 }}
+              >
+                Inventory
+              </button>
             </div>
-          ) : (
-            unrackedDevices.map(d => {
-              const info = getDeviceDisplayInfo(d, deviceTypes);
-              return (
-                <div
-                  key={d.id}
-                  className="rv-unracked-item"
-                  draggable
-                  onDragStart={() => handleDragStart(d)}
-                  onClick={() => handleDeviceClick(d)}
-                  style={{
-                    background: 'var(--cardBg, #141618)',
-                    border: '1px solid var(--border2, #262c30)',
-                    borderRadius: 6, padding: '8px 10px',
-                    cursor: 'grab',
-                    transition: 'border-color 0.15s',
-                  }}
-                >
-                  <div style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 11, fontWeight: 600,
-                    color: 'var(--text, #d4d9dd)',
-                    marginBottom: 2,
-                  }}>
-                    {d.name}
-                  </div>
-                  <div style={{
-                    display: 'flex', gap: 6, alignItems: 'center',
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 9, color: 'var(--text3, #4e5560)',
-                  }}>
-                    <span className="badge" style={{
-                      background: info.color + '22', color: info.color,
-                      fontSize: 9, padding: '1px 5px',
-                    }}>
-                      {deviceTypes.find(t => t.id === d.typeId)?.name ?? d.typeId}
-                    </span>
-                    {d.uHeight && <span>{d.uHeight}U</span>}
-                    {d.isDraft && <span style={{ color: 'var(--gold, #b89870)' }}>draft</span>}
-                  </div>
-                </div>
-              );
-            })
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Device Editor Modal */}
-      <DeviceEditorModal
-        open={editorOpen}
-        onClose={() => { setEditorOpen(false); setSelectedDevice(null); }}
-        device={selectedDevice}
+      {/* ── Right-click context menu on empty rack rows ─────────────────────── */}
+      {rackCtx && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 1800 }}
+            onClick={() => setRackCtx(null)}
+            onContextMenu={e => { e.preventDefault(); setRackCtx(null); }}
+          />
+          <div style={{
+            position: 'fixed',
+            left: rackCtx.x, top: rackCtx.y,
+            zIndex: 1801,
+            background: 'var(--cardBg, #141618)',
+            border: '1px solid var(--border2, #262c30)',
+            borderRadius: 6,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            minWidth: 200, maxWidth: 280,
+            padding: '6px 0',
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>
+            <div style={{
+              padding: '4px 12px 6px',
+              fontSize: 9, fontWeight: 700,
+              color: 'var(--text3, #4e5560)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+            }}>
+              U{rackCtx.u} · {face}
+            </div>
+
+            {rackMountableUnracked.length > 0 ? (
+              <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                {rackMountableUnracked.map(d => {
+                  const info = getDeviceDisplayInfo(d, deviceTypes);
+                  return (
+                    <button
+                      key={d.id}
+                      onClick={() => handlePlaceFromContext(d)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        width: '100%', padding: '6px 12px',
+                        background: 'transparent', border: 'none',
+                        cursor: 'pointer', textAlign: 'left',
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 11, color: 'var(--text, #d4d9dd)',
+                        transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--border, #1d2022)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <span className="badge" style={{
+                        background: info.color + '22', color: info.color,
+                        fontSize: 9, padding: '1px 5px',
+                      }}>
+                        {d.uHeight ?? '?'}U
+                      </span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {d.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{
+                padding: '6px 12px', fontSize: 10,
+                color: 'var(--text3, #4e5560)',
+              }}>
+                no unracked devices
+              </div>
+            )}
+
+            <div style={{ borderTop: '1px solid var(--border, #1d2022)', margin: '4px 0' }} />
+            <button
+              onClick={() => {
+                setDeployPreU(rackCtx.u);
+                setRackCtx(null);
+                setDeployOpen(true);
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                width: '100%', padding: '6px 12px',
+                background: 'transparent', border: 'none',
+                cursor: 'pointer', textAlign: 'left',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11, color: accent,
+                fontWeight: 600,
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--border, #1d2022)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <Icon name="plus" size={10} color={accent} />
+              Deploy New
+            </button>
+
+            <div style={{ borderTop: '1px solid var(--border, #1d2022)', margin: '4px 0' }} />
+            <div style={{
+              padding: '4px 12px 2px',
+              fontSize: 9, fontWeight: 700,
+              color: 'var(--text3, #4e5560)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+            }}>
+              Add Shelf
+            </div>
+            {[1, 2, 3, 4, 5, 6].map(u => (
+              <button
+                key={u}
+                onClick={() => handleAddShelf(u)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  width: '100%', padding: '4px 12px',
+                  background: 'transparent', border: 'none',
+                  cursor: 'pointer', textAlign: 'left',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, color: 'var(--text, #d4d9dd)',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--border, #1d2022)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                {u}U Shelf
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Deploy wizard */}
+      <DeployWizard
+        open={deployOpen}
+        onClose={() => setDeployOpen(false)}
         siteId={site?.id ?? ''}
         accent={accent}
+        preRackId={activeRackId ?? undefined}
+        preRackU={deployPreU}
+        preFace={face}
       />
+
+      {/* Shelf detail modal */}
+      {shelfDetailDevice && (
+        <ShelfDetailModal
+          shelf={shelfDetailDevice}
+          siteId={site?.id ?? ''}
+          accent={accent}
+          onClose={() => setShelfDetailDevice(null)}
+          onEditDevice={(device) => {
+            setShelfDetailDevice(null);
+            setSelectedDevice(device);
+            setPaneMode('info');
+          }}
+        />
+      )}
     </div>
   );
 }

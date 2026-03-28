@@ -52,9 +52,10 @@ export function StorageDevicesTab({ devices, drives, templates }: Props) {
     );
   }
 
-  // Group drives by device
+  // Group drives by device (skip unassigned drives)
   const drivesByDevice = new Map<string, Drive[]>();
   for (const d of drives) {
+    if (!d.deviceId) continue;
     if (!drivesByDevice.has(d.deviceId)) drivesByDevice.set(d.deviceId, []);
     drivesByDevice.get(d.deviceId)!.push(d);
   }

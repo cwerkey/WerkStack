@@ -21,6 +21,8 @@ export const DEFAULT_DEVICE_TYPES: DeviceType[] = [
   { id: 'dt-ups',         orgId: null, name: 'UPS',            color: '#8ab89e', isBuiltin: true, createdAt: '' },
   { id: 'dt-patch-panel', orgId: null, name: 'Patch Panel',    color: '#7090b8', isBuiltin: true, createdAt: '' },
   { id: 'dt-kvm',         orgId: null, name: 'KVM Switch',     color: '#8a9299', isBuiltin: true, createdAt: '' },
+  { id: 'dt-shelf',       orgId: null, name: 'Shelf',          color: '#8a9299', isBuiltin: true, createdAt: '' },
+  { id: 'dt-router',      orgId: null, name: 'Router',         color: '#b89870', isBuiltin: true, createdAt: '' },
   { id: 'dt-other',       orgId: null, name: 'Other',          color: '#4e5560', isBuiltin: true, createdAt: '' },
 ];
 
