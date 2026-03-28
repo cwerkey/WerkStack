@@ -143,14 +143,6 @@ export function DeployWizard({
     return steps;
   }, [driveBlocks.length, portBlocks.length, pcieSlots.length]);
 
-  if (!open) return null;
-
-  const stepIdx = activeSteps.indexOf(step);
-  const canBack = stepIdx > 0;
-
-  const set = <K extends keyof InfoForm>(k: K, v: InfoForm[K]) =>
-    setInfo(prev => ({ ...prev, [k]: v }));
-
   // ── Rack picker helpers ──────────────────────────────────────────────────
 
   const activeRack = racks.find(r => r.id === rackId) ?? null;
@@ -164,6 +156,14 @@ export function DeployWizard({
     for (let u = activeRack.uHeight; u >= 1; u--) arr.push(u);
     return arr;
   }, [activeRack?.uHeight]);
+
+  if (!open) return null;
+
+  const stepIdx = activeSteps.indexOf(step);
+  const canBack = stepIdx > 0;
+
+  const set = <K extends keyof InfoForm>(k: K, v: InfoForm[K]) =>
+    setInfo(prev => ({ ...prev, [k]: v }));
 
   function isUOccupied(u: number): boolean {
     return rackDevices.some(d => {
