@@ -45,7 +45,14 @@ export function ShelfDetailModal({ shelf, siteId, accent, onClose, onEditDevice 
   const [dragPos, setDragPos]       = useState<{ col: number; row: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  function handleGridMouseMove(e: React.MouseEvent) {
+  // Resolve grid dimensions for a device (from its template or fallback)
+  function deviceGridSize(d: DeviceInstance): { cols: number; rows: number } {
+    const tpl = d.templateId ? deviceTemplates.find(t => t.id === d.templateId) : undefined;
+    return { cols: tpl?.gridCols ?? 10, rows: tpl?.gridRows ?? 10 };
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
     if (!dragDevice || !gridRef.current) return;
     const rect = gridRef.current.getBoundingClientRect();
     const col = Math.floor((e.clientX - rect.left) / CELL_SIZE);
@@ -53,43 +60,45 @@ export function ShelfDetailModal({ shelf, siteId, accent, onClose, onEditDevice 
     setDragPos({ col: Math.max(0, Math.min(col, GRID_COLS - 1)), row: Math.max(0, Math.min(row, gridRows - 1)) });
   }
 
-  function handleGridDrop() {
-    if (!dragDevice || !dragPos) return;
+  function handleGridDrop(e: React.DragEvent) {
+    e.preventDefault();
+    if (!dragDevice || !gridRef.current) return;
+
+    // Compute final position from drop coordinates (dragPos may lag behind)
+    const rect = gridRef.current.getBoundingClientRect();
+    const col = Math.max(0, Math.min(Math.floor((e.clientX - rect.left) / CELL_SIZE), GRID_COLS - 1));
+    const row = Math.max(0, Math.min(Math.floor((e.clientY - rect.top) / CELL_SIZE), gridRows - 1));
+
     const isAlreadyOnShelf = dragDevice.shelfDeviceId === shelf.id;
 
-    // Base payload preserves all existing fields so the SQL UPDATE doesn't null them out
-    const base = {
-      typeId:     dragDevice.typeId,
-      name:       dragDevice.name,
-      templateId: dragDevice.templateId,
-      zoneId:     dragDevice.zoneId,
-      rackU:      dragDevice.rackU,
-      uHeight:    dragDevice.uHeight,
-      face:       dragDevice.face ?? 'front',
-      ip:         dragDevice.ip,
-      serial:     dragDevice.serial,
-      assetTag:   dragDevice.assetTag,
-      notes:      dragDevice.notes,
-      isDraft:    dragDevice.isDraft ?? false,
+    // Build payload — strip null/undefined values so Zod .optional() doesn't reject them
+    const raw: Record<string, unknown> = {
+      typeId:        dragDevice.typeId,
+      name:          dragDevice.name,
+      templateId:    dragDevice.templateId,
+      zoneId:        dragDevice.zoneId,
+      rackU:         dragDevice.rackU,
+      uHeight:       dragDevice.uHeight,
+      face:          dragDevice.face ?? 'front',
+      ip:            dragDevice.ip,
+      serial:        dragDevice.serial,
+      assetTag:      dragDevice.assetTag,
+      notes:         dragDevice.notes,
+      isDraft:       dragDevice.isDraft ?? false,
+      rackId:        isAlreadyOnShelf ? dragDevice.rackId : shelf.rackId,
+      shelfDeviceId: isAlreadyOnShelf ? dragDevice.shelfDeviceId : shelf.id,
+      shelfCol:      col,
+      shelfRow:      row,
     };
+    const body = Object.fromEntries(Object.entries(raw).filter(([, v]) => v != null));
 
-    if (isAlreadyOnShelf) {
-      // Move within shelf
-      api.patch<DeviceInstance>(
-        `/api/sites/${siteId}/devices/${dragDevice.id}`,
-        { ...base, rackId: dragDevice.rackId, shelfDeviceId: dragDevice.shelfDeviceId, shelfCol: dragPos.col, shelfRow: dragPos.row }
-      ).then(updated => {
-        if (updated) useRackStore.getState().upsertDevice(updated);
-      }).catch(err => console.error('[shelf move]', err));
-    } else {
-      // Place on shelf
-      api.patch<DeviceInstance>(
-        `/api/sites/${siteId}/devices/${dragDevice.id}`,
-        { ...base, rackId: shelf.rackId, shelfDeviceId: shelf.id, shelfCol: dragPos.col, shelfRow: dragPos.row }
-      ).then(updated => {
-        if (updated) useRackStore.getState().upsertDevice(updated);
-      }).catch(err => console.error('[shelf place]', err));
-    }
+    const label = isAlreadyOnShelf ? 'shelf move' : 'shelf place';
+    api.patch<DeviceInstance>(
+      `/api/sites/${siteId}/devices/${dragDevice.id}`,
+      body,
+    ).then(updated => {
+      if (updated) useRackStore.getState().upsertDevice(updated);
+    }).catch(err => console.error(`[${label}]`, err));
 
     setDragDevice(null);
     setDragPos(null);
@@ -196,9 +205,7 @@ export function ShelfDetailModal({ shelf, siteId, accent, onClose, onEditDevice 
                 `,
                 backgroundSize: `${CELL_SIZE}px ${CELL_SIZE}px`,
               }}
-              onMouseMove={handleGridMouseMove}
-              onMouseUp={handleGridDrop}
-              onDragOver={e => e.preventDefault()}
+              onDragOver={handleDragOver}
               onDrop={handleGridDrop}
             >
               {/* Placed children */}
@@ -249,20 +256,23 @@ export function ShelfDetailModal({ shelf, siteId, accent, onClose, onEditDevice 
               })}
 
               {/* Drag ghost */}
-              {dragPos && dragDevice && (
-                <div style={{
-                  position: 'absolute',
-                  left: dragPos.col * CELL_SIZE,
-                  top: dragPos.row * CELL_SIZE,
-                  width: 10 * CELL_SIZE,
-                  height: 10 * CELL_SIZE,
-                  background: accent + '22',
-                  border: `2px dashed ${accent}`,
-                  borderRadius: 3,
-                  pointerEvents: 'none',
-                  zIndex: 10,
-                }} />
-              )}
+              {dragPos && dragDevice && (() => {
+                const sz = deviceGridSize(dragDevice);
+                return (
+                  <div style={{
+                    position: 'absolute',
+                    left: dragPos.col * CELL_SIZE,
+                    top: dragPos.row * CELL_SIZE,
+                    width: sz.cols * CELL_SIZE,
+                    height: sz.rows * CELL_SIZE,
+                    background: accent + '22',
+                    border: `2px dashed ${accent}`,
+                    borderRadius: 3,
+                    pointerEvents: 'none',
+                    zIndex: 10,
+                  }} />
+                );
+              })()}
             </div>
           </div>
         </div>
