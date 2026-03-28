@@ -88,6 +88,7 @@ interface Props {
   accent:              string;
   connections:         Connection[];
   onConnectionCreated: (conn: Connection) => void;
+  onConnectionRemoved: (id: string) => void;
 }
 
 // ── Device Strip ─────────────────────────────────────────────────────────────
@@ -464,6 +465,7 @@ function OccupiedPortPopup({
   deviceName,
   existingConns,
   devices,
+  onRemove,
   onOverride,
   onCancel,
   th,
@@ -472,12 +474,15 @@ function OccupiedPortPopup({
   deviceName:    string;
   existingConns: Connection[];
   devices:       DeviceInstance[];
+  onRemove:      (connId: string) => void;
   onOverride:    () => void;
   onCancel:      () => void;
   th:            typeof OS_THEME_TOKENS['homelab-dark'];
 }) {
+  const [removing, setRemoving] = useState<string | null>(null);
   const def = BLOCK_DEF_MAP.get(block.type);
   const label = block.label || def?.label || block.type;
+  const deviceId = devices.find(d => d.name === deviceName)?.id;
 
   return (
     <div
@@ -491,7 +496,7 @@ function OccupiedPortPopup({
       <div
         style={{
           background: th.cardBg, border: `1px solid ${th.border2}`,
-          borderRadius: 8, width: 380, maxWidth: '90vw',
+          borderRadius: 8, width: 400, maxWidth: '90vw',
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         }}
         onClick={e => e.stopPropagation()}
@@ -507,22 +512,36 @@ function OccupiedPortPopup({
           <div style={{ fontFamily: th.fontData, fontSize: 12, color: th.text, marginBottom: 8 }}>
             <strong>{deviceName}</strong> : {label}
           </div>
-          <div style={{ fontFamily: th.fontLabel, fontSize: 11, color: th.text3, marginBottom: 12 }}>
-            This port has {existingConns.length} existing connection{existingConns.length !== 1 ? 's' : ''}:
+          <div style={{ fontFamily: th.fontLabel, fontSize: 11, color: th.text3, marginBottom: 10 }}>
+            {existingConns.length} existing connection{existingConns.length !== 1 ? 's' : ''}:
           </div>
           {existingConns.map(c => {
-            const otherDeviceId = c.srcBlockId === block.id && c.srcDeviceId === devices.find(d => d.name === deviceName)?.id
+            const otherDeviceId = c.srcBlockId === block.id && c.srcDeviceId === deviceId
               ? c.dstDeviceId : c.srcDeviceId;
             const otherPort = c.srcBlockId === block.id ? c.dstPort : c.srcPort;
             const otherDevice = devices.find(d => d.id === otherDeviceId);
+            const isRemoving = removing === c.id;
             return (
               <div key={c.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '6px 10px', marginBottom: 4, borderRadius: 4,
                 background: th.rowBg, border: `1px solid ${th.border}`,
-                fontFamily: th.fontData, fontSize: 11, color: th.text2,
               }}>
-                → {otherDevice?.name ?? 'unknown'}{otherPort ? ` : ${otherPort}` : ''}
-                {c.label ? <span style={{ color: th.text3 }}> ({c.label})</span> : ''}
+                <span style={{ fontFamily: th.fontData, fontSize: 11, color: th.text2 }}>
+                  → {otherDevice?.name ?? 'unknown'}{otherPort ? ` : ${otherPort}` : ''}
+                  {c.label ? <span style={{ color: th.text3 }}> ({c.label})</span> : ''}
+                </span>
+                <button
+                  disabled={isRemoving}
+                  style={{
+                    padding: '2px 8px', borderRadius: 3, flexShrink: 0, marginLeft: 8,
+                    border: `1px solid ${th.red}`, background: 'transparent',
+                    color: th.red, fontFamily: th.fontLabel, fontSize: 10,
+                    cursor: isRemoving ? 'default' : 'pointer',
+                    opacity: isRemoving ? 0.5 : 1,
+                  }}
+                  onClick={() => { setRemoving(c.id); onRemove(c.id); }}
+                >{isRemoving ? '…' : 'remove'}</button>
               </div>
             );
           })}
@@ -555,7 +574,7 @@ function OccupiedPortPopup({
 }
 
 // ── Main PatchBoardTab Component ─────────────────────────────────────────────
-export function PatchBoardTab({ siteId, accent, connections, onConnectionCreated }: Props) {
+export function PatchBoardTab({ siteId, accent, connections, onConnectionCreated, onConnectionRemoved }: Props) {
   const osTheme   = useThemeStore(s => s.osTheme);
   const th        = OS_THEME_TOKENS[osTheme];
 
@@ -695,8 +714,24 @@ export function PatchBoardTab({ siteId, accent, connections, onConnectionCreated
 
   function handleConnectionSaved(conn: Connection) {
     onConnectionCreated(conn);
-    // Also update rack store for live port coloring
     useRackStore.getState().upsertConnection(conn);
+  }
+
+  async function handleRemoveConnection(connId: string) {
+    try {
+      await api.delete(`/api/sites/${siteId}/connections/${connId}`);
+      onConnectionRemoved(connId);
+      useRackStore.getState().removeConnection(connId);
+      // If the removed connection was the last one on this port, close the popup
+      setOccupiedWarning(prev => {
+        if (!prev) return null;
+        const remaining = prev.conns.filter(c => c.id !== connId);
+        if (remaining.length === 0) return null;
+        return { ...prev, conns: remaining };
+      });
+    } catch (err) {
+      console.error('Failed to remove connection:', err);
+    }
   }
 
   return (
@@ -850,6 +885,7 @@ export function PatchBoardTab({ siteId, accent, connections, onConnectionCreated
           deviceName={occupiedWarning.deviceName}
           existingConns={occupiedWarning.conns}
           devices={devices}
+          onRemove={handleRemoveConnection}
           onOverride={handleOccupiedOverride}
           onCancel={() => setOccupiedWarning(null)}
           th={th}

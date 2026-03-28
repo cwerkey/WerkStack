@@ -358,6 +358,7 @@ export function CableMapScreen() {
           accent={accent}
           connections={conns}
           onConnectionCreated={handleSave}
+          onConnectionRemoved={id => setConns(p => p.filter(c => c.id !== id))}
         />
       )}
 
