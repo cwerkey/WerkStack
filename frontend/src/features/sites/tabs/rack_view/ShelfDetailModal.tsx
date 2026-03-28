@@ -57,11 +57,27 @@ export function ShelfDetailModal({ shelf, siteId, accent, onClose, onEditDevice 
     if (!dragDevice || !dragPos) return;
     const isAlreadyOnShelf = dragDevice.shelfDeviceId === shelf.id;
 
+    // Base payload preserves all existing fields so the SQL UPDATE doesn't null them out
+    const base = {
+      typeId:     dragDevice.typeId,
+      name:       dragDevice.name,
+      templateId: dragDevice.templateId,
+      zoneId:     dragDevice.zoneId,
+      rackU:      dragDevice.rackU,
+      uHeight:    dragDevice.uHeight,
+      face:       dragDevice.face ?? 'front',
+      ip:         dragDevice.ip,
+      serial:     dragDevice.serial,
+      assetTag:   dragDevice.assetTag,
+      notes:      dragDevice.notes,
+      isDraft:    dragDevice.isDraft ?? false,
+    };
+
     if (isAlreadyOnShelf) {
       // Move within shelf
       api.patch<DeviceInstance>(
         `/api/sites/${siteId}/devices/${dragDevice.id}`,
-        { shelfCol: dragPos.col, shelfRow: dragPos.row }
+        { ...base, rackId: dragDevice.rackId, shelfDeviceId: dragDevice.shelfDeviceId, shelfCol: dragPos.col, shelfRow: dragPos.row }
       ).then(updated => {
         if (updated) useRackStore.getState().upsertDevice(updated);
       }).catch(err => console.error('[shelf move]', err));
@@ -69,12 +85,7 @@ export function ShelfDetailModal({ shelf, siteId, accent, onClose, onEditDevice 
       // Place on shelf
       api.patch<DeviceInstance>(
         `/api/sites/${siteId}/devices/${dragDevice.id}`,
-        {
-          shelfDeviceId: shelf.id,
-          shelfCol: dragPos.col,
-          shelfRow: dragPos.row,
-          rackId: shelf.rackId,
-        }
+        { ...base, rackId: shelf.rackId, shelfDeviceId: shelf.id, shelfCol: dragPos.col, shelfRow: dragPos.row }
       ).then(updated => {
         if (updated) useRackStore.getState().upsertDevice(updated);
       }).catch(err => console.error('[shelf place]', err));
