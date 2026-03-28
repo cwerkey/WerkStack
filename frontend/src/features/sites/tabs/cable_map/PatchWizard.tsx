@@ -57,24 +57,27 @@ function getPortOptions(device: DeviceInstance, templates: DeviceTemplate[]): Po
 
 // ── Wizard state ──────────────────────────────────────────────────────────────
 interface WState {
-  step:         1 | 2 | 3 | 4;
-  srcDeviceId:  string;
-  srcPort:      string;
-  srcBlockId:   string;
-  srcBlockType: string;
-  dstDeviceId:  string;
-  dstPort:      string;
-  dstBlockId:   string;
-  dstBlockType: string;
-  cableTypeId:  string;
-  label:        string;
-  notes:        string;
+  step:          1 | 2 | 3 | 4;
+  srcDeviceId:   string;
+  srcPort:       string;
+  srcBlockId:    string;
+  srcBlockType:  string;
+  dstDeviceId:   string;
+  dstPort:       string;
+  dstBlockId:    string;
+  dstBlockType:  string;
+  isExternal:    boolean;
+  externalLabel: string;
+  cableTypeId:   string;
+  label:         string;
+  notes:         string;
 }
 
 const BLANK: WState = {
   step: 1,
   srcDeviceId: '', srcPort: '', srcBlockId: '', srcBlockType: '',
   dstDeviceId: '', dstPort: '', dstBlockId: '', dstBlockType: '',
+  isExternal: false, externalLabel: '',
   cableTypeId: '', label: '', notes: '',
 };
 
@@ -103,17 +106,19 @@ export function PatchWizard({ siteId, initial, onSave, onClose }: Props) {
     if (initial) {
       setW({
         step: 1,
-        srcDeviceId:  initial.srcDeviceId,
-        srcPort:      initial.srcPort      ?? '',
-        srcBlockId:   initial.srcBlockId   ?? '',
-        srcBlockType: initial.srcBlockType ?? '',
-        dstDeviceId:  initial.dstDeviceId,
-        dstPort:      initial.dstPort      ?? '',
-        dstBlockId:   initial.dstBlockId   ?? '',
-        dstBlockType: initial.dstBlockType ?? '',
-        cableTypeId:  initial.cableTypeId  ?? '',
-        label:        initial.label        ?? '',
-        notes:        initial.notes        ?? '',
+        srcDeviceId:   initial.srcDeviceId,
+        srcPort:       initial.srcPort      ?? '',
+        srcBlockId:    initial.srcBlockId   ?? '',
+        srcBlockType:  initial.srcBlockType ?? '',
+        dstDeviceId:   initial.dstDeviceId  ?? '',
+        dstPort:       initial.dstPort      ?? '',
+        dstBlockId:    initial.dstBlockId   ?? '',
+        dstBlockType:  initial.dstBlockType ?? '',
+        isExternal:    initial.externalLabel != null,
+        externalLabel: initial.externalLabel ?? '',
+        cableTypeId:   initial.cableTypeId  ?? '',
+        label:         initial.label        ?? '',
+        notes:         initial.notes        ?? '',
       });
     } else {
       setW(BLANK);
@@ -136,8 +141,10 @@ export function PatchWizard({ siteId, initial, onSave, onClose }: Props) {
 
   // ── Step validation ──────────────────────────────────────────────────────────
   const step1Valid = !!w.srcDeviceId && (srcHasPorts ? !!w.srcBlockId : !!w.srcPort);
-  const step2Valid = !!w.dstDeviceId && w.dstDeviceId !== w.srcDeviceId &&
-    (dstHasPorts ? !!w.dstBlockId : !!w.dstPort);
+  const step2Valid = w.isExternal
+    ? true  // external connections don't need a dstDeviceId
+    : !!w.dstDeviceId && w.dstDeviceId !== w.srcDeviceId &&
+      (dstHasPorts ? !!w.dstBlockId : !!w.dstPort);
   // ── Port selection handler ───────────────────────────────────────────────────
   function selectSrcPort(opt: PortOption) {
     setW(p => ({ ...p, srcPort: opt.label, srcBlockId: opt.blockId, srcBlockType: opt.blockType }));
@@ -151,7 +158,16 @@ export function PatchWizard({ siteId, initial, onSave, onClose }: Props) {
     setSaving(true);
     setError('');
     try {
-      const body = {
+      const body = w.isExternal ? {
+        srcDeviceId:   w.srcDeviceId,
+        srcPort:       w.srcPort      || undefined,
+        srcBlockId:    w.srcBlockId   || undefined,
+        srcBlockType:  w.srcBlockType || undefined,
+        externalLabel: w.externalLabel || 'Internet',
+        cableTypeId:   w.cableTypeId  || undefined,
+        label:         w.label        || undefined,
+        notes:         w.notes        || undefined,
+      } : {
         srcDeviceId:  w.srcDeviceId,
         srcPort:      w.srcPort      || undefined,
         srcBlockId:   w.srcBlockId   || undefined,
@@ -274,40 +290,81 @@ export function PatchWizard({ siteId, initial, onSave, onClose }: Props) {
 
       case 2: return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Destination type toggle */}
           <div>
-            <label style={labelStyle}>destination device *</label>
-            <select
-              style={inputStyle}
-              value={w.dstDeviceId}
-              onChange={e => setW(p => ({ ...p, dstDeviceId: e.target.value, dstPort: '', dstBlockId: '', dstBlockType: '' }))}
-            >
-              <option value="">— select device —</option>
-              {devices.filter(d => d.id !== w.srcDeviceId).map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
+            <label style={labelStyle}>destination type</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                style={{
+                  padding: '5px 12px', borderRadius: 999, fontSize: 11,
+                  fontFamily: th.fontLabel, cursor: 'pointer',
+                  border: `1px solid ${!w.isExternal ? '#c47c5a' : th.border2}`,
+                  background: !w.isExternal ? '#c47c5a' : 'transparent',
+                  color: !w.isExternal ? '#0c0d0e' : th.text2,
+                }}
+                onClick={() => setW(p => ({ ...p, isExternal: false }))}
+              >internal device</button>
+              <button
+                style={{
+                  padding: '5px 12px', borderRadius: 999, fontSize: 11,
+                  fontFamily: th.fontLabel, cursor: 'pointer',
+                  border: `1px solid ${w.isExternal ? '#c47c5a' : th.border2}`,
+                  background: w.isExternal ? '#c47c5a' : 'transparent',
+                  color: w.isExternal ? '#0c0d0e' : th.text2,
+                }}
+                onClick={() => setW(p => ({ ...p, isExternal: true, dstDeviceId: '', dstPort: '', dstBlockId: '', dstBlockType: '' }))}
+              >external / internet</button>
+            </div>
           </div>
-          {w.dstDeviceId && (
+
+          {w.isExternal ? (
             <div>
-              <label style={labelStyle}>destination port</label>
-              <PortPicker
-                ports={dstPorts}
-                selected={w.dstBlockId}
-                onSelect={selectDstPort}
-                textValue={w.dstPort}
-                onTextChange={v => setW(p => ({ ...p, dstPort: v }))}
-                hasTemplate={dstHasPorts}
+              <label style={labelStyle}>external endpoint label</label>
+              <input
+                style={inputStyle}
+                placeholder="e.g. Internet, WAN, ISP, AWS"
+                value={w.externalLabel}
+                onChange={e => setW(p => ({ ...p, externalLabel: e.target.value }))}
               />
             </div>
-          )}
-          {mismatch && (
-            <div style={{
-              padding: '8px 12px', borderRadius: 4,
-              background: `${th.red}22`, border: `1px solid ${th.red}`,
-              fontFamily: th.fontLabel, fontSize: 11, color: th.red,
-            }}>
-              ⚠ medium mismatch: connecting a {getPortMedium(w.srcBlockType)} port to a {getPortMedium(w.dstBlockType)} port
-            </div>
+          ) : (
+            <>
+              <div>
+                <label style={labelStyle}>destination device *</label>
+                <select
+                  style={inputStyle}
+                  value={w.dstDeviceId}
+                  onChange={e => setW(p => ({ ...p, dstDeviceId: e.target.value, dstPort: '', dstBlockId: '', dstBlockType: '' }))}
+                >
+                  <option value="">— select device —</option>
+                  {devices.filter(d => d.id !== w.srcDeviceId).map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              {w.dstDeviceId && (
+                <div>
+                  <label style={labelStyle}>destination port</label>
+                  <PortPicker
+                    ports={dstPorts}
+                    selected={w.dstBlockId}
+                    onSelect={selectDstPort}
+                    textValue={w.dstPort}
+                    onTextChange={v => setW(p => ({ ...p, dstPort: v }))}
+                    hasTemplate={dstHasPorts}
+                  />
+                </div>
+              )}
+              {mismatch && (
+                <div style={{
+                  padding: '8px 12px', borderRadius: 4,
+                  background: `${th.red}22`, border: `1px solid ${th.red}`,
+                  fontFamily: th.fontLabel, fontSize: 11, color: th.red,
+                }}>
+                  ⚠ medium mismatch: connecting a {getPortMedium(w.srcBlockType)} port to a {getPortMedium(w.dstBlockType)} port
+                </div>
+              )}
+            </>
           )}
         </div>
       );
@@ -356,8 +413,10 @@ export function PatchWizard({ siteId, initial, onSave, onClose }: Props) {
               <span style={{ color: th.text3, margin: '0 8px' }}>
                 {w.cableTypeId ? `— ${cableTypes.find(c => c.id === w.cableTypeId)?.name ?? w.cableTypeId} →` : '——→'}
               </span>
-              <span style={{ color: th.text2 }}>{dstDevice?.name ?? '?'}</span>
-              {w.dstPort && <span style={{ color: th.text3 }}> : {w.dstPort}</span>}
+              <span style={{ color: th.text2 }}>
+                {w.isExternal ? (w.externalLabel || 'Internet') : (dstDevice?.name ?? '?')}
+              </span>
+              {!w.isExternal && w.dstPort && <span style={{ color: th.text3 }}> : {w.dstPort}</span>}
             </div>
             {mismatch && (
               <div style={{ fontSize: 11, color: th.red }}>⚠ medium mismatch</div>

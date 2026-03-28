@@ -48,7 +48,7 @@ function enrichConnections(
   return conns.map(c => ({
     ...c,
     srcName:        deviceMap.get(c.srcDeviceId)?.name ?? 'unknown device',
-    dstName:        deviceMap.get(c.dstDeviceId)?.name ?? 'unknown device',
+    dstName:        c.dstDeviceId ? (deviceMap.get(c.dstDeviceId)?.name ?? 'unknown device') : (c.externalLabel ?? 'external'),
     cableTypeName:  c.cableTypeId ? cableMap.get(c.cableTypeId)?.name  : undefined,
     cableTypeColor: c.cableTypeId ? cableMap.get(c.cableTypeId)?.color : undefined,
     mismatch:       hasMediumMismatch(c.srcBlockType, c.dstBlockType),

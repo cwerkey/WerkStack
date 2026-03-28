@@ -92,7 +92,7 @@ module.exports = function pathfinderRoutes(db) {
               `SELECT src_device_id, src_port, src_block_id, src_block_type,
                       dst_device_id, dst_port, dst_block_id, dst_block_type, label
                FROM connections
-               WHERE site_id = $1 AND org_id = $2`,
+               WHERE site_id = $1 AND org_id = $2 AND dst_device_id IS NOT NULL`,
               [siteId, orgId]
             );
             conns.rows.forEach(r => {

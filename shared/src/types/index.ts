@@ -385,21 +385,22 @@ export interface OsApp {
 // ─── Cable Map / Connections ──────────────────────────────────────────────────
 
 export interface Connection {
-  id:            string;
-  orgId:         string;
-  siteId:        string;
-  srcDeviceId:   string;
-  srcPort?:      string;
-  srcBlockId?:   string;
-  srcBlockType?: string;
-  dstDeviceId:   string;
-  dstPort?:      string;
-  dstBlockId?:   string;
-  dstBlockType?: string;
-  cableTypeId?:  string;
-  label?:        string;
-  notes?:        string;
-  createdAt:     string;
+  id:             string;
+  orgId:          string;
+  siteId:         string;
+  srcDeviceId:    string;
+  srcPort?:       string;
+  srcBlockId?:    string;
+  srcBlockType?:  string;
+  dstDeviceId:    string | null;  // null when externalLabel is set
+  dstPort?:       string;
+  dstBlockId?:    string;
+  dstBlockType?:  string;
+  externalLabel:  string | null;  // null when dstDeviceId is set
+  cableTypeId?:   string;
+  label?:         string;
+  notes?:         string;
+  createdAt:      string;
 }
 
 // ─── IP Plan ──────────────────────────────────────────────────────────────────

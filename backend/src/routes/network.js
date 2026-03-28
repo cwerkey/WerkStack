@@ -8,17 +8,27 @@ const { validate } = require('../middleware/validate');
 // ── Validation schemas ────────────────────────────────────────────────────────
 
 const ConnectionSchema = z.object({
-  srcDeviceId:  z.string().uuid(),
-  srcPort:      z.string().max(200).optional(),
-  srcBlockId:   z.string().max(200).optional(),
-  srcBlockType: z.string().max(50).optional(),
-  dstDeviceId:  z.string().uuid(),
-  dstPort:      z.string().max(200).optional(),
-  dstBlockId:   z.string().max(200).optional(),
-  dstBlockType: z.string().max(50).optional(),
-  cableTypeId:  z.string().max(100).optional(),
-  label:        z.string().max(200).optional(),
-  notes:        z.string().max(2000).optional(),
+  srcDeviceId:   z.string().uuid(),
+  srcPort:       z.string().max(200).optional(),
+  srcBlockId:    z.string().max(200).optional(),
+  srcBlockType:  z.string().max(50).optional(),
+  dstDeviceId:   z.string().uuid().optional().nullable(),
+  dstPort:       z.string().max(200).optional(),
+  dstBlockId:    z.string().max(200).optional(),
+  dstBlockType:  z.string().max(50).optional(),
+  externalLabel: z.string().min(1).max(200).optional().nullable(),
+  cableTypeId:   z.string().max(100).optional(),
+  label:         z.string().max(200).optional(),
+  notes:         z.string().max(2000).optional(),
+}).superRefine((data, ctx) => {
+  const hasDst = !!data.dstDeviceId;
+  const hasExt = !!data.externalLabel;
+  if (!hasDst && !hasExt) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'either dstDeviceId or externalLabel is required', path: ['dstDeviceId'] });
+  }
+  if (hasDst && hasExt) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'dstDeviceId and externalLabel are mutually exclusive', path: ['externalLabel'] });
+  }
 });
 
 const SubnetSchema = z.object({
@@ -50,21 +60,22 @@ async function withOrg(db, orgId, fn) {
 
 function toConnection(row) {
   return {
-    id:           row.id,
-    orgId:        row.org_id,
-    siteId:       row.site_id,
-    srcDeviceId:  row.src_device_id,
-    srcPort:      row.src_port      ?? undefined,
-    srcBlockId:   row.src_block_id  ?? undefined,
-    srcBlockType: row.src_block_type ?? undefined,
-    dstDeviceId:  row.dst_device_id,
-    dstPort:      row.dst_port      ?? undefined,
-    dstBlockId:   row.dst_block_id  ?? undefined,
-    dstBlockType: row.dst_block_type ?? undefined,
-    cableTypeId:  row.cable_type_id ?? undefined,
-    label:        row.label         ?? undefined,
-    notes:        row.notes         ?? undefined,
-    createdAt:    row.created_at,
+    id:            row.id,
+    orgId:         row.org_id,
+    siteId:        row.site_id,
+    srcDeviceId:   row.src_device_id,
+    srcPort:       row.src_port       ?? undefined,
+    srcBlockId:    row.src_block_id   ?? undefined,
+    srcBlockType:  row.src_block_type ?? undefined,
+    dstDeviceId:   row.dst_device_id  ?? null,
+    dstPort:       row.dst_port       ?? undefined,
+    dstBlockId:    row.dst_block_id   ?? undefined,
+    dstBlockType:  row.dst_block_type ?? undefined,
+    externalLabel: row.external_label ?? null,
+    cableTypeId:   row.cable_type_id  ?? undefined,
+    label:         row.label          ?? undefined,
+    notes:         row.notes          ?? undefined,
+    createdAt:     row.created_at,
   };
 }
 
@@ -160,20 +171,21 @@ module.exports = function networkRoutes(db) {
       const {
         srcDeviceId, srcPort, srcBlockId, srcBlockType,
         dstDeviceId, dstPort, dstBlockId, dstBlockType,
-        cableTypeId, label, notes,
+        externalLabel, cableTypeId, label, notes,
       } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
             `INSERT INTO connections
                (org_id, site_id, src_device_id, src_port, src_block_id, src_block_type,
-                dst_device_id, dst_port, dst_block_id, dst_block_type, cable_type_id, label, notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                dst_device_id, dst_port, dst_block_id, dst_block_type,
+                external_label, cable_type_id, label, notes)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
              RETURNING *`,
             [orgId, siteId,
              srcDeviceId, srcPort ?? null, srcBlockId ?? null, srcBlockType ?? null,
-             dstDeviceId, dstPort ?? null, dstBlockId ?? null, dstBlockType ?? null,
-             cableTypeId ?? null, label ?? null, notes ?? null]
+             dstDeviceId ?? null, dstPort ?? null, dstBlockId ?? null, dstBlockType ?? null,
+             externalLabel ?? null, cableTypeId ?? null, label ?? null, notes ?? null]
           )
         );
         res.status(201).json(toConnection(result.rows[0]));
@@ -193,7 +205,7 @@ module.exports = function networkRoutes(db) {
       const {
         srcDeviceId, srcPort, srcBlockId, srcBlockType,
         dstDeviceId, dstPort, dstBlockId, dstBlockType,
-        cableTypeId, label, notes,
+        externalLabel, cableTypeId, label, notes,
       } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
@@ -201,12 +213,12 @@ module.exports = function networkRoutes(db) {
             `UPDATE connections
              SET src_device_id=$1, src_port=$2, src_block_id=$3, src_block_type=$4,
                  dst_device_id=$5, dst_port=$6, dst_block_id=$7, dst_block_type=$8,
-                 cable_type_id=$9, label=$10, notes=$11
-             WHERE id=$12 AND site_id=$13 AND org_id=$14
+                 external_label=$9, cable_type_id=$10, label=$11, notes=$12
+             WHERE id=$13 AND site_id=$14 AND org_id=$15
              RETURNING *`,
             [srcDeviceId, srcPort ?? null, srcBlockId ?? null, srcBlockType ?? null,
-             dstDeviceId, dstPort ?? null, dstBlockId ?? null, dstBlockType ?? null,
-             cableTypeId ?? null, label ?? null, notes ?? null,
+             dstDeviceId ?? null, dstPort ?? null, dstBlockId ?? null, dstBlockType ?? null,
+             externalLabel ?? null, cableTypeId ?? null, label ?? null, notes ?? null,
              connId, siteId, orgId]
           )
         );

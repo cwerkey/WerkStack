@@ -73,13 +73,15 @@ interface PortSelection {
 
 // ── Editor popup state ───────────────────────────────────────────────────────
 interface EditorState {
-  src:         PortSelection;
-  dst:         PortSelection;
-  cableTypeId: string;
-  label:       string;
-  notes:       string;
-  mismatch:    boolean;
+  src:              PortSelection;
+  dst:              PortSelection;
+  cableTypeId:      string;
+  label:            string;
+  notes:            string;
+  mismatch:         boolean;
   overrideOccupied: boolean;
+  isExternal:       boolean;
+  externalLabel:    string;
 }
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -288,7 +290,16 @@ function ConnectionEditor({
     setSaving(true);
     setError('');
     try {
-      const body = {
+      const body = editor.isExternal ? {
+        srcDeviceId:   editor.src.deviceId,
+        srcPort:       editor.src.label || undefined,
+        srcBlockId:    editor.src.blockId || undefined,
+        srcBlockType:  editor.src.blockType || undefined,
+        externalLabel: editor.externalLabel || 'Internet',
+        cableTypeId:   editor.cableTypeId || undefined,
+        label:         editor.label || undefined,
+        notes:         editor.notes || undefined,
+      } : {
         srcDeviceId:  editor.src.deviceId,
         srcPort:      editor.src.label || undefined,
         srcBlockId:   editor.src.blockId || undefined,
@@ -351,7 +362,9 @@ function ConnectionEditor({
           }}>
             <span style={{ color: accent }}>{editor.src.label}</span>
             <span style={{ color: th.text3, margin: '0 8px' }}>→</span>
-            <span style={{ color: accent }}>{editor.dst.label}</span>
+            <span style={{ color: accent }}>
+              {editor.isExternal ? (editor.externalLabel || 'Internet') : editor.dst.label}
+            </span>
           </div>
 
           {/* Mismatch warning */}
@@ -395,6 +408,43 @@ function ConnectionEditor({
                 >{ct.name}</button>
               ))}
             </div>
+          </div>
+
+          {/* External connection toggle */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontFamily: th.fontLabel, fontSize: 10, color: th.text3, marginBottom: 6 }}>
+              destination
+            </label>
+            <div style={{ display: 'flex', gap: 6, marginBottom: editor.isExternal ? 8 : 0 }}>
+              <button
+                style={{
+                  padding: '4px 10px', borderRadius: 999, fontSize: 10,
+                  fontFamily: th.fontLabel, cursor: 'pointer',
+                  border: `1px solid ${!editor.isExternal ? accent : th.border2}`,
+                  background: !editor.isExternal ? accent : 'transparent',
+                  color: !editor.isExternal ? '#0c0d0e' : th.text2,
+                }}
+                onClick={() => setEditor(p => ({ ...p, isExternal: false }))}
+              >internal device</button>
+              <button
+                style={{
+                  padding: '4px 10px', borderRadius: 999, fontSize: 10,
+                  fontFamily: th.fontLabel, cursor: 'pointer',
+                  border: `1px solid ${editor.isExternal ? accent : th.border2}`,
+                  background: editor.isExternal ? accent : 'transparent',
+                  color: editor.isExternal ? '#0c0d0e' : th.text2,
+                }}
+                onClick={() => setEditor(p => ({ ...p, isExternal: true }))}
+              >external / internet</button>
+            </div>
+            {editor.isExternal && (
+              <input
+                style={inputStyle}
+                placeholder="e.g. Internet, WAN, ISP"
+                value={editor.externalLabel}
+                onChange={e => setEditor(p => ({ ...p, externalLabel: e.target.value }))}
+              />
+            )}
           </div>
 
           {/* Label */}
@@ -528,7 +578,7 @@ function OccupiedPortPopup({
                 background: th.rowBg, border: `1px solid ${th.border}`,
               }}>
                 <span style={{ fontFamily: th.fontData, fontSize: 11, color: th.text2 }}>
-                  → {otherDevice?.name ?? 'unknown'}{otherPort ? ` : ${otherPort}` : ''}
+                  → {otherDevice?.name ?? c.externalLabel ?? 'unknown'}{otherPort ? ` : ${otherPort}` : ''}
                   {c.label ? <span style={{ color: th.text3 }}> ({c.label})</span> : ''}
                 </span>
                 <button
@@ -689,6 +739,8 @@ export function PatchBoardTab({ siteId, accent, connections, onConnectionCreated
         notes: '',
         mismatch,
         overrideOccupied: false,
+        isExternal: false,
+        externalLabel: '',
       });
       setSelectedPort(null);
     }

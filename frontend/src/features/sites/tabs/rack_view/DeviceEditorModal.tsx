@@ -284,7 +284,7 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent, rende
         const otherDeviceId = conn.srcDeviceId === device!.id ? conn.dstDeviceId : conn.srcDeviceId;
         const otherPort = conn.srcDeviceId === device!.id ? conn.dstPort : conn.srcPort;
         const otherDevice = devices.find(d => d.id === otherDeviceId);
-        text = `${blockLabel} → ${otherDevice?.name ?? 'unknown'}${otherPort ? ` (${otherPort})` : ''}`;
+        text = `${blockLabel} → ${otherDevice?.name ?? conn.externalLabel ?? 'unknown'}${otherPort ? ` (${otherPort})` : ''}`;
         if (conn.label) text += ` [${conn.label}]`;
       } else {
         text = `${blockLabel} — empty`;
