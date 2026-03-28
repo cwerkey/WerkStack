@@ -8,6 +8,7 @@ import { EmptyState }          from '../../../components/ui/EmptyState';
 import type { SiteCtx }        from '../../SiteShell';
 import type { Connection, CableType, DeviceInstance } from '@werkstack/shared';
 import { PatchWizard }         from './cable_map/PatchWizard';
+import { PatchBoardTab }       from './cable_map/PatchBoardTab';
 
 // ── Medium mismatch helpers ───────────────────────────────────────────────────
 const FIBER_TYPES  = new Set(['sfp', 'sfp+', 'sfp28', 'qsfp', 'qsfp28']);
@@ -69,6 +70,9 @@ export function CableMapScreen() {
   const [loading,  setLoading]  = useState(true);
   const [wizard,   setWizard]   = useState<{ open: boolean; initial?: Connection }>({ open: false });
   const [deleting, setDeleting] = useState<string | null>(null);
+
+  // Sub-tab: table vs patch board
+  const [subTab, setSubTab] = useState<'table' | 'patch_board'>('table');
 
   // Cable type filter — null = all, Set = specific types
   const [cableFilter, setCableFilter] = useState<Set<string> | null>(null);
@@ -148,181 +152,213 @@ export function CableMapScreen() {
         padding: '0 12px', height: 38, flexShrink: 0,
         background: th.hdrBg, borderBottom: `1px solid ${th.hdrBorder}`,
       }}>
-        <span style={{ fontFamily: th.fontMain, fontSize: 12, color: th.text, marginRight: 8 }}>
+        <span style={{ fontFamily: th.fontMain, fontSize: 12, color: th.text, marginRight: 4 }}>
           cable_map
         </span>
-        <span style={{ fontFamily: th.fontLabel, fontSize: 10, color: th.text3, marginRight: 4 }}>
-          filter:
-        </span>
 
-        {/* All pill */}
-        <button
-          className={`rpill${cableFilter === null && !mismatchOnly ? ' on' : ''}`}
-          style={{ background: cableFilter === null && !mismatchOnly ? accent : undefined, color: cableFilter === null && !mismatchOnly ? '#0c0d0e' : undefined }}
-          onClick={() => { setCableFilter(null); setMismatchOnly(false); }}
-        >all</button>
-
-        {/* Cable type pills */}
-        {presentCableIds.map(cid => {
-          const ct = cableTypes.find(c => c.id === cid);
-          const isOn = cableFilter !== null && cableFilter.has(cid) && !mismatchOnly;
+        {/* Sub-tab pills */}
+        {(['table', 'patch_board'] as const).map(tab => {
+          const active = subTab === tab;
           return (
             <button
-              key={cid}
-              className={`rpill${isOn ? ' on' : ''}`}
-              style={isOn ? { background: ct?.color ?? accent, color: '#0c0d0e', borderColor: ct?.color ?? accent } : {}}
-              onClick={() => {
-                setMismatchOnly(false);
-                setCableFilter(prev => {
-                  if (prev === null) return new Set([cid]);
-                  const next = new Set(prev);
-                  if (next.has(cid)) {
-                    next.delete(cid);
-                    return next.size === 0 ? null : next;
-                  }
-                  next.add(cid);
-                  return next;
-                });
-              }}
-            >{ct?.name ?? 'no cable'}</button>
+              key={tab}
+              className={`rpill${active ? ' on' : ''}`}
+              style={active ? { background: accent, color: '#0c0d0e' } : {}}
+              onClick={() => setSubTab(tab)}
+            >{tab.replace('_', ' ')}</button>
           );
         })}
 
-        {/* Mismatch filter */}
-        {rows.some(r => r.mismatch) && (
+        <div style={{ width: 1, height: 18, background: th.border2, margin: '0 4px' }} />
+
+        {subTab === 'table' && <span style={{ fontFamily: th.fontLabel, fontSize: 10, color: th.text3, marginRight: 4 }}>
+          filter:
+        </span>}
+
+        {subTab === 'table' && <>
+          {/* All pill */}
           <button
-            className={`rpill${mismatchOnly ? ' on' : ''}`}
-            style={mismatchOnly ? { background: th.red, color: '#0c0d0e', borderColor: th.red } : { color: th.red, borderColor: th.red }}
-            onClick={() => { setMismatchOnly(p => !p); setCableFilter(null); }}
-          >⚠ mismatch</button>
-        )}
+            className={`rpill${cableFilter === null && !mismatchOnly ? ' on' : ''}`}
+            style={{ background: cableFilter === null && !mismatchOnly ? accent : undefined, color: cableFilter === null && !mismatchOnly ? '#0c0d0e' : undefined }}
+            onClick={() => { setCableFilter(null); setMismatchOnly(false); }}
+          >all</button>
+
+          {/* Cable type pills */}
+          {presentCableIds.map(cid => {
+            const ct = cableTypes.find(c => c.id === cid);
+            const isOn = cableFilter !== null && cableFilter.has(cid) && !mismatchOnly;
+            return (
+              <button
+                key={cid}
+                className={`rpill${isOn ? ' on' : ''}`}
+                style={isOn ? { background: ct?.color ?? accent, color: '#0c0d0e', borderColor: ct?.color ?? accent } : {}}
+                onClick={() => {
+                  setMismatchOnly(false);
+                  setCableFilter(prev => {
+                    if (prev === null) return new Set([cid]);
+                    const next = new Set(prev);
+                    if (next.has(cid)) {
+                      next.delete(cid);
+                      return next.size === 0 ? null : next;
+                    }
+                    next.add(cid);
+                    return next;
+                  });
+                }}
+              >{ct?.name ?? 'no cable'}</button>
+            );
+          })}
+
+          {/* Mismatch filter */}
+          {rows.some(r => r.mismatch) && (
+            <button
+              className={`rpill${mismatchOnly ? ' on' : ''}`}
+              style={mismatchOnly ? { background: th.red, color: '#0c0d0e', borderColor: th.red } : { color: th.red, borderColor: th.red }}
+              onClick={() => { setMismatchOnly(p => !p); setCableFilter(null); }}
+            >⚠ mismatch</button>
+          )}
+        </>}
 
         <div style={{ flex: 1 }} />
 
-        <button
-          className="act-primary"
-          style={{
-            padding: '4px 12px', borderRadius: 4,
-            background: accent, color: '#0c0d0e',
-            fontFamily: th.fontLabel, fontSize: 11,
-            border: `1px solid ${accent}`,
-          }}
-          onClick={() => setWizard({ open: true })}
-        >+ new connection</button>
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-        {loading ? (
-          <div style={{ padding: 32, fontFamily: th.fontData, fontSize: 11, color: th.text3 }}>loading…</div>
-        ) : conns.length === 0 ? (
-          <EmptyState
-            icon="layers"
-            title="no connections yet"
-            subtitle="Document physical cable connections between device ports"
-            action={
-              <button
-                className="act-primary"
-                style={{ padding: '5px 14px', borderRadius: 4, background: accent, color: '#0c0d0e', border: `1px solid ${accent}`, fontFamily: th.fontLabel, fontSize: 11 }}
-                onClick={() => setWizard({ open: true })}
-              >+ new connection</button>
-            }
-          />
-        ) : visible.length === 0 ? (
-          <div style={{ padding: 32, fontFamily: th.fontData, fontSize: 11, color: th.text3 }}>
-            no connections match filter
-          </div>
-        ) : (
-          <table style={{
-            width: '100%', borderCollapse: 'collapse',
-            fontFamily: th.fontData, fontSize: 12,
-          }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${th.border2}` }}>
-                {['source', 'cable', 'destination', 'label', '', ''].map((h, i) => (
-                  <th key={i} style={{
-                    padding: '6px 10px', textAlign: 'left',
-                    fontFamily: th.fontLabel, fontSize: 10, color: th.text3,
-                    fontWeight: 500, whiteSpace: 'nowrap',
-                  }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map(row => (
-                <tr key={row.id} className="cm-row">
-                  {/* Source */}
-                  <td style={{ padding: '7px 10px', color: th.text }}>
-                    <span style={{ color: accent }}>{row.srcName}</span>
-                    {row.srcPort && (
-                      <span style={{ color: th.text3 }}> : {row.srcPort}</span>
-                    )}
-                  </td>
-                  {/* Cable type */}
-                  <td style={{ padding: '7px 10px' }}>
-                    {row.cableTypeName ? (
-                      <span style={{
-                        padding: '2px 8px', borderRadius: 999,
-                        background: row.cableTypeColor ?? th.border2,
-                        color: '#0c0d0e',
-                        fontFamily: th.fontLabel, fontSize: 10,
-                      }}>{row.cableTypeName}</span>
-                    ) : (
-                      <span style={{ color: th.text3, fontSize: 10 }}>—</span>
-                    )}
-                  </td>
-                  {/* Destination */}
-                  <td style={{ padding: '7px 10px', color: th.text }}>
-                    <span style={{ color: accent }}>{row.dstName}</span>
-                    {row.dstPort && (
-                      <span style={{ color: th.text3 }}> : {row.dstPort}</span>
-                    )}
-                  </td>
-                  {/* Label */}
-                  <td style={{ padding: '7px 10px', color: th.text2 }}>
-                    {row.label ?? ''}
-                  </td>
-                  {/* Mismatch warning */}
-                  <td style={{ padding: '7px 6px', width: 24 }}>
-                    {row.mismatch && (
-                      <span title="Medium mismatch: fiber port connected to copper port" style={{ color: th.red, fontSize: 13 }}>⚠</span>
-                    )}
-                  </td>
-                  {/* Actions */}
-                  <td style={{ padding: '7px 6px', whiteSpace: 'nowrap' }}>
-                    <button
-                      className="cm-act"
-                      style={{ fontFamily: th.fontLabel, fontSize: 10, color: th.text3, marginRight: 8 }}
-                      onClick={() => setWizard({ open: true, initial: row })}
-                    >edit</button>
-                    <button
-                      className="cm-del"
-                      disabled={deleting === row.id}
-                      style={{ fontFamily: th.fontLabel, fontSize: 10, color: th.text3 }}
-                      onClick={() => handleDelete(row.id)}
-                    >{deleting === row.id ? '…' : 'delete'}</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {subTab === 'table' && (
+          <button
+            className="act-primary"
+            style={{
+              padding: '4px 12px', borderRadius: 4,
+              background: accent, color: '#0c0d0e',
+              fontFamily: th.fontLabel, fontSize: 11,
+              border: `1px solid ${accent}`,
+            }}
+            onClick={() => setWizard({ open: true })}
+          >+ new connection</button>
         )}
       </div>
 
-      {/* Stats footer */}
-      {conns.length > 0 && (
-        <div style={{
-          padding: '6px 16px', borderTop: `1px solid ${th.border}`,
-          fontFamily: th.fontLabel, fontSize: 10, color: th.text3,
-          display: 'flex', gap: 16,
-        }}>
-          <span>{conns.length} connection{conns.length !== 1 ? 's' : ''}</span>
-          {rows.filter(r => r.mismatch).length > 0 && (
-            <span style={{ color: th.red }}>
-              ⚠ {rows.filter(r => r.mismatch).length} mismatch{rows.filter(r => r.mismatch).length !== 1 ? 'es' : ''}
-            </span>
+      {/* Content — table tab */}
+      {subTab === 'table' && <>
+        <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          {loading ? (
+            <div style={{ padding: 32, fontFamily: th.fontData, fontSize: 11, color: th.text3 }}>loading…</div>
+          ) : conns.length === 0 ? (
+            <EmptyState
+              icon="layers"
+              title="no connections yet"
+              subtitle="Document physical cable connections between device ports"
+              action={
+                <button
+                  className="act-primary"
+                  style={{ padding: '5px 14px', borderRadius: 4, background: accent, color: '#0c0d0e', border: `1px solid ${accent}`, fontFamily: th.fontLabel, fontSize: 11 }}
+                  onClick={() => setWizard({ open: true })}
+                >+ new connection</button>
+              }
+            />
+          ) : visible.length === 0 ? (
+            <div style={{ padding: 32, fontFamily: th.fontData, fontSize: 11, color: th.text3 }}>
+              no connections match filter
+            </div>
+          ) : (
+            <table style={{
+              width: '100%', borderCollapse: 'collapse',
+              fontFamily: th.fontData, fontSize: 12,
+            }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${th.border2}` }}>
+                  {['source', 'cable', 'destination', 'label', '', ''].map((h, i) => (
+                    <th key={i} style={{
+                      padding: '6px 10px', textAlign: 'left',
+                      fontFamily: th.fontLabel, fontSize: 10, color: th.text3,
+                      fontWeight: 500, whiteSpace: 'nowrap',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(row => (
+                  <tr key={row.id} className="cm-row">
+                    {/* Source */}
+                    <td style={{ padding: '7px 10px', color: th.text }}>
+                      <span style={{ color: accent }}>{row.srcName}</span>
+                      {row.srcPort && (
+                        <span style={{ color: th.text3 }}> : {row.srcPort}</span>
+                      )}
+                    </td>
+                    {/* Cable type */}
+                    <td style={{ padding: '7px 10px' }}>
+                      {row.cableTypeName ? (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 999,
+                          background: row.cableTypeColor ?? th.border2,
+                          color: '#0c0d0e',
+                          fontFamily: th.fontLabel, fontSize: 10,
+                        }}>{row.cableTypeName}</span>
+                      ) : (
+                        <span style={{ color: th.text3, fontSize: 10 }}>—</span>
+                      )}
+                    </td>
+                    {/* Destination */}
+                    <td style={{ padding: '7px 10px', color: th.text }}>
+                      <span style={{ color: accent }}>{row.dstName}</span>
+                      {row.dstPort && (
+                        <span style={{ color: th.text3 }}> : {row.dstPort}</span>
+                      )}
+                    </td>
+                    {/* Label */}
+                    <td style={{ padding: '7px 10px', color: th.text2 }}>
+                      {row.label ?? ''}
+                    </td>
+                    {/* Mismatch warning */}
+                    <td style={{ padding: '7px 6px', width: 24 }}>
+                      {row.mismatch && (
+                        <span title="Medium mismatch: fiber port connected to copper port" style={{ color: th.red, fontSize: 13 }}>⚠</span>
+                      )}
+                    </td>
+                    {/* Actions */}
+                    <td style={{ padding: '7px 6px', whiteSpace: 'nowrap' }}>
+                      <button
+                        className="cm-act"
+                        style={{ fontFamily: th.fontLabel, fontSize: 10, color: th.text3, marginRight: 8 }}
+                        onClick={() => setWizard({ open: true, initial: row })}
+                      >edit</button>
+                      <button
+                        className="cm-del"
+                        disabled={deleting === row.id}
+                        style={{ fontFamily: th.fontLabel, fontSize: 10, color: th.text3 }}
+                        onClick={() => handleDelete(row.id)}
+                      >{deleting === row.id ? '…' : 'delete'}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
+
+        {/* Stats footer */}
+        {conns.length > 0 && (
+          <div style={{
+            padding: '6px 16px', borderTop: `1px solid ${th.border}`,
+            fontFamily: th.fontLabel, fontSize: 10, color: th.text3,
+            display: 'flex', gap: 16,
+          }}>
+            <span>{conns.length} connection{conns.length !== 1 ? 's' : ''}</span>
+            {rows.filter(r => r.mismatch).length > 0 && (
+              <span style={{ color: th.red }}>
+                ⚠ {rows.filter(r => r.mismatch).length} mismatch{rows.filter(r => r.mismatch).length !== 1 ? 'es' : ''}
+              </span>
+            )}
+          </div>
+        )}
+      </>}
+
+      {/* Content — patch board tab */}
+      {subTab === 'patch_board' && (
+        <PatchBoardTab
+          siteId={siteId}
+          accent={accent}
+          connections={conns}
+          onConnectionCreated={handleSave}
+        />
       )}
 
       {wizard.open && (
