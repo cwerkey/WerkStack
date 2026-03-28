@@ -107,8 +107,6 @@ export function DeployWizard({
     setError('');
   }, [open, preTemplateId, preRackId, preRackU, preFace]);
 
-  if (!open) return null;
-
   const template = deviceTemplates.find(t => t.id === info.templateId) ?? null;
   const rackMountTemplates = deviceTemplates.filter(t => t.formFactor === 'rack');
   const av = { '--accent': accent } as React.CSSProperties;
@@ -144,6 +142,8 @@ export function DeployWizard({
     steps.push('summary');
     return steps;
   }, [driveBlocks.length, portBlocks.length, pcieSlots.length]);
+
+  if (!open) return null;
 
   const stepIdx = activeSteps.indexOf(step);
   const canBack = stepIdx > 0;

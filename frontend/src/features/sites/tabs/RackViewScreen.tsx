@@ -248,9 +248,20 @@ export function RackViewScreen() {
     }),
   [unrackedDevices, deviceTemplates]);
 
+  // Check if all U positions in a range are free on current face
+  function isRangeFree(startU: number, uHeight: number): boolean {
+    if (!activeRack) return false;
+    if (startU + uHeight - 1 > activeRack.uHeight) return false; // exceeds rack
+    for (let u = startU; u < startU + uHeight; u++) {
+      if (!isUEmpty(u)) return false;
+    }
+    return true;
+  }
+
   // Create a shelf at the right-clicked U position
   function handleAddShelf(uHeight: number) {
     if (!activeRackId || !site || !rackCtx) return;
+    if (!isRangeFree(rackCtx.u, uHeight)) return; // collision guard
     api.post<DeviceInstance>(
       `/api/sites/${site.id}/devices`,
       {
@@ -882,25 +893,31 @@ export function RackViewScreen() {
             }}>
               Add Shelf
             </div>
-            {[1, 2, 3, 4, 5, 6].map(u => (
-              <button
-                key={u}
-                onClick={() => handleAddShelf(u)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  width: '100%', padding: '4px 12px',
-                  background: 'transparent', border: 'none',
-                  cursor: 'pointer', textAlign: 'left',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 10, color: 'var(--text, #d4d9dd)',
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--border, #1d2022)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                {u}U Shelf
-              </button>
-            ))}
+            {[1, 2, 3, 4, 5, 6].map(u => {
+              const fits = rackCtx ? isRangeFree(rackCtx.u, u) : false;
+              return (
+                <button
+                  key={u}
+                  onClick={() => fits && handleAddShelf(u)}
+                  disabled={!fits}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    width: '100%', padding: '4px 12px',
+                    background: 'transparent', border: 'none',
+                    cursor: fits ? 'pointer' : 'not-allowed', textAlign: 'left',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 10,
+                    color: fits ? 'var(--text, #d4d9dd)' : 'var(--text3, #4e5560)',
+                    opacity: fits ? 1 : 0.45,
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => { if (fits) e.currentTarget.style.background = 'var(--border, #1d2022)'; }}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  {u}U Shelf
+                </button>
+              );
+            })}
           </div>
         </>
       )}
