@@ -816,14 +816,15 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent, rende
         <PatchWizard
           siteId={siteId}
           initial={{
-            id:           '',
-            orgId:        '',
+            id:            '',
+            orgId:         '',
             siteId,
-            srcDeviceId:  patchWizardSourceBlock.deviceId,
-            srcBlockId:   patchWizardSourceBlock.blockId,
-            srcBlockType: patchWizardSourceBlock.blockType,
-            dstDeviceId:  '',
-            createdAt:    '',
+            srcDeviceId:   patchWizardSourceBlock.deviceId,
+            srcBlockId:    patchWizardSourceBlock.blockId,
+            srcBlockType:  patchWizardSourceBlock.blockType,
+            dstDeviceId:   '',
+            externalLabel: null,
+            createdAt:     '',
           }}
           onSave={(conn) => {
             useRackStore.getState().upsertConnection(conn);
