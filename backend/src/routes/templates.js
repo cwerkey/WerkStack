@@ -5,8 +5,6 @@ const { z }   = require('zod');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const PlacedBlockSchema = z.object({
   id:      z.string().uuid(),
   type:    z.string(),
@@ -50,7 +48,6 @@ const PcieTemplateSchema = z.object({
   layout:     z.object({ rear: z.array(PlacedBlockSchema) }),
 });
 
-// Community Exchange Format v2
 const TemplateImportSchema = z.object({
   schema_version: z.literal('2'),
   metadata: z.object({
@@ -66,8 +63,6 @@ const TemplateImportSchema = z.object({
     rear:  z.array(z.record(z.unknown())),
   }),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -114,7 +109,6 @@ function toPcieTemplate(row) {
   };
 }
 
-// Collision detection: check if a block at (col,row,w,h) overlaps any existing blocks
 function hasCollision(blocks, col, row, w, h, excludeId) {
   return blocks.some(b => {
     if (b.id === excludeId) return false;
@@ -124,16 +118,9 @@ function hasCollision(blocks, col, row, w, h, excludeId) {
   });
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function templatesRoutes(db) {
   const router = express.Router({ mergeParams: true });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  DEVICE TEMPLATES
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // ── GET /api/templates/devices — list all device templates for org ────────
   router.get('/devices', requireAuth, async (req, res) => {
     const { orgId } = req.user;
     try {
@@ -150,7 +137,6 @@ module.exports = function templatesRoutes(db) {
     }
   });
 
-  // ── POST /api/templates/devices — create device template ──────────────────
   router.post(
     '/devices',
     requireAuth,
@@ -177,7 +163,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ── PATCH /api/templates/devices/:id — update device template ─────────────
   router.patch(
     '/devices/:id',
     requireAuth,
@@ -210,7 +195,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ── DELETE /api/templates/devices/:id — delete device template ────────────
   router.delete(
     '/devices/:id',
     requireAuth,
@@ -236,7 +220,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ── POST /api/templates/devices/import — import from community exchange format
   router.post(
     '/devices/import',
     requireAuth,
@@ -272,7 +255,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ── GET /api/templates/devices/:id/export — export to community exchange format
   router.get(
     '/devices/:id/export',
     requireAuth,
@@ -309,7 +291,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ── POST /api/templates/devices/check-collision — collision detection ─────
   router.post(
     '/devices/check-collision',
     requireAuth,
@@ -323,11 +304,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  PCIE CARD TEMPLATES
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // ── GET /api/templates/pcie — list all PCIe templates for org ─────────────
   router.get('/pcie', requireAuth, async (req, res) => {
     const { orgId } = req.user;
     try {
@@ -344,7 +320,6 @@ module.exports = function templatesRoutes(db) {
     }
   });
 
-  // ── POST /api/templates/pcie — create PCIe template ───────────────────────
   router.post(
     '/pcie',
     requireAuth,
@@ -371,7 +346,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ── PATCH /api/templates/pcie/:id — update PCIe template ──────────────────
   router.patch(
     '/pcie/:id',
     requireAuth,
@@ -403,7 +377,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ── DELETE /api/templates/pcie/:id — delete PCIe template ─────────────────
   router.delete(
     '/pcie/:id',
     requireAuth,
@@ -429,11 +402,6 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  MANUFACTURERS — /api/templates/manufacturers
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // ── GET /api/templates/manufacturers — distinct manufacturers for dropdowns
   router.get('/manufacturers', requireAuth, async (req, res) => {
     const { orgId } = req.user;
     try {

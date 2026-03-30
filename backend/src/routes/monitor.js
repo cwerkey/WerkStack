@@ -5,16 +5,12 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const HeartbeatSchema = z.object({
   deviceId:  z.string().uuid(),
   status:    z.enum(['up', 'down', 'degraded', 'unknown']).default('up'),
   latencyMs: z.number().int().min(0).optional(),
   payload:   z.record(z.unknown()).optional(),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -54,17 +50,10 @@ function toEvent(row) {
   };
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function monitorRoutes(db) {
   const router = express.Router({ mergeParams: true });
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // HEARTBEAT — POST /api/sites/:siteId/monitor/heartbeat
-  // Accepts a heartbeat, updates device status, logs state changes
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.post(
     '/heartbeat',
@@ -76,7 +65,6 @@ module.exports = function monitorRoutes(db) {
 
       try {
         const result = await withOrg(db, orgId, async (c) => {
-          // Verify device exists
           const devRes = await c.query(
             `SELECT id, current_status FROM device_instances
              WHERE id=$1 AND site_id=$2 AND org_id=$3`,
@@ -88,7 +76,6 @@ module.exports = function monitorRoutes(db) {
 
           const prevStatus = devRes.rows[0].current_status || 'unknown';
 
-          // Insert heartbeat
           const hbRes = await c.query(
             `INSERT INTO heartbeats (org_id, site_id, device_id, status, latency_ms, payload)
              VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
@@ -96,7 +83,6 @@ module.exports = function monitorRoutes(db) {
              payload ? JSON.stringify(payload) : null]
           );
 
-          // Update device current_status if changed
           if (prevStatus !== status) {
             await c.query(
               `UPDATE device_instances SET current_status = $1
@@ -104,7 +90,6 @@ module.exports = function monitorRoutes(db) {
               [status, deviceId, siteId, orgId]
             );
 
-            // Log state change event
             await c.query(
               `INSERT INTO device_events
                  (org_id, site_id, device_id, event_type, from_state, to_state)
@@ -126,11 +111,6 @@ module.exports = function monitorRoutes(db) {
       }
     }
   );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/monitor/status
-  // Current status of all devices (with last heartbeat)
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/status', async (req, res) => {
     const { orgId }  = req.user;
@@ -169,11 +149,6 @@ module.exports = function monitorRoutes(db) {
     }
   });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/monitor/heartbeats/:deviceId
-  // Heartbeat history for a specific device
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.get('/heartbeats/:deviceId', async (req, res) => {
     const { orgId }  = req.user;
     const { siteId, deviceId } = req.params;
@@ -192,11 +167,6 @@ module.exports = function monitorRoutes(db) {
       res.status(500).json({ error: 'server error' });
     }
   });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/monitor/events
-  // Device event log (state machine history)
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/events', async (req, res) => {
     const { orgId }  = req.user;

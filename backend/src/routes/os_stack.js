@@ -5,8 +5,6 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const ExtraIpSchema = z.object({
   label: z.string().max(100),
   ip:    z.string().max(100),
@@ -52,8 +50,6 @@ const OsAppSchema = z.object({
   extraIps: z.array(ExtraIpSchema).default([]),
   notes:    z.string().max(2000).optional(),
 }).refine(d => d.vmId || d.hostId, { message: 'vmId or hostId required' });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -124,14 +120,8 @@ function toApp(row) {
   };
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function osStackRoutes(db) {
   const router = express.Router({ mergeParams: true });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // OS HOSTS — /api/sites/:siteId/os-hosts
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/:siteId/os-hosts', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId } = req.user;
@@ -224,10 +214,6 @@ module.exports = function osStackRoutes(db) {
       }
     }
   );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // OS VMs — /api/sites/:siteId/os-vms
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/:siteId/os-vms', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId } = req.user;
@@ -326,10 +312,6 @@ module.exports = function osStackRoutes(db) {
       }
     }
   );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // OS APPS — /api/sites/:siteId/os-apps
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/:siteId/os-apps', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId } = req.user;

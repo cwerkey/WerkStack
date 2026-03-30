@@ -5,8 +5,6 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const PathfinderQuerySchema = z.object({
   srcDeviceId: z.string().uuid(),
   dstDeviceId: z.string().uuid(),
@@ -21,8 +19,6 @@ const VpnTunnelSchema = z.object({
   label:       z.string().max(200).optional(),
   notes:       z.string().max(2000).optional(),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -48,20 +44,10 @@ function toTunnel(row) {
   };
 }
 
-// ── Bridge/Hub detection ──────────────────────────────────────────────────────
-// A device is a "bridge" (transparent switch/hub) if its type is dt-switch or
-// dt-patch-panel. Bridges are traversed transparently in pathfinding.
 const BRIDGE_TYPES = new Set(['dt-switch', 'dt-patch-panel', 'dt-hub']);
-
-// ── Route factory ─────────────────────────────────────────────────────────────
 
 module.exports = function pathfinderRoutes(db) {
   const router = express.Router({ mergeParams: true });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PATHFINDER — POST /api/sites/:siteId/pathfinder/trace
-  // Recursive CTE engine with depth limit, cycle detection, bridge logic
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.post(
     '/trace',
@@ -72,10 +58,7 @@ module.exports = function pathfinderRoutes(db) {
       const { srcDeviceId, dstDeviceId, layer, maxDepth } = req.body;
 
       try {
-        // Build the recursive CTE that walks connections (L1) and vpn_tunnels (L3)
-        // The path array prevents cycles; depth limit prevents runaway recursion.
         const result = await withOrg(db, orgId, async (c) => {
-          // Step 1: Get all device types for bridge detection
           const devicesRes = await c.query(
             `SELECT id, type_id, name FROM device_instances
              WHERE site_id = $1 AND org_id = $2`,
@@ -84,7 +67,6 @@ module.exports = function pathfinderRoutes(db) {
           const deviceMap = new Map();
           devicesRes.rows.forEach(d => deviceMap.set(d.id, { typeId: d.type_id, name: d.name }));
 
-          // Step 2: Get all edges (connections + tunnels based on layer)
           const edges = [];
 
           if (layer === 'L1' || layer === 'all') {
@@ -102,7 +84,6 @@ module.exports = function pathfinderRoutes(db) {
                 dstPort: r.dst_port, dstBlockId: r.dst_block_id, dstBlockType: r.dst_block_type,
                 linkType: 'L1', label: r.label,
               });
-              // Connections are bidirectional
               edges.push({
                 from: r.dst_device_id, to: r.src_device_id,
                 port: r.dst_port, blockId: r.dst_block_id, blockType: r.dst_block_type,
@@ -124,7 +105,6 @@ module.exports = function pathfinderRoutes(db) {
                 from: r.src_device_id, to: r.dst_device_id,
                 linkType: 'L3', label: r.label || r.tunnel_type,
               });
-              // Tunnels are bidirectional
               edges.push({
                 from: r.dst_device_id, to: r.src_device_id,
                 linkType: 'L3', label: r.label || r.tunnel_type,
@@ -132,14 +112,12 @@ module.exports = function pathfinderRoutes(db) {
             });
           }
 
-          // Step 3: BFS/DFS with cycle detection and depth limit
           const adjacency = new Map();
           edges.forEach(e => {
             if (!adjacency.has(e.from)) adjacency.set(e.from, []);
             adjacency.get(e.from).push(e);
           });
 
-          // BFS for shortest path
           const queue = [{ deviceId: srcDeviceId, path: [], visited: new Set([srcDeviceId]) }];
           let foundPath = null;
           let hasCycle = false;
@@ -204,10 +182,6 @@ module.exports = function pathfinderRoutes(db) {
       }
     }
   );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // VPN TUNNELS — /api/sites/:siteId/pathfinder/tunnels
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get(
     '/tunnels',

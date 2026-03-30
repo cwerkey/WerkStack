@@ -5,8 +5,6 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const ConnectionSchema = z.object({
   srcDeviceId:   z.string().uuid(),
   srcPort:       z.string().max(200).optional(),
@@ -45,8 +43,6 @@ const IpAssignmentSchema = z.object({
   label:    z.string().max(200).optional(),
   notes:    z.string().max(2000).optional(),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -107,8 +103,6 @@ function toIp(row) {
   };
 }
 
-// ── IP arithmetic ─────────────────────────────────────────────────────────────
-
 function ipToNum(ip) {
   const parts = ip.split('.').map(Number);
   return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
@@ -136,14 +130,8 @@ function ipInCidr(ip, cidr) {
   return n >= start && n <= end;
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function networkRoutes(db) {
   const router = express.Router({ mergeParams: true });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CONNECTIONS — /api/sites/:siteId/connections
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/:siteId/connections', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId }  = req.user;
@@ -253,10 +241,6 @@ module.exports = function networkRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SUBNETS — /api/sites/:siteId/subnets
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.get('/:siteId/subnets', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId }  = req.user;
     const { siteId } = req.params;
@@ -347,10 +331,6 @@ module.exports = function networkRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // IP ASSIGNMENTS — /api/sites/:siteId/subnets/:subnetId/ips
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.get('/:siteId/subnets/:subnetId/ips', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId }  = req.user;
     const { siteId, subnetId } = req.params;
@@ -370,7 +350,6 @@ module.exports = function networkRoutes(db) {
     }
   });
 
-  // Next-available IP in subnet
   router.get('/:siteId/subnets/:subnetId/ips/next', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId }  = req.user;
     const { siteId, subnetId } = req.params;
@@ -418,7 +397,6 @@ module.exports = function networkRoutes(db) {
       const { siteId, subnetId } = req.params;
       const { ip, deviceId, label, notes } = req.body;
       try {
-        // Validate IP is within subnet CIDR
         const subnetResult = await withOrg(db, orgId, c =>
           c.query(`SELECT cidr FROM subnets WHERE id=$1 AND site_id=$2 AND org_id=$3`,
             [subnetId, siteId, orgId])
@@ -455,7 +433,6 @@ module.exports = function networkRoutes(db) {
       const { siteId, subnetId, ipId } = req.params;
       const { ip, deviceId, label, notes } = req.body;
       try {
-        // Validate new IP is within subnet CIDR
         const subnetResult = await withOrg(db, orgId, c =>
           c.query(`SELECT cidr FROM subnets WHERE id=$1 AND site_id=$2 AND org_id=$3`,
             [subnetId, siteId, orgId])

@@ -6,13 +6,10 @@ const { z }          = require('zod');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// Inline schema — name (1-100 chars) + hex color (#RRGGBB)
 const TypeSchema = z.object({
   name:  z.string().min(1).max(100),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function toType(row) {
   return {
@@ -25,7 +22,6 @@ function toType(row) {
   };
 }
 
-// Acquire a client, set org context, run callback, release.
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
   try {
@@ -36,10 +32,8 @@ async function withOrg(db, orgId, fn) {
   }
 }
 
-// Generic CRUD factory — builds POST / PATCH / DELETE handlers for one table.
 function makeCrud(table, schema) {
   return {
-    // POST /api/types/:category
     async create(req, res) {
       const { orgId } = req.user;
       const { name, color } = req.body;
@@ -60,7 +54,6 @@ function makeCrud(table, schema) {
       }
     },
 
-    // PATCH /api/types/:category/:id
     async update(req, res) {
       const { orgId } = req.user;
       const { id } = req.params;
@@ -85,7 +78,6 @@ function makeCrud(table, schema) {
       }
     },
 
-    // DELETE /api/types/:category/:id
     async remove(req, res) {
       const { orgId } = req.user;
       const { id } = req.params;
@@ -112,16 +104,12 @@ function makeCrud(table, schema) {
   };
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function typesRoutes(db) {
   const router = express.Router();
 
-  // Attach db to every request for handler convenience
   router.use((req, _res, next) => { req.db = db; next(); });
   router.use(requireAuth);
 
-  // ── GET /api/types — hydrates all type categories at once ─────────────────
   router.get('/', async (req, res) => {
     const { orgId } = req.user;
     try {
@@ -148,8 +136,6 @@ module.exports = function typesRoutes(db) {
       res.status(500).json({ error: 'server error' });
     }
   });
-
-  // ── Per-category CRUD (admin+ required for mutations) ─────────────────────
 
   const categories = [
     { path: 'devices',  ...makeCrud('device_types',     TypeSchema) },

@@ -34,7 +34,6 @@ module.exports = function ticketsRoutes(db) {
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
 
-  // GET /api/sites/:siteId/tickets
   router.get('/', async (req, res) => {
     const { siteId } = req.params;
     const { orgId }  = req.user;
@@ -52,7 +51,6 @@ module.exports = function ticketsRoutes(db) {
     }
   });
 
-  // POST /api/sites/:siteId/tickets
   router.post('/', validate(TicketSchema), async (req, res) => {
     const { siteId }                           = req.params;
     const { orgId, userId }                    = req.user;
@@ -73,7 +71,6 @@ module.exports = function ticketsRoutes(db) {
     }
   });
 
-  // PATCH /api/sites/:siteId/tickets/:id — full update (form always sends all fields)
   router.patch('/:id', validate(TicketSchema), async (req, res) => {
     const { siteId, id }                       = req.params;
     const { orgId }                            = req.user;
@@ -99,7 +96,6 @@ module.exports = function ticketsRoutes(db) {
     }
   });
 
-  // DELETE /api/sites/:siteId/tickets/:id — admin+ only
   router.delete('/:id', requireRole('admin'), async (req, res) => {
     const { siteId, id } = req.params;
     const { orgId }      = req.user;

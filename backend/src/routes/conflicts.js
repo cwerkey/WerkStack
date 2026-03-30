@@ -3,8 +3,6 @@
 const express = require('express');
 const { requireAuth, requireSiteAccess } = require('../middleware/auth');
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
   try {
@@ -15,7 +13,6 @@ async function withOrg(db, orgId, fn) {
   }
 }
 
-// Port-type categories for medium-mismatch detection
 const COPPER_TYPES  = new Set(['rj45', 'sfp-copper']);
 const FIBER_TYPES   = new Set(['sfp', 'sfp+', 'sfp28', 'qsfp', 'qsfp28', 'sfp-fiber']);
 const SPEED_MAP     = { sfp: 1, 'sfp+': 10, sfp28: 25, qsfp: 40, qsfp28: 100 };
@@ -26,26 +23,17 @@ function isMediumMismatch(typeA, typeB) {
   const bCopper = COPPER_TYPES.has(typeB);
   const aFiber  = FIBER_TYPES.has(typeA);
   const bFiber  = FIBER_TYPES.has(typeB);
-  // copper ↔ fiber is a mismatch
   if ((aCopper && bFiber) || (aFiber && bCopper)) return true;
-  // sfp speed mismatch (e.g. sfp+ ↔ qsfp)
   const aSpeed = SPEED_MAP[typeA];
   const bSpeed = SPEED_MAP[typeB];
   if (aSpeed && bSpeed && aSpeed !== bSpeed) return true;
   return false;
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function conflictsRoutes(db) {
   const router = express.Router({ mergeParams: true });
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/conflicts
-  // Returns all 6 conflict types for the site
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/', async (req, res) => {
     const { orgId }  = req.user;
@@ -54,8 +42,6 @@ module.exports = function conflictsRoutes(db) {
     try {
       const result = await withOrg(db, orgId, async (c) => {
 
-        // ── 1. Spatial conflicts ─────────────────────────────────────────────
-        // Devices in the same rack + face whose U ranges overlap
         const spatialRes = await c.query(
           `SELECT a.id AS a_id, a.name AS a_name, a.rack_u AS a_rack_u, a.u_height AS a_u,
                   b.id AS b_id, b.name AS b_name, b.rack_u AS b_rack_u, b.u_height AS b_u,
@@ -83,8 +69,6 @@ module.exports = function conflictsRoutes(db) {
           face:     r.face,
         }));
 
-        // ── 2. Power overload ────────────────────────────────────────────────
-        // Racks exceeding 80% (warn) or 100% (error) of power_budget_watts
         const powerRes = await c.query(
           `SELECT r.id AS rack_id, r.name AS rack_name, r.power_budget_watts,
                   COALESCE(SUM(dt.wattage_max), 0)::integer AS used_watts
@@ -126,8 +110,6 @@ module.exports = function conflictsRoutes(db) {
           }
         }
 
-        // ── 3. IP conflicts ──────────────────────────────────────────────────
-        // Duplicate IP addresses within the same subnet
         const ipRes = await c.query(
           `SELECT ip, subnet_id, COUNT(*) AS cnt,
                   array_agg(id) AS ids, array_agg(COALESCE(label, device_id::text)) AS labels,
@@ -149,8 +131,6 @@ module.exports = function conflictsRoutes(db) {
           count:      parseInt(r.cnt, 10),
         }));
 
-        // ── 4. Medium mismatches ─────────────────────────────────────────────
-        // Connections linking incompatible port types (e.g. SFP+ to RJ45)
         const connRes = await c.query(
           `SELECT c.id, c.src_block_type, c.dst_block_type,
                   c.label, c.src_port, c.dst_port,
@@ -176,7 +156,6 @@ module.exports = function conflictsRoutes(db) {
             dstBlockType: r.dst_block_type,
           }));
 
-        // ── 5. Inventory shortages ───────────────────────────────────────────
         const ledgerRes = await c.query(
           `SELECT name, quantity, reserved FROM ledger_items
            WHERE site_id = $1 AND org_id = $2 AND reserved > quantity`,
@@ -192,8 +171,6 @@ module.exports = function conflictsRoutes(db) {
           available: r.quantity,
         }));
 
-        // ── 6. Loop detection ────────────────────────────────────────────────
-        // Devices connected to themselves (self-loop)
         const selfLoopRes = await c.query(
           `SELECT c.id, da.name AS device_name, c.src_port, c.dst_port
            FROM connections c
@@ -203,7 +180,6 @@ module.exports = function conflictsRoutes(db) {
           [siteId, orgId]
         );
 
-        // Duplicate connections (same device pair, same ports)
         const dupConnRes = await c.query(
           `SELECT src_device_id, dst_device_id,
                   src_port, dst_port,

@@ -5,13 +5,9 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const PromotionSchema = z.object({
   deviceIds: z.array(z.string().uuid()).min(1),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -23,17 +19,10 @@ async function withOrg(db, orgId, fn) {
   }
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function blueprintRoutes(db) {
   const router = express.Router({ mergeParams: true });
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/blueprints/summary
-  // BOM generation, power/space projections for all draft devices
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/summary', async (req, res) => {
     const { orgId }  = req.user;
@@ -41,7 +30,6 @@ module.exports = function blueprintRoutes(db) {
 
     try {
       const result = await withOrg(db, orgId, async (c) => {
-        // Get all draft devices with their templates
         const draftsRes = await c.query(
           `SELECT di.id, di.name, di.template_id, di.u_height,
                   dt.make, dt.model, dt.wattage_max, dt.u_height AS tmpl_u
@@ -53,7 +41,6 @@ module.exports = function blueprintRoutes(db) {
 
         const drafts = draftsRes.rows;
 
-        // Build BOM — group by template
         const bomMap = new Map();
         let totalWatts = 0;
         let totalU = 0;
@@ -78,7 +65,6 @@ module.exports = function blueprintRoutes(db) {
           totalU += (d.u_height || d.tmpl_u || 0);
         }
 
-        // Check resource ledger for missing items
         const ledgerRes = await c.query(
           `SELECT name, quantity, reserved FROM ledger_items
            WHERE site_id = $1 AND org_id = $2`,
@@ -113,11 +99,6 @@ module.exports = function blueprintRoutes(db) {
     }
   });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/blueprints/drafts
-  // List all draft device instances
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.get('/drafts', async (req, res) => {
     const { orgId }  = req.user;
     const { siteId } = req.params;
@@ -137,12 +118,6 @@ module.exports = function blueprintRoutes(db) {
     }
   });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // POST /api/sites/:siteId/blueprints/promote
-  // Promotion Wizard — BOM checklist → inventory check → commit
-  // Promotes draft devices to active (is_draft = false)
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.post(
     '/promote',
     requireRole('member'), validate(PromotionSchema),
@@ -153,11 +128,9 @@ module.exports = function blueprintRoutes(db) {
 
       try {
         const result = await withOrg(db, orgId, async (c) => {
-          // Begin transaction for atomicity
           await c.query('BEGIN');
 
           try {
-            // Verify all devices are drafts belonging to this site
             const verify = await c.query(
               `SELECT id, name, is_draft FROM device_instances
                WHERE id = ANY($1) AND site_id = $2 AND org_id = $3`,
@@ -178,14 +151,12 @@ module.exports = function blueprintRoutes(db) {
               };
             }
 
-            // Promote: set is_draft = false
             await c.query(
               `UPDATE device_instances SET is_draft = false
                WHERE id = ANY($1) AND site_id = $2 AND org_id = $3`,
               [deviceIds, siteId, orgId]
             );
 
-            // Unreserve any ledger reservations for promoted drafts
             await c.query(
               `UPDATE ledger_items li
                SET reserved = GREATEST(0, li.reserved - COALESCE(
@@ -196,7 +167,6 @@ module.exports = function blueprintRoutes(db) {
               [deviceIds, siteId, orgId]
             );
 
-            // Log promotion events
             for (const d of verify.rows) {
               await c.query(
                 `INSERT INTO device_events (org_id, site_id, device_id, event_type, from_state, to_state, created_by)
@@ -207,7 +177,6 @@ module.exports = function blueprintRoutes(db) {
 
             await c.query('COMMIT');
 
-            // Return promoted devices
             const promoted = await c.query(
               `SELECT * FROM device_instances WHERE id = ANY($1)`,
               [deviceIds]
@@ -230,18 +199,12 @@ module.exports = function blueprintRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/blueprints/resource-check
-  // Shadow resource reservation — Total = Active + Staged
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.get('/resource-check', async (req, res) => {
     const { orgId }  = req.user;
     const { siteId } = req.params;
 
     try {
       const result = await withOrg(db, orgId, async (c) => {
-        // Count active vs staged devices per rack
         const rackUsage = await c.query(
           `SELECT r.id AS rack_id, r.name AS rack_name, r.u_height AS rack_u,
                   COALESCE(SUM(CASE WHEN di.is_draft = false THEN di.u_height ELSE 0 END), 0) AS active_u,
@@ -253,7 +216,6 @@ module.exports = function blueprintRoutes(db) {
           [siteId, orgId]
         );
 
-        // Power projection: active + staged
         const powerRes = await c.query(
           `SELECT
              COALESCE(SUM(CASE WHEN di.is_draft = false THEN dt.wattage_max ELSE 0 END), 0) AS active_watts,
@@ -289,18 +251,12 @@ module.exports = function blueprintRoutes(db) {
     }
   });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/blueprints/assembly-manual
-  // Build Wizard: BOM + wiring guide for all draft devices
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.get('/assembly-manual', async (req, res) => {
     const { orgId }  = req.user;
     const { siteId } = req.params;
 
     try {
       const result = await withOrg(db, orgId, async (c) => {
-        // Draft devices with template + rack info
         const draftsRes = await c.query(
           `SELECT di.id, di.name, di.rack_u, di.u_height, di.serial, di.asset_tag, di.notes,
                   dt.make, dt.model, dt.wattage_max,
@@ -315,7 +271,6 @@ module.exports = function blueprintRoutes(db) {
           [siteId, orgId]
         );
 
-        // Connections involving at least one draft device
         const wiringRes = await c.query(
           `SELECT c.id, c.label, c.src_port, c.dst_port, c.src_block_type, c.dst_block_type,
                   ct.name AS cable_type_name,
@@ -334,7 +289,6 @@ module.exports = function blueprintRoutes(db) {
           [siteId, orgId]
         );
 
-        // Build BOM
         const bomMap = new Map();
         let totalWatts = 0;
         let totalU = 0;
@@ -399,7 +353,6 @@ module.exports = function blueprintRoutes(db) {
   return router;
 };
 
-// ── Device row mapper (shared with racks.js pattern) ──────────────────────────
 function toDevice(row) {
   return {
     id:            row.id,

@@ -3,8 +3,6 @@
 const express = require('express');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
   try {
@@ -19,20 +17,17 @@ function toEntry(row) {
   return {
     id:         row.id,
     orgId:      row.org_id,
-    siteId:     row.site_id    ?? undefined,
-    actorId:    row.actor_id   ?? undefined,
-    actorEmail: row.actor_email ?? undefined,
+    siteId:     row.site_id,
+    actorId:    row.actor_id,
+    actorEmail: row.actor_email,
     action:     row.action,
-    resource:   row.resource   ?? undefined,
-    resourceId: row.resource_id ?? undefined,
-    details:    row.details    ?? undefined,
-    ipAddress:  row.ip_address ?? undefined,
+    resource:   row.resource,
+    resourceId: row.resource_id,
+    details:    row.details,
+    ipAddress:  row.ip_address,
     createdAt:  row.created_at,
   };
 }
-
-// ── Public helper — write an audit entry ──────────────────────────────────────
-// Called from other routes: await writeAudit(db, { orgId, siteId, actorId, actorEmail, action, resource, resourceId, details, ipAddress })
 
 async function writeAudit(db, { orgId, siteId, actorId, actorEmail, action, resource, resourceId, details, ipAddress }) {
   try {
@@ -50,22 +45,14 @@ async function writeAudit(db, { orgId, siteId, actorId, actorEmail, action, reso
       client.release();
     }
   } catch (err) {
-    // Never let audit failures break the main operation
     console.error('[audit_log] write failed:', err.message);
   }
 }
-
-// ── Route factory ─────────────────────────────────────────────────────────────
 
 module.exports = function auditLogRoutes(db) {
   const router = express.Router({ mergeParams: true });
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/audit-log?limit=50&offset=0&resource=device
-  // Paginated audit log; admin+ only
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/', requireRole('admin'), async (req, res) => {
     const { orgId }  = req.user;
@@ -93,14 +80,6 @@ module.exports = function auditLogRoutes(db) {
           params
         );
 
-        const countRes = await c.query(
-          `SELECT COUNT(*)::integer AS total FROM audit_log a ${where}`,
-          params.slice(0, resource ? 5 : 4).filter((_, i) => i !== 2 && i !== 3)
-            .concat(resource ? [] : [])
-          // rebuild clean param list for count
-        );
-
-        // simpler count query
         const totalRes = await c.query(
           resource
             ? `SELECT COUNT(*)::integer AS total FROM audit_log WHERE site_id = $1 AND org_id = $2 AND resource = $3`

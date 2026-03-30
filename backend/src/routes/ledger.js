@@ -5,7 +5,6 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
 
 const LedgerItemSchema = z.object({
   name:     z.string().min(1).max(200),
@@ -24,7 +23,6 @@ const LedgerTransactionSchema = z.object({
   note:         z.string().max(2000).optional(),
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -68,16 +66,12 @@ function toTx(row) {
   };
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
 
 module.exports = function ledgerRoutes(db) {
   const router = express.Router({ mergeParams: true });
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // LEDGER ITEMS — /api/sites/:siteId/ledger
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/', async (req, res) => {
     const { orgId }  = req.user;
@@ -168,10 +162,6 @@ module.exports = function ledgerRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TRANSACTIONS — /api/sites/:siteId/ledger/transactions
-  // Atomic shelf→server moves with quantity tracking
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/transactions', async (req, res) => {
     const { orgId }  = req.user;
@@ -207,7 +197,6 @@ module.exports = function ledgerRoutes(db) {
           await c.query('BEGIN');
 
           try {
-            // Lock the ledger item row for atomic update
             const itemRes = await c.query(
               `SELECT * FROM ledger_items WHERE id=$1 AND site_id=$2 AND org_id=$3 FOR UPDATE`,
               [ledgerItemId, siteId, orgId]
@@ -247,7 +236,6 @@ module.exports = function ledgerRoutes(db) {
                 newReserved -= quantity;
                 break;
               case 'install':
-                // Move from shelf to device: decrease quantity, decrease reserved if was reserved
                 if (item.quantity < quantity) {
                   await c.query('ROLLBACK');
                   return { error: `insufficient quantity to install (have ${item.quantity}, need ${quantity})`, status: 400 };
@@ -256,19 +244,16 @@ module.exports = function ledgerRoutes(db) {
                 newReserved = Math.max(0, newReserved - quantity);
                 break;
               case 'uninstall':
-                // Return from device to shelf: increase quantity
                 newQty += quantity;
                 break;
             }
 
-            // Update ledger item
             await c.query(
               `UPDATE ledger_items SET quantity=$1, reserved=$2, updated_at=now()
                WHERE id=$3`,
               [newQty, newReserved, ledgerItemId]
             );
 
-            // Record transaction
             const txRes = await c.query(
               `INSERT INTO ledger_transactions
                  (org_id, site_id, ledger_item_id, device_id, action, quantity, note, created_by)

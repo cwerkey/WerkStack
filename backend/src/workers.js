@@ -1,16 +1,5 @@
 'use strict';
 
-/**
- * Background workers for Phase 11:
- * 1. Heartbeat checker — marks devices as down if no heartbeat received within threshold
- * 2. Abandoned draft cleanup — removes drafts older than configurable age
- * 3. Git-sync scheduler — pushes site data on configured intervals
- */
-
-// ── Heartbeat Checker ─────────────────────────────────────────────────────────
-// Runs every 60 seconds. If a non-draft device hasn't sent a heartbeat within
-// the threshold (5 min default), mark it as 'down' and log the event.
-
 const HEARTBEAT_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const HEARTBEAT_CHECK_CRON   = '* * * * *';    // every minute
 
@@ -21,7 +10,6 @@ function startHeartbeatChecker(db, cron) {
     try {
       const cutoff = new Date(Date.now() - HEARTBEAT_THRESHOLD_MS).toISOString();
 
-      // Find devices that are currently 'up' or 'degraded' but have no recent heartbeat
       const staleRes = await db.query(
         `SELECT di.id, di.org_id, di.site_id, di.current_status, di.name,
                 h.received_at AS last_heartbeat
@@ -42,13 +30,11 @@ function startHeartbeatChecker(db, cron) {
         try {
           await client.query(`SELECT set_config('app.current_org_id', $1, true)`, [device.org_id]);
 
-          // Update device status to 'down'
           await client.query(
             `UPDATE device_instances SET current_status = 'down' WHERE id = $1`,
             [device.id]
           );
 
-          // Log heartbeat_missed event
           await client.query(
             `INSERT INTO device_events
                (org_id, site_id, device_id, event_type, from_state, to_state,
@@ -72,9 +58,6 @@ function startHeartbeatChecker(db, cron) {
   });
 }
 
-// ── Abandoned Draft Cleanup ──────────────────────────────────────────────────
-// Runs every hour. Removes draft devices older than 30 days with no activity.
-
 const DRAFT_MAX_AGE_DAYS    = 30;
 const DRAFT_CLEANUP_CRON    = '0 * * * *'; // every hour
 
@@ -85,7 +68,6 @@ function startDraftCleanup(db, cron) {
     try {
       const cutoff = new Date(Date.now() - DRAFT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-      // Find abandoned drafts (no events in the last 30 days)
       const abandonedRes = await db.query(
         `SELECT di.id, di.org_id, di.site_id, di.name
          FROM device_instances di
@@ -104,7 +86,6 @@ function startDraftCleanup(db, cron) {
         try {
           await client.query(`SELECT set_config('app.current_org_id', $1, true)`, [device.org_id]);
 
-          // Log abandonment event before deletion
           await client.query(
             `INSERT INTO device_events
                (org_id, site_id, device_id, event_type, from_state, to_state,
@@ -114,7 +95,6 @@ function startDraftCleanup(db, cron) {
              JSON.stringify({ reason: `draft older than ${DRAFT_MAX_AGE_DAYS} days with no activity` })]
           );
 
-          // Delete the draft
           await client.query(
             `DELETE FROM device_instances WHERE id = $1`,
             [device.id]
@@ -135,9 +115,6 @@ function startDraftCleanup(db, cron) {
   });
 }
 
-// ── Git-Sync Scheduler ──────────────────────────────────────────────────────
-// Runs every minute. Checks if any git-sync configs are due for a push.
-
 const GIT_SYNC_CHECK_CRON = '* * * * *'; // every minute
 
 function startGitSyncScheduler(db, cron) {
@@ -145,7 +122,6 @@ function startGitSyncScheduler(db, cron) {
 
   cron.schedule(GIT_SYNC_CHECK_CRON, async () => {
     try {
-      // Find configs due for push
       const dueRes = await db.query(
         `SELECT * FROM git_sync_config
          WHERE enabled = true
@@ -159,7 +135,6 @@ function startGitSyncScheduler(db, cron) {
           const path = require('path');
           const fs   = require('fs');
 
-          // Export site data
           const client = await db.connect();
           let data;
           try {
@@ -193,7 +168,6 @@ function startGitSyncScheduler(db, cron) {
             client.release();
           }
 
-          // Git operations
           const repoDir = path.join('/tmp', 'werkstack-sync', config.site_id);
           fs.mkdirSync(repoDir, { recursive: true });
 
@@ -216,7 +190,6 @@ function startGitSyncScheduler(db, cron) {
             await git.push('origin', config.branch);
           }
 
-          // Update last push (use client with RLS scope)
           const updateClient = await db.connect();
           try {
             await updateClient.query(`SELECT set_config('app.current_org_id', $1, true)`, [config.org_id]);
@@ -232,7 +205,6 @@ function startGitSyncScheduler(db, cron) {
 
           console.log(`[worker:git-sync] pushed site ${config.site_id}`);
         } catch (gitErr) {
-          // Record error but don't crash worker (use client with RLS scope)
           const errClient = await db.connect();
           try {
             await errClient.query(`SELECT set_config('app.current_org_id', $1, true)`, [config.org_id]);
@@ -253,8 +225,6 @@ function startGitSyncScheduler(db, cron) {
     }
   });
 }
-
-// ── Exports ──────────────────────────────────────────────────────────────────
 
 module.exports = function startWorkers(db) {
   let cron;

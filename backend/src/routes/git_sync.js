@@ -5,16 +5,12 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const GitSyncConfigSchema = z.object({
   repoUrl:      z.string().min(1).max(500),
   branch:       z.string().min(1).max(100).default('main'),
   enabled:      z.boolean().default(false),
   pushInterval: z.number().int().min(60).max(86400).default(300),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -41,9 +37,6 @@ function toConfig(row) {
     updatedAt:     row.updated_at,
   };
 }
-
-// ── Site data export helper ──────────────────────────────────────────────────
-// Exports all site data as a JSON structure for git commit
 
 async function exportSiteData(db, orgId, siteId) {
   const client = await db.connect();
@@ -82,16 +75,10 @@ async function exportSiteData(db, orgId, siteId) {
   }
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function gitSyncRoutes(db) {
   const router = express.Router({ mergeParams: true });
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/git-sync — get config
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/', async (req, res) => {
     const { orgId }  = req.user;
@@ -110,10 +97,6 @@ module.exports = function gitSyncRoutes(db) {
       res.status(500).json({ error: 'server error' });
     }
   });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PUT /api/sites/:siteId/git-sync — create or update config
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.put(
     '/',
@@ -141,10 +124,6 @@ module.exports = function gitSyncRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // POST /api/sites/:siteId/git-sync/push — trigger manual push
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.post(
     '/push',
     requireRole('admin'),
@@ -153,7 +132,6 @@ module.exports = function gitSyncRoutes(db) {
       const { siteId } = req.params;
 
       try {
-        // Get config
         const configRes = await withOrg(db, orgId, c =>
           c.query(
             `SELECT * FROM git_sync_config WHERE site_id=$1 AND org_id=$2`,
@@ -166,10 +144,8 @@ module.exports = function gitSyncRoutes(db) {
 
         const config = configRes.rows[0];
 
-        // Export site data
         const data = await exportSiteData(db, orgId, siteId);
 
-        // Attempt git push via simple-git
         let pushError = null;
         try {
           const simpleGit = require('simple-git');
@@ -181,7 +157,6 @@ module.exports = function gitSyncRoutes(db) {
 
           const git = simpleGit(repoDir);
 
-          // Clone or pull
           const isRepo = fs.existsSync(path.join(repoDir, '.git'));
           if (!isRepo) {
             await git.clone(config.repo_url, repoDir, ['--branch', config.branch]);
@@ -189,11 +164,9 @@ module.exports = function gitSyncRoutes(db) {
             await git.pull('origin', config.branch);
           }
 
-          // Write exported data
           const filePath = path.join(repoDir, 'site-data.json');
           fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
 
-          // Stage, commit, push
           await git.add('.');
           const status = await git.status();
           if (status.files.length > 0) {
@@ -204,7 +177,6 @@ module.exports = function gitSyncRoutes(db) {
           pushError = gitErr.message;
         }
 
-        // Update last push timestamp
         await withOrg(db, orgId, c =>
           c.query(
             `UPDATE git_sync_config
@@ -225,10 +197,6 @@ module.exports = function gitSyncRoutes(db) {
       }
     }
   );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // GET /api/sites/:siteId/git-sync/export — preview export data
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/export', async (req, res) => {
     const { orgId }  = req.user;

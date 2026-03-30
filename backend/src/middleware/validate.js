@@ -1,7 +1,5 @@
 'use strict';
 
-// validate — Zod schema middleware.
-// On failure returns { error: 'validation failed', issues: [...] }
 function validate(schema) {
   return (req, res, next) => {
     const result = schema.safeParse(req.body);

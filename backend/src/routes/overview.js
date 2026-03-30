@@ -8,7 +8,6 @@ module.exports = function overviewRoutes(db) {
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
 
-  // GET /api/sites/:siteId/overview — KPI aggregation for the overview screen
   router.get('/', async (req, res) => {
     const { siteId } = req.params;
     const { orgId }  = req.user;

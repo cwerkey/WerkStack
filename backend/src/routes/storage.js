@@ -5,8 +5,6 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const DriveSchema = z.object({
   deviceId:      z.string().uuid().optional().nullable(),
   slotBlockId:   z.string().max(200).optional(),
@@ -43,8 +41,6 @@ const ShareSchema = z.object({
   path:     z.string().max(500).optional(),
   notes:    z.string().max(2000).optional(),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -110,14 +106,8 @@ function toShare(row) {
   };
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function storageRoutes(db) {
   const router = express.Router({ mergeParams: true });
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DRIVES — /api/sites/:siteId/drives
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/:siteId/drives', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId } = req.user;
@@ -136,7 +126,6 @@ module.exports = function storageRoutes(db) {
     }
   });
 
-  // ── GET /api/sites/:siteId/drives/inventory — uninstalled drives ─────────
   router.get('/:siteId/drives/inventory', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId } = req.user;
     const { siteId } = req.params;
@@ -154,7 +143,6 @@ module.exports = function storageRoutes(db) {
     }
   });
 
-  // ── PATCH /api/sites/:siteId/drives/:driveId/assign — assign drive to device slot
   router.patch(
     '/:siteId/drives/:driveId/assign',
     requireAuth, requireSiteAccess(db), requireRole('member'),
@@ -181,7 +169,6 @@ module.exports = function storageRoutes(db) {
     }
   );
 
-  // ── PATCH /api/sites/:siteId/drives/:driveId/unassign — return drive to inventory
   router.patch(
     '/:siteId/drives/:driveId/unassign',
     requireAuth, requireSiteAccess(db), requireRole('member'),
@@ -284,10 +271,6 @@ module.exports = function storageRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // STORAGE POOLS — /api/sites/:siteId/pools
-  // ═══════════════════════════════════════════════════════════════════════════
-
   router.get('/:siteId/pools', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId } = req.user;
     const { siteId } = req.params;
@@ -381,10 +364,6 @@ module.exports = function storageRoutes(db) {
       }
     }
   );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SHARES — /api/sites/:siteId/shares
-  // ═══════════════════════════════════════════════════════════════════════════
 
   router.get('/:siteId/shares', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId } = req.user;

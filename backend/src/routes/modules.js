@@ -5,16 +5,12 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const ModuleInstanceSchema = z.object({
   slotBlockId:    z.string().uuid(),
   cardTemplateId: z.string().uuid(),
   serialNumber:   z.string().max(200).optional(),
   assetTag:       z.string().max(200).optional(),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -32,19 +28,16 @@ function toModule(row) {
     deviceId:       row.device_id,
     slotBlockId:    row.slot_block_id,
     cardTemplateId: row.card_template_id,
-    serialNumber:   row.serial_number ?? undefined,
-    assetTag:       row.asset_tag ?? undefined,
+    serialNumber:   row.serial_number,
+    assetTag:       row.asset_tag,
     createdAt:      row.created_at,
   };
 }
-
-// ── Routes ────────────────────────────────────────────────────────────────────
 
 module.exports = function modulesRoutes(db) {
   const router = express.Router({ mergeParams: true });
   router.use(requireAuth, requireSiteAccess(db));
 
-  // GET /api/sites/:siteId/devices/:deviceId/modules
   router.get('/:siteId/devices/:deviceId/modules', async (req, res, next) => {
     try {
       const { deviceId } = req.params;
@@ -62,14 +55,12 @@ module.exports = function modulesRoutes(db) {
     } catch (err) { next(err); }
   });
 
-  // POST /api/sites/:siteId/devices/:deviceId/modules
   router.post('/:siteId/devices/:deviceId/modules', validate(ModuleInstanceSchema), async (req, res, next) => {
     try {
       const { deviceId } = req.params;
       const { slotBlockId, cardTemplateId, serialNumber, assetTag } = req.body;
 
       const row = await withOrg(db, req.orgId, async (client) => {
-        // Verify device belongs to site
         const devCheck = await client.query(
           `SELECT id FROM device_instances WHERE id = $1 AND site_id = $2`,
           [deviceId, req.params.siteId]
@@ -80,7 +71,6 @@ module.exports = function modulesRoutes(db) {
           throw err;
         }
 
-        // Check slot not already occupied
         const slotCheck = await client.query(
           `SELECT id FROM module_instances WHERE device_id = $1 AND slot_block_id = $2`,
           [deviceId, slotBlockId]
@@ -104,13 +94,11 @@ module.exports = function modulesRoutes(db) {
     } catch (err) { next(err); }
   });
 
-  // DELETE /api/sites/:siteId/devices/:deviceId/modules/:moduleId
   router.delete('/:siteId/devices/:deviceId/modules/:moduleId', async (req, res, next) => {
     try {
       const { deviceId, moduleId } = req.params;
 
       await withOrg(db, req.orgId, async (client) => {
-        // Verify device belongs to site
         const devCheck = await client.query(
           `SELECT id FROM device_instances WHERE id = $1 AND site_id = $2`,
           [deviceId, req.params.siteId]

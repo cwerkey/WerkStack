@@ -43,7 +43,6 @@ async function uniqueSlug(client, base) {
 module.exports = function authRoutes(db) {
   const router = express.Router();
 
-  // ── GET /api/auth/me — hydrate session ──────────────────────────────────
   router.get('/me', requireAuth, async (req, res) => {
     try {
       const userResult = await db.query(
@@ -95,7 +94,6 @@ module.exports = function authRoutes(db) {
     }
   });
 
-  // ── POST /api/auth/login ─────────────────────────────────────────────────
   router.post('/login', validate(LoginSchema), async (req, res) => {
     const { email, password } = req.body;
     try {
@@ -126,9 +124,6 @@ module.exports = function authRoutes(db) {
     }
   });
 
-  // ── POST /api/auth/register ──────────────────────────────────────────────
-  // Creates an organization + owner user in a single transaction.
-  // Also inserts the initial membership row (for future multi-org queries).
   router.post('/register', validate(RegisterSchema), async (req, res) => {
     const { email, username, password, orgName } = req.body;
     const client = await db.connect();
@@ -153,7 +148,6 @@ module.exports = function authRoutes(db) {
       );
       const user = userResult.rows[0];
 
-      // Seed the memberships table for future cross-org queries
       await client.query(
         `INSERT INTO memberships (org_id, user_id, role) VALUES ($1, $2, 'owner')`,
         [org.id, user.id]
@@ -190,7 +184,6 @@ module.exports = function authRoutes(db) {
     }
   });
 
-  // ── POST /api/auth/logout ────────────────────────────────────────────────
   router.post('/logout', (req, res) => {
     clearSessionCookie(res);
     res.status(204).send();

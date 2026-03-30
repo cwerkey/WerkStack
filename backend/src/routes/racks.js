@@ -5,8 +5,6 @@ const { z } = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const RackSchema = z.object({
   name:             z.string().min(1).max(100),
   zoneId:           z.string().uuid().optional(),
@@ -32,8 +30,6 @@ const DeviceInstanceSchema = z.object({
   shelfCol:      z.number().int().min(0).optional(),
   shelfRow:      z.number().int().min(0).optional(),
 });
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
@@ -84,7 +80,6 @@ function toDevice(row) {
   };
 }
 
-// Collision check — does a new device at rackU..rackU+uHeight-1 overlap any existing device?
 function hasRackCollision(devices, rackU, uHeight, face, excludeId) {
   const top = rackU;
   const bottom = rackU + uHeight - 1;
@@ -98,16 +93,9 @@ function hasRackCollision(devices, rackU, uHeight, face, excludeId) {
   });
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function racksRoutes(db) {
   const router = express.Router({ mergeParams: true });
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // RACKS — /api/sites/:siteId/racks
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // ── GET /api/sites/:siteId/racks — list racks for site ──────────────────
   router.get(
     '/:siteId/racks',
     requireAuth,
@@ -130,7 +118,6 @@ module.exports = function racksRoutes(db) {
     }
   );
 
-  // ── POST /api/sites/:siteId/racks — create rack ────────────────────────
   router.post(
     '/:siteId/racks',
     requireAuth,
@@ -158,7 +145,6 @@ module.exports = function racksRoutes(db) {
     }
   );
 
-  // ── PATCH /api/sites/:siteId/racks/:rackId — update rack ───────────────
   router.patch(
     '/:siteId/racks/:rackId',
     requireAuth,
@@ -189,7 +175,6 @@ module.exports = function racksRoutes(db) {
     }
   );
 
-  // ── DELETE /api/sites/:siteId/racks/:rackId — delete rack ──────────────
   router.delete(
     '/:siteId/racks/:rackId',
     requireAuth,
@@ -216,11 +201,6 @@ module.exports = function racksRoutes(db) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DEVICE INSTANCES — /api/sites/:siteId/devices
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // ── GET /api/sites/:siteId/devices — list devices for site ─────────────
   router.get(
     '/:siteId/devices',
     requireAuth,
@@ -243,7 +223,6 @@ module.exports = function racksRoutes(db) {
     }
   );
 
-  // ── POST /api/sites/:siteId/devices — create device instance ───────────
   router.post(
     '/:siteId/devices',
     requireAuth,
@@ -256,7 +235,6 @@ module.exports = function racksRoutes(db) {
       const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow } = req.body;
 
       try {
-        // If placing in a rack, check for collision
         if (rackId && rackU && uHeight) {
           const existing = await withOrg(db, orgId, (c) =>
             c.query(
@@ -291,7 +269,6 @@ module.exports = function racksRoutes(db) {
     }
   );
 
-  // ── PATCH /api/sites/:siteId/devices/:deviceId — update device ─────────
   router.patch(
     '/:siteId/devices/:deviceId',
     requireAuth,
@@ -304,7 +281,6 @@ module.exports = function racksRoutes(db) {
       const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow } = req.body;
 
       try {
-        // Collision check on update
         if (rackId && rackU && uHeight) {
           const existing = await withOrg(db, orgId, (c) =>
             c.query(
@@ -346,7 +322,6 @@ module.exports = function racksRoutes(db) {
     }
   );
 
-  // ── DELETE /api/sites/:siteId/devices/:deviceId — delete device ────────
   router.delete(
     '/:siteId/devices/:deviceId',
     requireAuth,
@@ -373,8 +348,6 @@ module.exports = function racksRoutes(db) {
     }
   );
 
-  // ── PATCH /api/sites/:siteId/devices/:deviceId/position — move device ──
-  // Lightweight endpoint for drag-and-drop repositioning
   const PositionSchema = z.object({
     rackId:  z.string().uuid(),
     rackU:   z.number().int().min(1),
@@ -393,7 +366,6 @@ module.exports = function racksRoutes(db) {
       const { rackId, rackU, face } = req.body;
 
       try {
-        // Get device uHeight first
         const devResult = await withOrg(db, orgId, (c) =>
           c.query(
             `SELECT u_height FROM device_instances WHERE id = $1 AND site_id = $2 AND org_id = $3`,
@@ -408,7 +380,6 @@ module.exports = function racksRoutes(db) {
           return res.status(400).json({ error: 'device has no uHeight — cannot position in rack' });
         }
 
-        // Collision check
         const existing = await withOrg(db, orgId, (c) =>
           c.query(
             `SELECT id, rack_u, u_height, face FROM device_instances

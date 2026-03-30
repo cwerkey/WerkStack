@@ -20,19 +20,4 @@ function getDb() {
   return pool;
 }
 
-// Run a query with app.current_org_id set for RLS.
-// All queries that touch tenant data should use this.
-// Uses set_config() with parameterized value to avoid string interpolation.
-async function queryWithOrg(db, orgId, text, params) {
-  const client = await db.connect();
-  try {
-    // set_config(key, value, is_local) — is_local=true scopes to current transaction
-    await client.query(`SELECT set_config('app.current_org_id', $1, true)`, [orgId]);
-    const result = await client.query(text, params);
-    return result;
-  } finally {
-    client.release();
-  }
-}
-
-module.exports = { getDb, queryWithOrg };
+module.exports = { getDb };

@@ -32,7 +32,6 @@ module.exports = function usersRoutes(db) {
   const router = express.Router();
   router.use(requireAuth);
 
-  // GET /api/org/users — list all users in the requester's org
   router.get('/', async (req, res) => {
     const { orgId } = req.user;
     try {
@@ -48,7 +47,6 @@ module.exports = function usersRoutes(db) {
     }
   });
 
-  // POST /api/org/users — invite (create) a new member in this org (admin+)
   router.post('/', requireRole('admin'), validate(InviteSchema), async (req, res) => {
     const { orgId }                        = req.user;
     const { email, username, password, role } = req.body;
@@ -78,7 +76,6 @@ module.exports = function usersRoutes(db) {
     }
   });
 
-  // PATCH /api/org/users/:id/role — change a member's role (admin+, cannot change owner)
   router.patch('/:id/role', requireRole('admin'), validate(RoleSchema), async (req, res) => {
     const { orgId, userId: currentUserId, role: currentRole } = req.user;
     const { id }      = req.params;
@@ -120,7 +117,6 @@ module.exports = function usersRoutes(db) {
     }
   });
 
-  // DELETE /api/org/users/:id — remove a member from the org (admin+, cannot remove owner)
   router.delete('/:id', requireRole('admin'), async (req, res) => {
     const { orgId, userId: currentUserId, role: currentRole } = req.user;
     const { id } = req.params;

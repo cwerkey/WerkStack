@@ -5,8 +5,6 @@ const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 
-// ── Validation schemas ────────────────────────────────────────────────────────
-
 const SiteSchema = z.object({
   name:        z.string().min(1).max(100),
   location:    z.string().min(1).max(200),
@@ -19,9 +17,6 @@ const ZoneSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// Acquire a client, set org context for RLS, run callback, release.
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
   try {
@@ -55,15 +50,11 @@ function toZone(row) {
   };
 }
 
-// ── Route factory ─────────────────────────────────────────────────────────────
-
 module.exports = function sitesRoutes(db) {
   const router = express.Router({ mergeParams: true });
 
-  // Attach db to every request for handler convenience
   router.use((req, _res, next) => { req.db = db; next(); });
 
-  // ── GET /api/sites — list all sites for org ───────────────────────────────
   router.get('/', requireAuth, async (req, res) => {
     const { orgId } = req.user;
     try {
@@ -80,7 +71,6 @@ module.exports = function sitesRoutes(db) {
     }
   });
 
-  // ── POST /api/sites — create site ─────────────────────────────────────────
   router.post('/', requireAuth, requireRole('admin'), validate(SiteSchema), async (req, res) => {
     const { orgId } = req.user;
     const { name, location, color, description } = req.body;
@@ -100,7 +90,6 @@ module.exports = function sitesRoutes(db) {
     }
   });
 
-  // ── PATCH /api/sites/:siteId — update site ────────────────────────────────
   router.patch(
     '/:siteId',
     requireAuth,
@@ -132,7 +121,6 @@ module.exports = function sitesRoutes(db) {
     }
   );
 
-  // ── DELETE /api/sites/:siteId — delete site ───────────────────────────────
   router.delete(
     '/:siteId',
     requireAuth,
@@ -156,7 +144,6 @@ module.exports = function sitesRoutes(db) {
     }
   );
 
-  // ── GET /api/sites/:siteId/zones — list zones for site ───────────────────
   router.get(
     '/:siteId/zones',
     requireAuth,
@@ -179,7 +166,6 @@ module.exports = function sitesRoutes(db) {
     }
   );
 
-  // ── POST /api/sites/:siteId/zones — create zone ───────────────────────────
   router.post(
     '/:siteId/zones',
     requireAuth,
@@ -207,7 +193,6 @@ module.exports = function sitesRoutes(db) {
     }
   );
 
-  // ── PATCH /api/sites/:siteId/zones/:zoneId — update zone ─────────────────
   router.patch(
     '/:siteId/zones/:zoneId',
     requireAuth,
@@ -239,7 +224,6 @@ module.exports = function sitesRoutes(db) {
     }
   );
 
-  // ── DELETE /api/sites/:siteId/zones/:zoneId — delete zone ────────────────
   router.delete(
     '/:siteId/zones/:zoneId',
     requireAuth,

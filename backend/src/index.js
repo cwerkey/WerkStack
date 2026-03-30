@@ -15,8 +15,11 @@ const osStackRoutes   = require('./routes/os_stack');
 const networkRoutes   = require('./routes/network');
 const overviewRoutes  = require('./routes/overview');
 const ticketsRoutes   = require('./routes/tickets');
-const guidesRoutes    = require('./routes/guides');
-const usersRoutes       = require('./routes/users');
+const guidesRoutes           = require('./routes/guides');
+const guideManualsRoutes     = require('./routes/guide_manuals');
+const { guideLinkQueryRoutes } = require('./routes/guide_links');
+const searchRoutes           = require('./routes/search');
+const usersRoutes        = require('./routes/users');
 const pathfinderRoutes  = require('./routes/pathfinder');
 const blueprintRoutes   = require('./routes/blueprints');
 const ledgerRoutes      = require('./routes/ledger');
@@ -31,7 +34,6 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 
 const app = express();
 
-// ── Middleware ─────────────────────────────────────────────────────────────
 app.use(cors({
   origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
   credentials: true,
@@ -39,17 +41,10 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// ── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ── Routes ─────────────────────────────────────────────────────────────────
-// Routes are mounted after DB connection is confirmed.
-// Each route factory receives the db pool as its sole dependency.
-
-// waitForDb — retries the DB connection with linear backoff.
-// Handles the case where postgres starts slower than the backend process (common in dev).
 async function waitForDb(db, retries = 15, delayMs = 2000) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -68,17 +63,14 @@ async function waitForDb(db, retries = 15, delayMs = 2000) {
 async function start() {
   const db = getDb();
 
-  // Wait for DB — retries up to 15× with 2s delay (30s total window).
-  // Covers postgres cold-start time in both dev and Docker.
   await waitForDb(db);
 
-  // Run pending migrations before mounting any routes
   try {
     await migrate(db);
     console.log('[migrate] schema up to date');
   } catch (err) {
     console.error('[migrate] failed:', err.message);
-    process.exit(1); // Schema inconsistency — refuse to start
+    process.exit(1);
   }
 
   app.use('/api/auth',      authRoutes(db));
@@ -91,8 +83,11 @@ async function start() {
   app.use('/api/sites',     networkRoutes(db));
   app.use('/api/sites/:siteId/overview', overviewRoutes(db));
   app.use('/api/sites/:siteId/tickets',  ticketsRoutes(db));
-  app.use('/api/sites/:siteId/guides',   guidesRoutes(db));
-  app.use('/api/org/users',              usersRoutes(db));
+  app.use('/api/sites/:siteId/guides',        guidesRoutes(db));
+  app.use('/api/sites/:siteId/guide-manuals', guideManualsRoutes(db));
+  app.use('/api/sites/:siteId/guide-links',   guideLinkQueryRoutes(db));
+  app.use('/api/sites/:siteId/search',        searchRoutes(db));
+  app.use('/api/org/users',                   usersRoutes(db));
   app.use('/api/sites/:siteId/pathfinder',  pathfinderRoutes(db));
   app.use('/api/sites/:siteId/blueprints',  blueprintRoutes(db));
   app.use('/api/sites/:siteId/ledger',      ledgerRoutes(db));
@@ -102,15 +97,12 @@ async function start() {
   app.use('/api/sites/:siteId/audit-log',   auditLogRoutes(db));
   app.use('/api/sites',                     modulesRoutes(db));
 
-  // Start background workers (heartbeat checker, draft cleanup, git-sync)
   startWorkers(db);
 
-  // 404 handler
   app.use((req, res) => {
     res.status(404).json({ error: `route not found: ${req.method} ${req.path}` });
   });
 
-  // Error handler — always returns { error: 'message' }
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, _next) => {
     console.error('[unhandled error]', err);

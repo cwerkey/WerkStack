@@ -5,7 +5,6 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
 const COOKIE_NAME = 'werkdocs_session';
 
-// requireAuth — verifies JWT from httpOnly cookie and attaches user to req.
 function requireAuth(req, res, next) {
   const token = req.cookies?.[COOKIE_NAME];
   if (!token) {
@@ -20,7 +19,6 @@ function requireAuth(req, res, next) {
   }
 }
 
-// requireSiteAccess — checks that req.user has access to the siteId in params.
 function requireSiteAccess(db) {
   return async (req, res, next) => {
     const { siteId } = req.params;
@@ -42,7 +40,6 @@ function requireSiteAccess(db) {
   };
 }
 
-// requireRole — checks that req.user.role meets the minimum level.
 const ROLE_LEVELS = { viewer: 0, member: 1, admin: 2, owner: 3 };
 
 function requireRole(minRole) {
@@ -58,7 +55,6 @@ function signToken(payload) {
   return jwt.sign(
     {
       ...payload,
-      // Reserved for admin shadowing (Phase 11+). Always null in v1.
       impersonator_id: null,
     },
     JWT_SECRET,
