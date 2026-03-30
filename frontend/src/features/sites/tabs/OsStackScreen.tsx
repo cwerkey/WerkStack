@@ -52,6 +52,8 @@ export function OsStackScreen() {
   const [hosts, setHosts] = useState<OsHost[]>([]);
   const [vms, setVms]     = useState<OsVm[]>([]);
   const [apps, setApps]   = useState<OsApp[]>([]);
+  const [vmGuideCounts,  setVmGuideCounts]  = useState<Record<string, number>>({});
+  const [appGuideCounts, setAppGuideCounts] = useState<Record<string, number>>({});
 
   // Modals for list view edit callbacks
   const [hostModal, setHostModal] = useState<{ open: boolean; initial?: OsHost | null }>({ open: false });
@@ -68,11 +70,19 @@ export function OsStackScreen() {
       api.get<OsHost[]>(`${apiBase}/os-hosts`),
       api.get<OsVm[]>(`${apiBase}/os-vms`),
       api.get<OsApp[]>(`${apiBase}/os-apps`),
+      api.get<{ entityId: string; count: number }[]>(`${apiBase}/guide-links/counts?entityType=vm`).catch(() => []),
+      api.get<{ entityId: string; count: number }[]>(`${apiBase}/guide-links/counts?entityType=app`).catch(() => []),
     ])
-      .then(([h, v, a]) => {
+      .then(([h, v, a, vgc, agc]) => {
         setHosts(h ?? []);
         setVms(v ?? []);
         setApps(a ?? []);
+        const vmCounts: Record<string, number> = {};
+        for (const row of (vgc ?? [])) vmCounts[row.entityId] = row.count;
+        setVmGuideCounts(vmCounts);
+        const appCounts: Record<string, number> = {};
+        for (const row of (agc ?? [])) appCounts[row.entityId] = row.count;
+        setAppGuideCounts(appCounts);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -270,7 +280,9 @@ export function OsStackScreen() {
               appTypes={appTypes}
               th={th}
               accent={accent}
+              siteId={siteId}
               apiBase={apiBase}
+              guideCounts={vmGuideCounts}
               onVmAdd={v => setVms(p => [...p, v])}
               onVmUpdate={v => setVms(p => p.map(x => x.id === v.id ? v : x))}
               onVmDelete={id => setVms(p => p.filter(x => x.id !== id))}
@@ -285,7 +297,9 @@ export function OsStackScreen() {
               appTypes={appTypes}
               th={th}
               accent={accent}
+              siteId={siteId}
               apiBase={apiBase}
+              guideCounts={appGuideCounts}
               onAppAdd={a => setApps(p => [...p, a])}
               onAppUpdate={a => setApps(p => p.map(x => x.id === a.id ? a : x))}
               onAppDelete={id => setApps(p => p.filter(x => x.id !== id))}

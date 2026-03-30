@@ -450,15 +450,67 @@ export interface Ticket {
 
 // ─── Guides ───────────────────────────────────────────────────────────────────
 
+export interface GuideManual {
+  id:        string;
+  orgId:     string;
+  siteId:    string;
+  name:      string;
+  sortOrder: number;
+  parentId:  string | null;
+  createdAt: string;
+}
+
+export interface GuideLink {
+  id:         string;
+  orgId:      string;
+  guideId:    string;
+  entityType: string;
+  entityId:   string;
+  createdAt:  string;
+}
+
 export interface Guide {
   id:         string;
   orgId:      string;
   siteId:     string;
   title:      string;
   content:    string;
+  manualId:   string | null;
+  sortOrder:  number;
+  isLocked:   boolean;
+  manualName: string | null;
+  links:      GuideLink[];
   createdBy?: string;
   createdAt:  string;
   updatedAt:  string;
+}
+
+export interface SearchResult {
+  type:     'device' | 'guide' | 'subnet' | 'pool' | 'vm' | 'app' | 'connection';
+  id:       string;
+  name:     string;
+  subtitle: string;
+  icon:     string;
+  route:    string;
+}
+
+export type GuideBlockType =
+  | 'h1' | 'h2' | 'h3'
+  | 'paragraph'
+  | 'code'
+  | 'list'
+  | 'ordered'
+  | 'divider'
+  | 'callout';
+
+export interface GuideBlock {
+  id:      string;
+  type:    GuideBlockType;
+  content: string;
+  meta?:   {
+    language?: string;
+    variant?:  string;   // callout: 'info' | 'warning' | 'tip'
+  };
 }
 
 // ─── Pathfinder ──────────────────────────────────────────────────────────────

@@ -1,18 +1,22 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { OsApp, OsVm, OsHost, DeviceInstance, AppType } from '@werkstack/shared';
 import type { OsThemeTokens } from '../../../../store/useThemeStore';
 import { AppEditorModal } from './AppEditorModal';
 import { sanitizeUrl } from '../../../../utils/sanitize';
+import { api } from '../../../../utils/api';
 
 interface Props {
-  apps:     OsApp[];
-  vms:      OsVm[];
-  hosts:    OsHost[];
-  devices:  DeviceInstance[];
-  appTypes: AppType[];
-  th:       OsThemeTokens;
-  accent:   string;
-  apiBase:  string;
+  apps:        OsApp[];
+  vms:         OsVm[];
+  hosts:       OsHost[];
+  devices:     DeviceInstance[];
+  appTypes:    AppType[];
+  th:          OsThemeTokens;
+  accent:      string;
+  siteId:      string;
+  apiBase:     string;
+  guideCounts: Record<string, number>;
   onAppAdd:    (a: OsApp) => void;
   onAppUpdate: (a: OsApp) => void;
   onAppDelete: (id: string) => void;
@@ -31,12 +35,14 @@ function toggleFilter(s: FilterSet, id: string, allIds: string[]): FilterSet {
 }
 
 export function OsAppsTab({
-  apps, vms, hosts, devices, appTypes, th, accent, apiBase,
+  apps, vms, hosts, devices, appTypes, th, accent, siteId, apiBase, guideCounts,
   onAppAdd, onAppUpdate, onAppDelete,
 }: Props) {
+  const navigate = useNavigate();
   const [modal, setModal]           = useState<{ open: boolean; initial?: OsApp | null }>({ open: false });
   const [typeFilter, setTypeFilter] = useState<FilterSet>(null);
   const [confirm, setConfirm]       = useState<string | null>(null);
+  const [guidePopup, setGuidePopup] = useState<{ appId: string; guides: { id: string; guideTitle?: string }[] } | null>(null);
 
   const appTypeMap = Object.fromEntries(appTypes.map(t => [t.id, t]));
   const vmMap      = Object.fromEntries(vms.map(v => [v.id, v]));
@@ -162,6 +168,7 @@ export function OsAppsTab({
               <th style={thStyle}>version</th>
               <th style={thStyle}>ip / port</th>
               <th style={thStyle}>url</th>
+              <th style={{ ...thStyle, width: 60 }}>guides</th>
               <th style={{ ...thStyle, width: 80 }}></th>
             </tr>
           </thead>
@@ -191,6 +198,55 @@ export function OsAppsTab({
                         style={{ color: th.blue, fontFamily: th.fontData, fontSize: 11 }}
                       >{safeUrl}</a>
                     ) : '—'}
+                  </td>
+                  <td style={{ ...tdStyle, padding: '4px 12px', position: 'relative' }}>
+                    {(guideCounts[app.id] ?? 0) > 0 ? (
+                      <button
+                        onClick={async () => {
+                          const data = await api.get<{ id: string; guideTitle?: string }[]>(
+                            `/api/sites/${siteId}/guide-links?entityType=app&entityId=${app.id}`
+                          ).catch(() => []);
+                          setGuidePopup({ appId: app.id, guides: data ?? [] });
+                        }}
+                        style={{
+                          padding: '2px 7px', borderRadius: 10,
+                          background: '#c47c5a18', border: '1px solid #c47c5a40',
+                          color: '#c47c5a', cursor: 'pointer',
+                          fontFamily: th.fontLabel, fontSize: 10,
+                        }}
+                      >
+                        {guideCounts[app.id]}
+                      </button>
+                    ) : (
+                      <span style={{ color: th.text3, fontFamily: th.fontData, fontSize: 10 }}>—</span>
+                    )}
+                    {guidePopup?.appId === app.id && (
+                      <div style={{
+                        position: 'absolute', bottom: '100%', left: 0, zIndex: 300,
+                        background: 'var(--cardBg, #141618)', border: '1px solid var(--border2, #262c30)',
+                        borderRadius: 6, padding: '4px 0', minWidth: 180,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                      }}>
+                        {guidePopup.guides.map(g => (
+                          <button
+                            key={g.id}
+                            onClick={() => { navigate(`/sites/${siteId}/guides?guideId=${g.id}`); setGuidePopup(null); }}
+                            style={{
+                              display: 'block', width: '100%', textAlign: 'left',
+                              padding: '6px 12px', background: 'transparent', border: 'none',
+                              cursor: 'pointer', fontFamily: th.fontLabel, fontSize: 10,
+                              color: th.text2,
+                            }}
+                          >
+                            {g.guideTitle ?? g.id.slice(0, 8) + '…'}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setGuidePopup(null)}
+                          style={{ display: 'block', width: '100%', textAlign: 'center', padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: th.fontLabel, fontSize: 9, color: th.text3 }}
+                        >close</button>
+                      </div>
+                    )}
                   </td>
                   <td style={{ ...tdStyle, padding: '4px 12px' }}>
                     <div style={{ display: 'flex', gap: 6 }}>

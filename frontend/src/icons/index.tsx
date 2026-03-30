@@ -244,4 +244,37 @@ export const icons: IconMap = {
       <line x1="12" y1="22.08" x2="12" y2="12" />
     </g>
   ),
+  // Security
+  lock: (
+    <g fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="11" width="14" height="11" rx="2" />
+      <path d="M8 11V7a4 4 0 018 0v4" />
+    </g>
+  ),
+  lockOpen: (
+    <g fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="11" width="14" height="11" rx="2" />
+      <path d="M8 11V7a4 4 0 018 0" />
+    </g>
+  ),
+  // Network / App
+  network: (
+    <g fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="4" r="2" />
+      <circle cx="4" cy="20" r="2" />
+      <circle cx="20" cy="20" r="2" />
+      <line x1="12" y1="6" x2="12" y2="10" />
+      <line x1="10.5" y1="13.5" x2="5.5" y2="18.5" />
+      <line x1="13.5" y1="13.5" x2="18.5" y2="18.5" />
+    </g>
+  ),
+  app: (
+    <g fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="6" height="6" rx="1" />
+      <rect x="14" y="4" width="6" height="6" rx="1" />
+      <rect x="4" y="14" width="6" height="6" rx="1" />
+      <rect x="14" y="14" width="6" height="6" rx="1" />
+    </g>
+  ),
 };

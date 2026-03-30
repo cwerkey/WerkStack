@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icon } from '../../../../components/ui/Icon';
 import { ErrorBoundary } from '../../../../components/ui/ErrorBoundary';
 import { TemplateOverlay } from '../../../../components/ui/TemplateOverlay';
@@ -74,6 +75,63 @@ function getBlockConnection(deviceId: string, blockId: string, connections: Conn
 /** Get drives assigned to a specific slot block */
 function getDriveForSlot(deviceId: string, blockId: string, drives: Drive[]): Drive | undefined {
   return drives.find(d => d.deviceId === deviceId && d.slotBlockId === blockId);
+}
+
+// ── Device Guide Links ───────────────────────────────────────────────────────
+
+interface GuideRef { id: string; entityType: string; entityId: string; guideTitle?: string; }
+
+function DeviceGuideLinks({ deviceId, siteId }: { deviceId: string; siteId: string }) {
+  const navigate = useNavigate();
+  const [guideLinks, setGuideLinks] = useState<GuideRef[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await api.get<GuideRef[]>(
+        `/api/sites/${siteId}/guide-links?entityType=device&entityId=${deviceId}`
+      );
+      setGuideLinks(data ?? []);
+    } catch { /* ignore */ } finally {
+      setLoading(false);
+    }
+  }, [deviceId, siteId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return (
+    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text3, #4e5560)' }}>
+      loading…
+    </div>
+  );
+
+  if (guideLinks.length === 0) return (
+    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: 'var(--text3, #4e5560)', fontStyle: 'italic' }}>
+      no linked guides
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {guideLinks.map(gl => (
+        <button
+          key={gl.id}
+          onClick={() => navigate(`/sites/${siteId}/guides?guideId=${gl.entityId}`)}
+          title="open guide"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '3px 10px', borderRadius: 10,
+            background: '#c47c5a18', border: '1px solid #c47c5a40',
+            color: '#c47c5a', cursor: 'pointer',
+            fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+          }}
+        >
+          <Icon name="book" size={10} />
+          {gl.guideTitle ?? gl.entityId.slice(0, 8) + '…'}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ── Port Context Menu ────────────────────────────────────────────────────────
@@ -498,6 +556,10 @@ export function DeviceEditorModal({ open, onClose, device, siteId, accent, rende
               <div className="wiz-field">
                 <label className="wiz-label">notes</label>
                 <textarea className="wiz-input" value={f.notes} onChange={e => set('notes', e.target.value)} rows={3} style={{ resize: 'vertical' }} placeholder="—" />
+              </div>
+              <div className="wiz-field">
+                <label className="wiz-label">guides</label>
+                <DeviceGuideLinks deviceId={device.id} siteId={siteId} />
               </div>
               {template && (
                 <div style={{
