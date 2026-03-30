@@ -1,8 +1,7 @@
-import { randomUUID } from 'crypto';
 import type { GuideBlock, GuideBlockType } from './types';
 
 function uid(): string {
-  return randomUUID();
+  return crypto.randomUUID();
 }
 
 function makeBlock(type: GuideBlockType, content: string, meta?: GuideBlock['meta']): GuideBlock {
