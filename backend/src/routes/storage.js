@@ -9,6 +9,7 @@ const DriveSchema = z.object({
   deviceId:      z.string().uuid().optional().nullable(),
   slotBlockId:   z.string().max(200).optional(),
   label:         z.string().max(200).optional(),
+  model:         z.string().max(200).optional(),
   capacity:      z.string().min(1).max(50),
   driveType:     z.enum(['hdd', 'ssd', 'nvme', 'flash', 'tape']),
   serial:        z.string().max(200).optional(),
@@ -31,15 +32,18 @@ const PoolSchema = z.object({
   poolType:   z.enum(['zfs', 'raid', 'ceph', 'lvm', 'drive']),
   raidLevel:  z.string().max(20).default('stripe'),
   vdevGroups: z.array(VdevGroupSchema).default([]),
+  health:     z.enum(['online', 'degraded', 'faulted', 'offline', 'unknown']).default('unknown'),
   notes:      z.string().max(2000).optional(),
 });
 
 const ShareSchema = z.object({
-  poolId:   z.string().uuid().optional(),
-  name:     z.string().min(1).max(200),
-  protocol: z.enum(['smb', 'nfs', 'iscsi']),
-  path:     z.string().max(500).optional(),
-  notes:    z.string().max(2000).optional(),
+  poolId:     z.string().uuid().optional(),
+  name:       z.string().min(1).max(200),
+  protocol:   z.enum(['smb', 'nfs', 'iscsi']),
+  path:       z.string().max(500).optional(),
+  accessMode: z.enum(['public', 'auth', 'list']).default('public'),
+  accessList: z.array(z.string().max(200)).default([]),
+  notes:      z.string().max(2000).optional(),
 });
 
 async function withOrg(db, orgId, fn) {
@@ -61,6 +65,7 @@ function toDrive(row) {
     poolId:        row.pool_id ?? undefined,
     slotBlockId:   row.slot_block_id ?? undefined,
     label:         row.label ?? undefined,
+    model:         row.model ?? undefined,
     capacity:      row.capacity,
     driveType:     row.drive_type,
     serial:        row.serial ?? undefined,
@@ -87,27 +92,77 @@ function toPool(row) {
     poolType:   row.pool_type,
     raidLevel:  row.raid_level,
     vdevGroups,
+    health:     row.health ?? 'unknown',
     notes:      row.notes ?? undefined,
     createdAt:  row.created_at,
   };
 }
 
 function toShare(row) {
+  let accessList = [];
+  try {
+    accessList = typeof row.access_list === 'string'
+      ? JSON.parse(row.access_list)
+      : (row.access_list ?? []);
+  } catch { accessList = []; }
   return {
-    id:        row.id,
-    orgId:     row.org_id,
-    siteId:    row.site_id,
-    poolId:    row.pool_id ?? undefined,
-    name:      row.name,
-    protocol:  row.protocol,
-    path:      row.path ?? undefined,
-    notes:     row.notes ?? undefined,
-    createdAt: row.created_at,
+    id:         row.id,
+    orgId:      row.org_id,
+    siteId:     row.site_id,
+    poolId:     row.pool_id ?? undefined,
+    name:       row.name,
+    protocol:   row.protocol,
+    path:       row.path ?? undefined,
+    accessMode: row.access_mode ?? 'public',
+    accessList,
+    notes:      row.notes ?? undefined,
+    createdAt:  row.created_at,
   };
 }
 
 module.exports = function storageRoutes(db) {
   const router = express.Router({ mergeParams: true });
+
+  // ── External drives: resolve connection graph to find drives in connected JBODs/DAS ──
+  router.get('/:siteId/devices/:deviceId/external-drives', requireAuth, requireSiteAccess(db), async (req, res) => {
+    const { orgId } = req.user;
+    const { siteId, deviceId } = req.params;
+    try {
+      const result = await withOrg(db, orgId, async c => {
+        // Find devices connected to this device (directly connected peers)
+        const connResult = await c.query(
+          `SELECT DISTINCT
+             CASE WHEN src_device_id = $1 THEN dst_device_id ELSE src_device_id END AS peer_id
+           FROM connections
+           WHERE site_id = $2 AND org_id = $3
+             AND (src_device_id = $1 OR dst_device_id = $1)
+             AND dst_device_id IS NOT NULL`,
+          [deviceId, siteId, orgId]
+        );
+        const peerIds = connResult.rows.map(r => r.peer_id).filter(Boolean);
+        if (peerIds.length === 0) return [];
+
+        // Get drives belonging to those connected devices
+        const driveResult = await c.query(
+          `SELECT d.*, di.name AS source_device_name
+           FROM drives d
+           JOIN device_instances di ON di.id = d.device_id
+           WHERE d.site_id = $1 AND d.org_id = $2
+             AND d.device_id = ANY($3)
+           ORDER BY d.device_id, d.created_at`,
+          [siteId, orgId, peerIds]
+        );
+        return driveResult.rows;
+      });
+      res.json(result.map(row => ({
+        ...toDrive(row),
+        sourceDeviceName: row.source_device_name,
+      })));
+    } catch (err) {
+      console.error(`[GET /api/sites/${siteId}/devices/${deviceId}/external-drives]`, err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
 
   router.get('/:siteId/drives', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId } = req.user;
@@ -199,16 +254,16 @@ module.exports = function storageRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId } = req.params;
-      const { deviceId, slotBlockId, label, capacity, driveType, serial, poolId, isBoot, vmPassthrough } = req.body;
+      const { deviceId, slotBlockId, label, model, capacity, driveType, serial, poolId, isBoot, vmPassthrough } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
             `INSERT INTO drives
-               (org_id, site_id, device_id, pool_id, slot_block_id, label,
+               (org_id, site_id, device_id, pool_id, slot_block_id, label, model,
                 capacity, drive_type, serial, is_boot, vm_passthrough)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
              RETURNING *`,
-            [orgId, siteId, deviceId, poolId ?? null, slotBlockId ?? null, label ?? null,
+            [orgId, siteId, deviceId, poolId ?? null, slotBlockId ?? null, label ?? null, model ?? null,
              capacity, driveType, serial ?? null, isBoot ?? false, vmPassthrough ?? null]
           )
         );
@@ -226,16 +281,16 @@ module.exports = function storageRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, driveId } = req.params;
-      const { deviceId, slotBlockId, label, capacity, driveType, serial, poolId, isBoot, vmPassthrough } = req.body;
+      const { deviceId, slotBlockId, label, model, capacity, driveType, serial, poolId, isBoot, vmPassthrough } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
             `UPDATE drives
-             SET device_id = $1, pool_id = $2, slot_block_id = $3, label = $4,
-                 capacity = $5, drive_type = $6, serial = $7, is_boot = $8, vm_passthrough = $9
-             WHERE id = $10 AND site_id = $11 AND org_id = $12
+             SET device_id = $1, pool_id = $2, slot_block_id = $3, label = $4, model = $5,
+                 capacity = $6, drive_type = $7, serial = $8, is_boot = $9, vm_passthrough = $10
+             WHERE id = $11 AND site_id = $12 AND org_id = $13
              RETURNING *`,
-            [deviceId, poolId ?? null, slotBlockId ?? null, label ?? null,
+            [deviceId, poolId ?? null, slotBlockId ?? null, label ?? null, model ?? null,
              capacity, driveType, serial ?? null, isBoot ?? false, vmPassthrough ?? null,
              driveId, siteId, orgId]
           )
@@ -294,16 +349,16 @@ module.exports = function storageRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId } = req.params;
-      const { deviceId, name, color, poolType, raidLevel, vdevGroups, notes } = req.body;
+      const { deviceId, name, color, poolType, raidLevel, vdevGroups, health, notes } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
             `INSERT INTO storage_pools
-               (org_id, site_id, device_id, name, color, pool_type, raid_level, vdev_groups, notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+               (org_id, site_id, device_id, name, color, pool_type, raid_level, vdev_groups, health, notes)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
              RETURNING *`,
             [orgId, siteId, deviceId, name, color ?? '#4a8fc4', poolType,
-             raidLevel ?? 'stripe', JSON.stringify(vdevGroups ?? []), notes ?? null]
+             raidLevel ?? 'stripe', JSON.stringify(vdevGroups ?? []), health ?? 'unknown', notes ?? null]
           )
         );
         res.status(201).json(toPool(result.rows[0]));
@@ -320,17 +375,17 @@ module.exports = function storageRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, poolId } = req.params;
-      const { deviceId, name, color, poolType, raidLevel, vdevGroups, notes } = req.body;
+      const { deviceId, name, color, poolType, raidLevel, vdevGroups, health, notes } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
             `UPDATE storage_pools
              SET device_id = $1, name = $2, color = $3, pool_type = $4,
-                 raid_level = $5, vdev_groups = $6, notes = $7
-             WHERE id = $8 AND site_id = $9 AND org_id = $10
+                 raid_level = $5, vdev_groups = $6, health = $7, notes = $8
+             WHERE id = $9 AND site_id = $10 AND org_id = $11
              RETURNING *`,
             [deviceId, name, color ?? '#4a8fc4', poolType,
-             raidLevel ?? 'stripe', JSON.stringify(vdevGroups ?? []), notes ?? null,
+             raidLevel ?? 'stripe', JSON.stringify(vdevGroups ?? []), health ?? 'unknown', notes ?? null,
              poolId, siteId, orgId]
           )
         );
@@ -388,14 +443,15 @@ module.exports = function storageRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId } = req.params;
-      const { poolId, name, protocol, path, notes } = req.body;
+      const { poolId, name, protocol, path, accessMode, accessList, notes } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
-            `INSERT INTO shares (org_id, site_id, pool_id, name, protocol, path, notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)
+            `INSERT INTO shares (org_id, site_id, pool_id, name, protocol, path, access_mode, access_list, notes)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
              RETURNING *`,
-            [orgId, siteId, poolId ?? null, name, protocol, path ?? null, notes ?? null]
+            [orgId, siteId, poolId ?? null, name, protocol, path ?? null,
+             accessMode ?? 'public', JSON.stringify(accessList ?? []), notes ?? null]
           )
         );
         res.status(201).json(toShare(result.rows[0]));
@@ -412,15 +468,17 @@ module.exports = function storageRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, shareId } = req.params;
-      const { poolId, name, protocol, path, notes } = req.body;
+      const { poolId, name, protocol, path, accessMode, accessList, notes } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
             `UPDATE shares
-             SET pool_id = $1, name = $2, protocol = $3, path = $4, notes = $5
-             WHERE id = $6 AND site_id = $7 AND org_id = $8
+             SET pool_id = $1, name = $2, protocol = $3, path = $4,
+                 access_mode = $5, access_list = $6, notes = $7
+             WHERE id = $8 AND site_id = $9 AND org_id = $10
              RETURNING *`,
-            [poolId ?? null, name, protocol, path ?? null, notes ?? null,
+            [poolId ?? null, name, protocol, path ?? null,
+             accessMode ?? 'public', JSON.stringify(accessList ?? []), notes ?? null,
              shareId, siteId, orgId]
           )
         );

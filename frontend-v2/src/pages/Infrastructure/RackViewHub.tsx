@@ -16,16 +16,26 @@ import {
   useDeleteConnection,
   useDeleteConnectionsByDevice,
 } from '@/api/connections';
-import { useGetModules } from '@/api/modules';
+import { useGetModules, useInstallModule } from '@/api/modules';
+import {
+  useGetSiteDrives,
+  useGetDeviceExternalDrives,
+  useGetSitePools,
+  useCreatePool,
+  useGetSiteShares,
+} from '@/api/storage';
 import { ZoneSidebar } from './ZoneSidebar';
 import { RackView } from './RackView';
 import { DetailDrawer } from './DetailDrawer/DetailDrawer';
 import { InfoTab } from './DetailDrawer/InfoTab';
 import { PortsTab } from './DetailDrawer/PortsTab';
+import { StorageTab } from './DetailDrawer/StorageTab';
 import { StubTab } from './DetailDrawer/StubTab';
 import { DeployWizard } from '@/wizards/DeployWizard';
 import { ConnectionWizard } from '@/wizards/ConnectionWizard';
 import { ConnectionEditModal } from '@/wizards/ConnectionEditModal';
+import { PoolWizard } from '@/wizards/PoolWizard';
+import { ExternalStorageWizard } from '@/wizards/ExternalStorageWizard';
 import { RackPickerModal } from './RackPickerModal';
 import styles from './RackViewHub.module.css';
 
@@ -65,6 +75,12 @@ export default function RackViewHub() {
     selectedDeviceId ?? '',
   );
 
+  // Storage data
+  const { data: siteDrives = [] } = useGetSiteDrives(siteId);
+  const { data: externalDrives = [] } = useGetDeviceExternalDrives(siteId, selectedDeviceId ?? '');
+  const { data: sitePools = [] } = useGetSitePools(siteId);
+  const { data: siteShares = [] } = useGetSiteShares(siteId);
+
   // Mutations
   const updateDevice = useUpdateDevice(siteId);
   const deleteDevice = useDeleteDevice(siteId);
@@ -73,6 +89,8 @@ export default function RackViewHub() {
   const createConnection = useCreateConnection(siteId);
   const updateConnection = useUpdateConnection(siteId);
   const deleteConnection = useDeleteConnection(siteId);
+  const createPool = useCreatePool(siteId);
+  const installModule = useInstallModule(siteId, selectedDeviceId ?? '');
 
   // Face toggle
   const [face, setFace] = useState<'front' | 'rear'>('front');
@@ -87,6 +105,12 @@ export default function RackViewHub() {
 
   // Connection edit modal state
   const [editingConn, setEditingConn] = useState<Connection | null>(null);
+
+  // Pool wizard state
+  const [poolWizardOpen, setPoolWizardOpen] = useState(false);
+
+  // External storage wizard state
+  const [extStorageWizardOpen, setExtStorageWizardOpen] = useState(false);
 
   // Rack picker state
   const [rackPickerOpen, setRackPickerOpen] = useState(false);
@@ -377,7 +401,19 @@ export default function RackViewHub() {
             onDeleteConnection={handleDeleteConnection}
           />
         )}
-        {selectedDevice && drawerTab !== 'info' && drawerTab !== 'ports' && (
+        {selectedDevice && drawerTab === 'storage' && (
+          <StorageTab
+            device={selectedDevice}
+            template={selectedTemplate}
+            drives={siteDrives}
+            externalDrives={externalDrives}
+            pools={sitePools}
+            shares={siteShares}
+            onCreatePool={() => setPoolWizardOpen(true)}
+            onConnectExternal={() => setExtStorageWizardOpen(true)}
+          />
+        )}
+        {selectedDevice && drawerTab !== 'info' && drawerTab !== 'ports' && drawerTab !== 'storage' && (
           <StubTab tab={drawerTab} />
         )}
       </DetailDrawer>
@@ -420,6 +456,48 @@ export default function RackViewHub() {
         onDelete={handleEditConnectionDelete}
         onClose={() => setEditingConn(null)}
       />
+
+      {/* Pool Wizard */}
+      {poolWizardOpen && selectedDevice && (
+        <PoolWizard
+          open={poolWizardOpen}
+          deviceId={selectedDevice.id}
+          localDrives={siteDrives}
+          externalDrives={externalDrives}
+          onSubmit={payload => {
+            createPool.mutate(payload, {
+              onSuccess: () => setPoolWizardOpen(false),
+            });
+          }}
+          onConnectExternal={() => {
+            setPoolWizardOpen(false);
+            setExtStorageWizardOpen(true);
+          }}
+          onClose={() => setPoolWizardOpen(false)}
+        />
+      )}
+
+      {/* External Storage Wizard */}
+      {extStorageWizardOpen && selectedDevice && (
+        <ExternalStorageWizard
+          open={extStorageWizardOpen}
+          device={selectedDevice}
+          template={selectedTemplate}
+          modules={selectedDeviceModules}
+          pcieTemplates={pcieTemplates}
+          cableTypes={cableTypes}
+          allDevices={devices}
+          allTemplates={templates}
+          allConnections={siteConnections}
+          onInstallModule={body => installModule.mutate(body)}
+          onCreateConnection={payload => {
+            createConnection.mutate(payload, {
+              onSuccess: () => setExtStorageWizardOpen(false),
+            });
+          }}
+          onClose={() => setExtStorageWizardOpen(false)}
+        />
+      )}
 
       {/* Rack Picker Modal */}
       <RackPickerModal

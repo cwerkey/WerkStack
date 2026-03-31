@@ -268,6 +268,7 @@ export interface Drive {
   deviceId?:      string;   // null = inventory/ledger drive (not installed)
   slotBlockId?:   string;   // PlacedBlock.id in template layout; null = internal/unlisted
   label?:         string;
+  model?:         string;   // manufacturer + model string
   capacity:       string;   // e.g. "4T", "960G"
   driveType:      DriveType;
   serial?:        string;
@@ -275,6 +276,10 @@ export interface Drive {
   isBoot:         boolean;
   vmPassthrough?: string;   // VM name/id assigned to
   createdAt:      string;
+}
+
+export interface ExternalDrive extends Drive {
+  sourceDeviceName: string;
 }
 
 export type VdevType =
@@ -294,6 +299,8 @@ export type RaidLevel =
   | 'raid0' | 'raid1' | 'raid5' | 'raid6' | 'raid10'
   | 'raidz1' | 'raidz2' | 'raidz3';
 
+export type PoolHealth = 'online' | 'degraded' | 'faulted' | 'offline' | 'unknown';
+
 export interface StoragePool {
   id:         string;
   orgId:      string;
@@ -304,22 +311,26 @@ export interface StoragePool {
   poolType:   PoolType;
   raidLevel:  RaidLevel;
   vdevGroups: VdevGroup[];
+  health:     PoolHealth;
   notes?:     string;
   createdAt:  string;
 }
 
 export type ShareProtocol = 'smb' | 'nfs' | 'iscsi';
+export type ShareAccessMode = 'public' | 'auth' | 'list';
 
 export interface Share {
-  id:        string;
-  orgId:     string;
-  siteId:    string;
-  poolId?:   string;
-  name:      string;
-  protocol:  ShareProtocol;
-  path?:     string;
-  notes?:    string;
-  createdAt: string;
+  id:          string;
+  orgId:       string;
+  siteId:      string;
+  poolId?:     string;
+  name:        string;
+  protocol:    ShareProtocol;
+  path?:       string;
+  accessMode:  ShareAccessMode;
+  accessList:  string[];   // user/group names when accessMode = 'list'
+  notes?:      string;
+  createdAt:   string;
 }
 
 // ─── OS Stack ─────────────────────────────────────────────────────────────────

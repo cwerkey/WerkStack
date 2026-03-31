@@ -29,7 +29,7 @@ services:
       DATABASE_URL: postgres://werkstack:werkstack_dev@postgres:5432/werkstack
       JWT_SECRET: change_me_in_production
       # Comma-separated list of allowed frontend origins
-      FRONTEND_ORIGIN: http://localhost:5174,http://localhost:5175
+      FRONTEND_ORIGIN: http://localhost:5174,http://localhost:5175,http://werkstack.gcwerkey.com,https://werkstack.gcwerkey.com
       # Set to 'true' only when serving over HTTPS
       COOKIE_SECURE: 'false'
     ports:

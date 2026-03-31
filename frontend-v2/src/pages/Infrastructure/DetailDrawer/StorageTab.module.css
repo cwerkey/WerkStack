@@ -1,0 +1,362 @@
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Section headers ──────────────────────────────────────────────────── */
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #1e2428;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: #8a9299;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.addBtn {
+  appearance: none;
+  background: none;
+  border: 1px solid #2a3038;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #8a9299;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.addBtn:hover {
+  border-color: #c47c5a;
+  color: #c47c5a;
+}
+
+/* ── Drive rows ───────────────────────────────────────────────────────── */
+
+.driveRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.driveRow:hover {
+  background: #1e2428;
+}
+
+.driveIcon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.driveLabel {
+  flex: 1;
+  color: #d4d9dd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.driveCapacity {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #8a9299;
+  flex-shrink: 0;
+}
+
+.driveType {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #5a6068;
+  min-width: 32px;
+  flex-shrink: 0;
+}
+
+.driveBay {
+  font-size: 10px;
+  color: #5a6068;
+  flex-shrink: 0;
+}
+
+.drivePool {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #1e2428;
+  color: #8a9299;
+  flex-shrink: 0;
+}
+
+.externalBadge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #2a1f15;
+  color: #c47c5a;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.bootBadge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #1a2a1a;
+  color: #3a8c4a;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* ── External source group ────────────────────────────────────────────── */
+
+.sourceGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sourceLabel {
+  font-size: 10px;
+  color: #5a6068;
+  padding: 4px 0 2px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+/* ── Pool rows ────────────────────────────────────────────────────────── */
+
+.poolRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.poolRow:hover {
+  background: #1e2428;
+}
+
+.poolColor {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.poolName {
+  flex: 1;
+  color: #d4d9dd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.poolType {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #5a6068;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.poolLayout {
+  font-size: 10px;
+  color: #8a9299;
+  flex-shrink: 0;
+}
+
+.poolCapacityBar {
+  width: 48px;
+  height: 6px;
+  background: #1e2428;
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.poolCapacityFill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+/* ── Pool detail (expanded) ───────────────────────────────────────────── */
+
+.poolDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  margin-top: 2px;
+  background: #111417;
+  border: 1px solid #1e2428;
+  border-radius: 4px;
+}
+
+.poolDetailTitle {
+  font-size: 10px;
+  font-weight: 500;
+  color: #5a6068;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vdevBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px;
+  background: #161a1d;
+  border: 1px solid #1e2428;
+  border-radius: 3px;
+}
+
+.vdevLabel {
+  font-size: 10px;
+  font-weight: 500;
+  color: #8a9299;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.vdevDrive {
+  font-size: 10px;
+  color: #5a6068;
+  padding-left: 8px;
+}
+
+/* ── Share rows ───────────────────────────────────────────────────────── */
+
+.shareRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.shareRow:hover {
+  background: #1e2428;
+}
+
+.protocolBadge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.protocolSmb {
+  background: #1a2a2a;
+  color: #4a9a8a;
+}
+
+.protocolNfs {
+  background: #2a2a1a;
+  color: #9a9a4a;
+}
+
+.protocolIscsi {
+  background: #1a1a2a;
+  color: #6a6aba;
+}
+
+.shareName {
+  flex: 1;
+  color: #d4d9dd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sharePath {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #5a6068;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Access badge ─────────────────────────────────────────────────────── */
+
+.accessBadge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #1e2428;
+  color: #8a9299;
+  flex-shrink: 0;
+  text-transform: capitalize;
+}
+
+/* ── Pool health dot ──────────────────────────────────────────────────── */
+
+.poolHealthDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Prompt banner ────────────────────────────────────────────────────── */
+
+.promptBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #161a1d;
+  border: 1px dashed #2a3038;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #5a6068;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.promptBanner:hover {
+  border-color: #c47c5a;
+  color: #c47c5a;
+}
+
+.promptArrow {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+
+.empty {
+  text-align: center;
+  color: #5a6068;
+  font-size: 12px;
+  padding: 16px 0;
+  font-family: 'Inter', system-ui, sans-serif;
+}
