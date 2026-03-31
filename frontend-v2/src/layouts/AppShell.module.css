@@ -1,0 +1,202 @@
+.shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--color-bg, #0f1317);
+  color: var(--color-text, #d4d9dd);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.sidebar {
+  width: 188px;
+  min-width: 188px;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-sidebar-bg, #131920);
+  border-right: 1px solid var(--color-border, #2a3038);
+  transition: width 0.2s ease, min-width 0.2s ease;
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: 48px;
+  min-width: 48px;
+}
+
+.sidebarTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  height: 38px;
+  border-bottom: 1px solid var(--color-border, #2a3038);
+  flex-shrink: 0;
+}
+
+.logo {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-accent, #c47c5a);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.collapseBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.collapseBtn:hover {
+  color: var(--color-text, #d4d9dd);
+}
+
+.nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 0;
+}
+
+.navItem,
+.navParent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 0;
+  text-align: left;
+}
+
+.navItem:hover,
+.navParent:hover {
+  color: var(--color-text, #d4d9dd);
+  background: var(--color-hover, #1e252c);
+}
+
+.navItem.active {
+  color: var(--color-accent, #c47c5a);
+  background: var(--color-accent-tint, #c47c5a18);
+}
+
+.navIcon {
+  font-size: 14px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.navLabel {
+  flex: 1;
+}
+
+.navChevron {
+  font-size: 10px;
+  color: var(--color-text-muted, #888);
+}
+
+.navChildren {
+  padding-left: 30px;
+}
+
+.navChild {
+  display: block;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.navChild:hover {
+  color: var(--color-text, #d4d9dd);
+}
+
+.navChild.active {
+  color: var(--color-accent, #c47c5a);
+}
+
+.sidebarBottom {
+  padding: 8px 10px;
+  border-top: 1px solid var(--color-border, #2a3038);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.userEmail {
+  flex: 1;
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logoutBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.logoutBtn:hover {
+  color: var(--color-text, #d4d9dd);
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.header {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-border, #2a3038);
+  background: var(--color-surface, #1a2028);
+  flex-shrink: 0;
+}
+
+.themeToggle {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.themeToggle:hover {
+  color: var(--color-text, #d4d9dd);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}

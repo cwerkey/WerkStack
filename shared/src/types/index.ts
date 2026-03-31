@@ -750,3 +750,160 @@ export interface ApiError {
   error: string;
   issues?: unknown[];
 }
+
+// ─── Rev 2 Navigation ─────────────────────────────────────────────────────────
+
+export type DrawerTab = 'info' | 'ports' | 'storage' | 'os' | 'network' | 'guides';
+
+export interface NavState {
+  selectedZoneId:  string | null;
+  selectedRackId:  string | null;
+  selectedDeviceId: string | null;
+  drawerOpen:      boolean;
+  drawerTab:       DrawerTab;
+}
+
+// ─── Rev 2 Dashboard ─────────────────────────────────────────────────────────
+
+export type DashboardWidgetType =
+  | 'device-list'
+  | 'network-summary'
+  | 'storage-summary'
+  | 'recent-activity';
+
+export interface DashboardWidget {
+  id:      string;
+  type:    DashboardWidgetType;
+  col:     number;
+  row:     number;
+  w:       number;
+  h:       number;
+}
+
+// ─── Rev 2 Topology ──────────────────────────────────────────────────────────
+
+export interface TopologyPosition {
+  deviceId: string;
+  x:        number;
+  y:        number;
+  pinned:   boolean;
+}
+
+export type SwitchRole = 'core' | 'edge' | 'access' | 'unclassified';
+
+// ─── Rev 2 Containers ─────────────────────────────────────────────────────────
+
+export interface ContainerPort {
+  hostPort:      number;
+  containerPort: number;
+  protocol:      'tcp' | 'udp';
+}
+
+export interface ContainerVolume {
+  hostPath:      string;
+  containerPath: string;
+  readOnly:      boolean;
+}
+
+export interface Container {
+  id:                   string;
+  orgId:                string;
+  siteId:               string;
+  hostId?:              string;
+  vmId?:                string;
+  name:                 string;
+  image:                string;
+  tag:                  string;
+  status:               'running' | 'stopped' | 'paused' | 'unknown';
+  ports:                ContainerPort[];
+  volumes:              ContainerVolume[];
+  networks:             string[];
+  composeFile?:         string;
+  composeService?:      string;
+  upstreamDependencyId?: string;
+  notes?:               string;
+  createdAt:            string;
+}
+
+// ─── Rev 2 To-Do ─────────────────────────────────────────────────────────────
+
+export type TodoStatus   = 'open' | 'in-progress' | 'done';
+export type TodoPriority = 'low' | 'normal' | 'high' | 'critical';
+
+export interface TodoChecklist {
+  id:        string;
+  text:      string;
+  done:      boolean;
+  sortOrder: number;
+}
+
+export interface TodoItem {
+  id:          string;
+  orgId:       string;
+  siteId:      string;
+  folderId:    string | null;
+  title:       string;
+  description?: string;
+  status:      TodoStatus;
+  priority:    TodoPriority;
+  dueDate?:    string;
+  assigneeId?: string;
+  entityType?: string;
+  entityId?:   string;
+  checklist:   TodoChecklist[];
+  createdBy?:  string;
+  createdAt:   string;
+  updatedAt:   string;
+}
+
+export interface TodoFolder {
+  id:        string;
+  orgId:     string;
+  siteId:    string;
+  name:      string;
+  parentId:  string | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
+// ─── Rev 2 Security / Permissions ─────────────────────────────────────────────
+
+export type PermissionLevel = 'read' | 'write' | 'execute';
+export type PermissionCategory =
+  | 'infrastructure' | 'storage' | 'networking'
+  | 'os' | 'topology' | 'docs' | 'activity' | 'settings';
+
+export interface SecurityGroup {
+  id:          string;
+  orgId:       string;
+  name:        string;
+  permissions: {
+    siteId:    string;
+    category:  PermissionCategory;
+    level:     PermissionLevel;
+  }[];
+  createdAt:   string;
+}
+
+export interface UserSitePermission {
+  id:              string;
+  orgId:           string;
+  userId:          string;
+  siteId:          string;
+  securityGroupId: string;
+  createdAt:       string;
+}
+
+// ─── Rev 2 VLANs ─────────────────────────────────────────────────────────────
+
+export interface Vlan {
+  id:        string;
+  orgId:     string;
+  siteId:    string;
+  vlanId:    number;
+  name:      string;
+  color:     string;
+  subnetId?: string;
+  notes?:    string;
+  createdAt: string;
+}

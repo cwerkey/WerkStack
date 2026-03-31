@@ -1,0 +1,144 @@
+/* ─── WerkStack Rev 2 — Theme Tokens ─────────────────────────────────────── */
+/* Default: dark mode */
+
+:root {
+  /* Backgrounds */
+  --color-bg:          #0f1317;
+  --color-surface:     #1a2028;
+  --color-surface-2:   #1e262e;
+  --color-sidebar-bg:  #131920;
+  --color-hover:       #1e252c;
+  --color-input-bg:    #0f1317;
+
+  /* Borders */
+  --color-border:      #2a3038;
+  --color-border-2:    #3a4248;
+
+  /* Text */
+  --color-text:        #d4d9dd;
+  --color-text-muted:  #8896a0;
+  --color-text-dim:    #5a6470;
+
+  /* Accent (default: homelab orange) */
+  --color-accent:      #c47c5a;
+  --color-accent-dark: #a8653e;
+  --color-accent-tint: #c47c5a18;
+  --color-accent-text: #fff;
+
+  /* Status */
+  --color-success:     #4caf50;
+  --color-warning:     #ff9800;
+  --color-error:       #e05c5c;
+  --color-info:        #2196f3;
+
+  /* Status tints */
+  --color-success-tint: #4caf5018;
+  --color-warning-tint: #ff980018;
+  --color-error-tint:   #e05c5c18;
+  --color-info-tint:    #2196f318;
+
+  /* Shadows */
+  --shadow-sm:  0 1px 4px rgba(0,0,0,0.4);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg:  0 8px 24px rgba(0,0,0,0.6);
+
+  /* Radius */
+  --radius-sm:  4px;
+  --radius-md:  6px;
+  --radius-lg:  14px;
+
+  /* Typography */
+  --font-ui:    'Inter', system-ui, sans-serif;
+  --font-mono:  'JetBrains Mono', monospace;
+  --font-hero:  'Ubuntu', sans-serif;
+
+  --fs-body:          13px;
+  --fs-interactive:   11px;
+  --fs-label:         10px;
+  --fs-input-large:   12px;
+  --fs-heading:       20px;
+
+  /* Layout */
+  --sidebar-width:     188px;
+  --topbar-height:     38px;
+  --modal-min-width:   460px;
+  --rack-unit-height:  40px;
+  --input-pad:         5px 10px;
+  --card-pad:          12px 14px;
+
+  /* Z-index */
+  --z-base:     0;
+  --z-raised:   10;
+  --z-sticky:   100;
+  --z-modal:    1000;
+  --z-tooltip:  1200;
+
+  /* Taxonomy color slots (populated at runtime from Settings → VLANs / Types) */
+  --color-vlan-default:  #5a8fc4;
+  --color-role-default:  #7a6c9e;
+  --color-type-default:  #5c8a5c;
+}
+
+/* ─── Light mode ─────────────────────────────────────────────────────────── */
+[data-theme='light'] {
+  --color-bg:          #f0f2f5;
+  --color-surface:     #ffffff;
+  --color-surface-2:   #f5f7fa;
+  --color-sidebar-bg:  #e8eaed;
+  --color-hover:       #e0e4ea;
+  --color-input-bg:    #ffffff;
+
+  --color-border:      #d0d6e0;
+  --color-border-2:    #b8c0cc;
+
+  --color-text:        #1a2028;
+  --color-text-muted:  #5a6470;
+  --color-text-dim:    #8896a0;
+
+  --color-accent:      #c47c5a;
+  --color-accent-dark: #a8653e;
+  --color-accent-tint: #c47c5a18;
+  --color-accent-text: #fff;
+
+  --shadow-sm:  0 1px 4px rgba(0,0,0,0.08);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg:  0 8px 24px rgba(0,0,0,0.12);
+}
+
+/* ─── Global resets ──────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-dim);
+}
+
+/* ─── Focus ring ─────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

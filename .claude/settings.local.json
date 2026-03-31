@@ -17,7 +17,9 @@
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?|md\\)$\")",
       "Bash(wc -l /Users/calebwerkmeister/Documents/WerkStack/app/backend/src/routes/*.js)",
       "Bash(grep -l \"conflict\\\\|power\\\\|audit\\\\|export\\\\|warning\" /Users/calebwerkmeister/Documents/WerkStack/app/backend/src/routes/*.js)",
-      "Bash(find /Users/calebwerkmeister/Documents/WerkStack/app/backend/src/db/migrations -name *.sql)"
+      "Bash(find /Users/calebwerkmeister/Documents/WerkStack/app/backend/src/db/migrations -name *.sql)",
+      "Bash(npx vite:*)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }
