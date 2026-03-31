@@ -95,13 +95,15 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
             <Field label="Notes" value={device.notes ?? '—'} />
           </dl>
           <div className={styles.actions}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {isRacked && onMoveToUnassigned && (
+                <button className={styles.btnGhost} onClick={handleMoveToUnassigned}>Move to Unassigned</button>
+              )}
+              {onMoveToRack && (
+                <button className={styles.btnGhost} onClick={onMoveToRack}>Move to Rack</button>
+              )}
+            </div>
             <button className={styles.btnPrimary} onClick={() => setEditing(true)}>Edit</button>
-            {isRacked && onMoveToUnassigned && (
-              <button className={styles.btnGhost} onClick={handleMoveToUnassigned}>Move to Unassigned</button>
-            )}
-            {onMoveToRack && (
-              <button className={styles.btnGhost} onClick={onMoveToRack}>Move to Rack</button>
-            )}
           </div>
         </>
       ) : (

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type {
   DeviceInstance,
   DeviceTemplate,
@@ -62,10 +62,6 @@ function shortLabel(block: PlacedBlock): string {
   const def = BLOCK_DEF_MAP.get(block.type);
   return def?.label ?? block.type;
 }
-
-// ─── Face constants ───────────────────────────────────────────────────────────
-
-const FACE_WIDTH = 200;
 
 // ─── Port row ─────────────────────────────────────────────────────────────────
 
@@ -228,6 +224,21 @@ export function PortsTab({
 }: PortsTabProps) {
   const [selectedPortId, setSelectedPortId] = useState<string | null>(null);
 
+  // ── Measure container width for responsive faceplate ───────────────────────
+
+  const faceContainerRef = useRef<HTMLDivElement>(null);
+  const [faceWidth, setFaceWidth] = useState(0);
+
+  useEffect(() => {
+    const el = faceContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      setFaceWidth(entries[0].contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // ── Build faceplate data ────────────────────────────────────────────────────
 
   const frontMeta = useMemo(() => {
@@ -244,7 +255,7 @@ export function PortsTab({
 
   const gridCols = template?.gridCols ?? 96;
   const gridRows = (template?.uHeight ?? 1) * 12;
-  const faceHeight = (FACE_WIDTH / gridCols) * gridRows;
+  const faceHeight = faceWidth > 0 ? (faceWidth / gridCols) * gridRows : 0;
 
   // ── blockColors for TemplateOverlay highlights ──────────────────────────────
 
@@ -340,46 +351,48 @@ export function PortsTab({
   return (
     <div className={styles.tab}>
 
-      {/* Mini Device Face */}
-      {template && frontMeta && rearMeta && (
-        <div className={styles.faceRow}>
-          <div className={styles.facePanel}>
-            <span className={styles.faceLabel}>Front</span>
-            <div className={styles.faceCanvas} style={{ width: FACE_WIDTH, height: faceHeight }}>
-              <TemplateOverlay
-                blocks={frontMeta.blocks}
-                gridCols={gridCols}
-                gridRows={gridRows}
-                width={FACE_WIDTH}
-                height={faceHeight}
-                selectedId={selectedPortId}
-                blockColors={blockColors}
-                blockOpacity={blockOpacity}
-                showLabels={false}
-                interactive={false}
-              />
+      {/* Device Face */}
+      <div ref={faceContainerRef} className={styles.faceRow}>
+        {template && frontMeta && rearMeta && faceWidth > 0 && (
+          <>
+            <div className={styles.facePanel}>
+              <span className={styles.faceLabel}>Front</span>
+              <div className={styles.faceCanvas} style={{ width: faceWidth, height: faceHeight }}>
+                <TemplateOverlay
+                  blocks={frontMeta.blocks}
+                  gridCols={gridCols}
+                  gridRows={gridRows}
+                  width={faceWidth}
+                  height={faceHeight}
+                  selectedId={selectedPortId}
+                  blockColors={blockColors}
+                  blockOpacity={blockOpacity}
+                  showLabels={false}
+                  interactive={false}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className={styles.facePanel}>
-            <span className={styles.faceLabel}>Rear</span>
-            <div className={styles.faceCanvas} style={{ width: FACE_WIDTH, height: faceHeight }}>
-              <TemplateOverlay
-                blocks={rearMeta.blocks}
-                gridCols={gridCols}
-                gridRows={gridRows}
-                width={FACE_WIDTH}
-                height={faceHeight}
-                selectedId={selectedPortId}
-                blockColors={blockColors}
-                blockOpacity={blockOpacity}
-                showLabels={false}
-                interactive={false}
-              />
+            <div className={styles.facePanel}>
+              <span className={styles.faceLabel}>Rear</span>
+              <div className={styles.faceCanvas} style={{ width: faceWidth, height: faceHeight }}>
+                <TemplateOverlay
+                  blocks={rearMeta.blocks}
+                  gridCols={gridCols}
+                  gridRows={gridRows}
+                  width={faceWidth}
+                  height={faceHeight}
+                  selectedId={selectedPortId}
+                  blockColors={blockColors}
+                  blockOpacity={blockOpacity}
+                  showLabels={false}
+                  interactive={false}
+                />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {/* Port List */}
       <div className={styles.portListHeader}>

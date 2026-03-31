@@ -8,17 +8,14 @@
 
 .faceRow {
   display: flex;
-  flex-direction: row;
-  gap: 12px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .facePanel {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  align-items: center;
 }
 
 .faceLabel {
