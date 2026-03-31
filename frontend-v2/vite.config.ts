@@ -7,10 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@werkstack/shared': path.resolve(__dirname, '../shared/src/index.ts'),
     },
-  },
-  optimizeDeps: {
-    include: ['@werkstack/shared'],
   },
   server: {
     port: process.env.PORT ? parseInt(process.env.PORT) : 5174,

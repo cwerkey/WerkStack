@@ -9,8 +9,7 @@ COPY frontend-v2/ ./frontend-v2/
 # Install all deps
 RUN npm install --workspaces
 
-# Compile shared TypeScript → dist/, then build frontend-v2
-RUN npm run build --workspace=shared
+# Build frontend-v2 (Vite resolves shared from source directly)
 RUN npm run build --workspace=frontend-v2
 
 FROM nginx:alpine
