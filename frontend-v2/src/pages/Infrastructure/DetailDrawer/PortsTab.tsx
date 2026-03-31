@@ -248,8 +248,9 @@ export function PortsTab({
 
   // ── blockColors for TemplateOverlay highlights ──────────────────────────────
 
-  const blockColors = useMemo<Record<string, string>>(() => {
+  const { blockColors, blockOpacity } = useMemo(() => {
     const colors: Record<string, string> = {};
+    const opacity: Record<string, number> = {};
 
     const allFaceBlocks = [
       ...(frontMeta?.blocks ?? []),
@@ -257,17 +258,24 @@ export function PortsTab({
     ];
 
     for (const block of allFaceBlocks) {
-      const conn = getConnectionForBlock(block, device.id, connections);
-      if (conn) {
-        colors[block.id] = '#c47c5a';
+      const def = BLOCK_DEF_MAP.get(block.type);
+      const isPort = !!(def?.isPort || def?.isNet);
+      if (isPort) {
+        const conn = getConnectionForBlock(block, device.id, connections);
+        colors[block.id] = conn ? '#c47c5a' : '#3a4a54';
+        opacity[block.id] = 1;
+      } else {
+        colors[block.id] = '#1e2428';
+        opacity[block.id] = 0.4;
       }
     }
 
     if (selectedPortId) {
       colors[selectedPortId] = '#e09070';
+      opacity[selectedPortId] = 1;
     }
 
-    return colors;
+    return { blockColors: colors, blockOpacity: opacity };
   }, [frontMeta, rearMeta, device.id, connections, selectedPortId]);
 
   // ── Derive port lists ───────────────────────────────────────────────────────
@@ -346,6 +354,7 @@ export function PortsTab({
                 height={faceHeight}
                 selectedId={selectedPortId}
                 blockColors={blockColors}
+                blockOpacity={blockOpacity}
                 showLabels={false}
                 interactive={false}
               />
@@ -363,6 +372,7 @@ export function PortsTab({
                 height={faceHeight}
                 selectedId={selectedPortId}
                 blockColors={blockColors}
+                blockOpacity={blockOpacity}
                 showLabels={false}
                 interactive={false}
               />

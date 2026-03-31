@@ -102,7 +102,6 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
             {onMoveToRack && (
               <button className={styles.btnGhost} onClick={onMoveToRack}>Move to Rack</button>
             )}
-            <button className={styles.btnDanger} onClick={handleDelete}>Delete</button>
           </div>
         </>
       ) : (
@@ -136,8 +135,11 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
             <textarea className={styles.textarea} value={notes} onChange={e => setNotes(e.target.value)} rows={4} />
           </label>
           <div className={styles.actions}>
-            <button className={styles.btnPrimary} onClick={handleSave}>Save</button>
-            <button className={styles.btnGhost} onClick={handleCancel}>Cancel</button>
+            <button className={styles.btnDanger} onClick={handleDelete}>Delete</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className={styles.btnGhost} onClick={handleCancel}>Cancel</button>
+              <button className={styles.btnPrimary} onClick={handleSave}>Save</button>
+            </div>
           </div>
         </div>
       )}
