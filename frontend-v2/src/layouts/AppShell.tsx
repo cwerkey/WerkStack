@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import styles from './AppShell.module.css';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useSiteStore } from '@/stores/siteStore';
+import { useGetSites } from '@/api/sites';
 
 type NavItem = {
   label: string;
@@ -92,11 +94,30 @@ function NavItemRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) 
 
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
-  const user    = useAuthStore(s => s.user);
-  const logout  = useAuthStore(s => s.logout);
-  const theme   = useThemeStore(s => s.theme);
-  const setTheme = useThemeStore(s => s.setTheme);
-  const navigate = useNavigate();
+  const [sitePickerOpen, setSitePickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  const user      = useAuthStore(s => s.user);
+  const logout    = useAuthStore(s => s.logout);
+  const theme     = useThemeStore(s => s.theme);
+  const setTheme  = useThemeStore(s => s.setTheme);
+  const navigate  = useNavigate();
+
+  const currentSite = useSiteStore(s => s.currentSite);
+  const setSite     = useSiteStore(s => s.setSite);
+  const { data: sites = [] } = useGetSites();
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    if (!sitePickerOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setSitePickerOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [sitePickerOpen]);
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
@@ -109,8 +130,34 @@ export function AppShell() {
       {/* Sidebar */}
       <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
         <div className={styles.sidebarTop}>
-          <div className={styles.logo}>
-            {collapsed ? 'W' : 'WerkStack'}
+          <div ref={pickerRef} className={styles.logoWrap}>
+            <button
+              className={styles.logo}
+              onClick={() => setSitePickerOpen(o => !o)}
+              title="Switch site"
+            >
+              {collapsed ? 'W' : 'WerkStack'}
+            </button>
+            {!collapsed && currentSite && (
+              <span className={styles.currentSite}>{currentSite.name}</span>
+            )}
+            {sitePickerOpen && (
+              <div className={styles.sitePicker}>
+                <div className={styles.sitePickerTitle}>Select Site</div>
+                {sites.length === 0 && (
+                  <div className={styles.sitePickerEmpty}>No sites found</div>
+                )}
+                {sites.map(site => (
+                  <button
+                    key={site.id}
+                    className={`${styles.siteOption}${currentSite?.id === site.id ? ` ${styles.siteOptionActive}` : ''}`}
+                    onClick={() => { setSite(site); setSitePickerOpen(false); }}
+                  >
+                    {site.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <button className={styles.collapseBtn} onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expand' : 'Collapse'}>
             {collapsed ? '▶' : '◀'}
