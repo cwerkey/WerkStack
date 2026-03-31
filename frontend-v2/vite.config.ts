@@ -9,6 +9,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: ['@werkstack/shared'],
+  },
   server: {
     port: process.env.PORT ? parseInt(process.env.PORT) : 5174,
     proxy: {

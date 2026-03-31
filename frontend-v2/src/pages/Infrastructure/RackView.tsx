@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback, useRef } from 'react';
 import type { Rack, DeviceInstance, DeviceTemplate, PcieTemplate, DeviceType, ModuleInstance, Connection, PlacedBlock } from '@werkstack/shared';
 import { BLOCK_DEF_MAP } from '@werkstack/shared';
 import { TemplateOverlay } from '@/components/TemplateOverlay';
-import { buildVirtualFaceplate } from '@/components/portAggregator';
+import { buildVirtualFaceplateWithMeta, type ShelvedItem } from '@/components/portAggregator';
 import { getDeviceDisplayInfo } from '@/components/DeviceOverlay';
 import styles from './RackView.module.css';
 
@@ -21,6 +21,7 @@ interface RackViewProps {
   selectedDeviceId?: string | null;
   onDeviceClick: (deviceId: string) => void;
   onDevicePositionChange?: (deviceId: string, newRackU: number) => void;
+  onEmptySlotDblClick?: (rackU: number) => void;
 }
 
 interface PositionedDevice {
@@ -50,6 +51,7 @@ export function RackView({
   selectedDeviceId,
   onDeviceClick,
   onDevicePositionChange,
+  onEmptySlotDblClick,
 }: RackViewProps) {
   const totalHeight = rack.uHeight * RACK_UNIT_HEIGHT;
   const rackBodyRef = useRef<HTMLDivElement>(null);
@@ -77,6 +79,19 @@ export function RackView({
       return { device, template, info, topPx, heightPx };
     });
   }, [rackDevices, templates, deviceTypes, totalHeight]);
+
+  // Build set of occupied U slots
+  const occupiedUs = useMemo(() => {
+    const occupied = new Set<number>();
+    for (const { device, template } of positioned) {
+      const uH = device.uHeight ?? template?.uHeight ?? 1;
+      const startU = device.rackU!;
+      for (let u = startU; u < startU + uH; u++) {
+        occupied.add(u);
+      }
+    }
+    return occupied;
+  }, [positioned]);
 
   const uLabels = useMemo(() => {
     const labels: number[] = [];
@@ -150,6 +165,11 @@ export function RackView({
             key={`slot-${u}`}
             className={styles.uSlot}
             style={{ bottom: (u - 1) * RACK_UNIT_HEIGHT }}
+            onDoubleClick={
+              onEmptySlotDblClick && !occupiedUs.has(u)
+                ? () => onEmptySlotDblClick(u)
+                : undefined
+            }
           />
         ))}
 
@@ -158,6 +178,15 @@ export function RackView({
           const isSelected = selectedDeviceId === device.id;
           const isDragging = drag?.deviceId === device.id;
           const displayTop = isDragging ? topPx + dragOffsetY : topPx;
+          const deviceConnections = connections.filter(
+            c => c.srcDeviceId === device.id || c.dstDeviceId === device.id,
+          );
+          const shelvedItems: ShelvedItem[] = devices
+            .filter(d => d.shelfDeviceId === device.id)
+            .flatMap(d => {
+              const t = templates.find(t => t.id === d.templateId);
+              return t ? [{ device: d, template: t }] : [];
+            });
 
           return (
             <div
@@ -174,7 +203,8 @@ export function RackView({
                   heightPx={heightPx}
                   modules={modules.filter(m => m.deviceId === device.id)}
                   pcieTemplates={pcieTemplates}
-                  deviceConnections={connections.filter(c => c.srcDeviceId === device.id || c.dstDeviceId === device.id)}
+                  deviceConnections={deviceConnections}
+                  shelvedItems={shelvedItems}
                 />
               ) : (
                 <SimpleDevice name={info.name} color={info.color} />
@@ -184,18 +214,22 @@ export function RackView({
         })}
 
         {rackDevices.length === 0 && (
-          <div className={styles.emptyRack}>empty rack</div>
+          <div className={styles.emptyRack}>empty rack — double-click a slot to deploy</div>
         )}
       </div>
     </div>
   );
 }
 
-function buildPortOpacity(
+interface PortVisuals {
+  opacity: Record<string, number>;
+  borderStyle: Record<string, string>;
+}
+
+function buildPortVisuals(
   blocks: PlacedBlock[],
   deviceConnections: Connection[],
-): Record<string, number> | undefined {
-  // If no connection data at all, render everything at full opacity
+): PortVisuals | undefined {
   if (deviceConnections.length === 0) return undefined;
 
   const connectedBlockIds = new Set<string>();
@@ -205,14 +239,20 @@ function buildPortOpacity(
   }
 
   const opacity: Record<string, number> = {};
+  const borderStyle: Record<string, string> = {};
+
   for (const block of blocks) {
     const def = BLOCK_DEF_MAP.get(block.type);
     const isPortOrNet = def?.isPort || def?.isNet;
     if (isPortOrNet) {
-      opacity[block.id] = connectedBlockIds.has(block.id) ? 1 : 0.35;
+      const connected = connectedBlockIds.has(block.id);
+      opacity[block.id] = connected ? 1 : 0.2;
+      if (!connected) borderStyle[block.id] = 'dashed';
     }
   }
-  return Object.keys(opacity).length > 0 ? opacity : undefined;
+
+  const hasEntries = Object.keys(opacity).length > 0;
+  return hasEntries ? { opacity, borderStyle } : undefined;
 }
 
 function TemplatedDevice({
@@ -222,6 +262,7 @@ function TemplatedDevice({
   modules,
   pcieTemplates,
   deviceConnections,
+  shelvedItems,
 }: {
   template: DeviceTemplate;
   face: 'front' | 'rear';
@@ -229,14 +270,15 @@ function TemplatedDevice({
   modules: ModuleInstance[];
   pcieTemplates: PcieTemplate[];
   deviceConnections: Connection[];
+  shelvedItems: ShelvedItem[];
 }) {
-  const blocks = useMemo(
-    () => buildVirtualFaceplate(template, face, modules, pcieTemplates),
-    [template, face, modules, pcieTemplates],
+  const { blocks, pcieBlockLabels } = useMemo(
+    () => buildVirtualFaceplateWithMeta(template, face, modules, pcieTemplates, shelvedItems),
+    [template, face, modules, pcieTemplates, shelvedItems],
   );
 
-  const blockOpacity = useMemo(
-    () => buildPortOpacity(blocks, deviceConnections),
+  const portVisuals = useMemo(
+    () => buildPortVisuals(blocks, deviceConnections),
     [blocks, deviceConnections],
   );
 
@@ -250,7 +292,9 @@ function TemplatedDevice({
       gridRows={gridRows}
       width={RACK_WIDTH}
       height={heightPx}
-      blockOpacity={blockOpacity}
+      blockOpacity={portVisuals?.opacity}
+      blockBorderStyle={portVisuals?.borderStyle}
+      blockBadge={Object.keys(pcieBlockLabels).length > 0 ? pcieBlockLabels : undefined}
       interactive
     />
   );

@@ -8,11 +8,15 @@ import { useGetZones } from '@/api/zones';
 import { useGetRacks } from '@/api/racks';
 import { useGetDevices, useUpdateDevice, useDeleteDevice, useUpdateDevicePosition } from '@/api/devices';
 import { useGetDeviceTemplates, useGetPcieTemplates } from '@/api/templates';
+import { useGetDeviceConnections, useDeleteConnectionsByDevice } from '@/api/connections';
+import { useGetModules } from '@/api/modules';
 import { ZoneSidebar } from './ZoneSidebar';
 import { RackView } from './RackView';
 import { DetailDrawer } from './DetailDrawer/DetailDrawer';
 import { InfoTab } from './DetailDrawer/InfoTab';
 import { StubTab } from './DetailDrawer/StubTab';
+import { DeployWizard } from '@/wizards/DeployWizard';
+import { RackPickerModal } from './RackPickerModal';
 import styles from './RackViewHub.module.css';
 
 export default function RackViewHub() {
@@ -35,13 +39,31 @@ export default function RackViewHub() {
   const { data: pcieTemplates = [] } = useGetPcieTemplates();
   const deviceTypes = useTypesStore(s => s.deviceTypes);
 
+  // Connections + modules for selected device
+  const { data: selectedDeviceConnections = [] } = useGetDeviceConnections(
+    siteId,
+    selectedDeviceId ?? '',
+  );
+  const { data: selectedDeviceModules = [] } = useGetModules(
+    siteId,
+    selectedDeviceId ?? '',
+  );
+
   // Mutations
   const updateDevice = useUpdateDevice(siteId);
   const deleteDevice = useDeleteDevice(siteId);
   const updatePosition = useUpdateDevicePosition(siteId);
+  const deleteConnections = useDeleteConnectionsByDevice(siteId);
 
   // Face toggle
   const [face, setFace] = useState<'front' | 'rear'>('front');
+
+  // Deploy wizard state
+  const [deployWizardOpen, setDeployWizardOpen] = useState(false);
+  const [deployTargetU, setDeployTargetU] = useState<number | undefined>();
+
+  // Rack picker state
+  const [rackPickerOpen, setRackPickerOpen] = useState(false);
 
   // Sync URL params → navStore on mount
   const initialized = useRef(false);
@@ -125,12 +147,49 @@ export default function RackViewHub() {
     updatePosition.mutate({ id: deviceId, rackId: selectedRackId, rackU: newRackU, face });
   }
 
+  function handleEmptySlotDblClick(rackU: number) {
+    setDeployTargetU(rackU);
+    setDeployWizardOpen(true);
+  }
+
+  function handleMoveToUnassigned() {
+    const device = devices.find(d => d.id === selectedDeviceId);
+    if (!device) return;
+    // Delete connections first, then remove from rack
+    deleteConnections.mutate(device.id, {
+      onSettled: () => {
+        updateDevice.mutate({
+          id: device.id,
+          rackId: undefined,
+          rackU: undefined,
+          face: undefined,
+        });
+        useNavStore.getState().closeDrawer();
+        updateUrl();
+      },
+    });
+  }
+
+  function handleMoveToRack(rackId: string, rackU: number, newFace: 'front' | 'rear') {
+    if (!selectedDeviceId) return;
+    updatePosition.mutate({ id: selectedDeviceId, rackId, rackU, face: newFace });
+    setRackPickerOpen(false);
+  }
+
   // Current rack
   const currentRack = racks.find(r => r.id === selectedRackId);
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
 
   // Rack tabs for current zone
   const zoneRacks = racks.filter(r => r.zoneId === selectedZoneId);
+
+  // Build all connections for current rack's devices (for port rendering)
+  const rackDeviceIds = new Set(
+    devices.filter(d => d.rackId === selectedRackId).map(d => d.id),
+  );
+  const rackConnections = selectedDeviceId
+    ? selectedDeviceConnections
+    : [];
 
   return (
     <div className={styles.hub}>
@@ -184,10 +243,13 @@ export default function RackViewHub() {
               templates={templates}
               pcieTemplates={pcieTemplates}
               deviceTypes={deviceTypes}
+              modules={selectedDeviceModules}
               face={face}
+              connections={rackConnections}
               selectedDeviceId={selectedDeviceId}
               onDeviceClick={handleDeviceClick}
               onDevicePositionChange={handleDevicePositionChange}
+              onEmptySlotDblClick={handleEmptySlotDblClick}
             />
           ) : (
             <div className={styles.noRack}>
@@ -217,12 +279,31 @@ export default function RackViewHub() {
             zones={zones}
             onSave={handleDeviceSave}
             onDelete={handleDeviceDelete}
+            onMoveToRack={() => setRackPickerOpen(true)}
+            onMoveToUnassigned={handleMoveToUnassigned}
           />
         )}
         {selectedDevice && drawerTab !== 'info' && (
           <StubTab tab={drawerTab} />
         )}
       </DetailDrawer>
+
+      {/* Deploy Wizard stub */}
+      <DeployWizard
+        open={deployWizardOpen}
+        rackU={deployTargetU}
+        onClose={() => setDeployWizardOpen(false)}
+      />
+
+      {/* Rack Picker Modal */}
+      <RackPickerModal
+        open={rackPickerOpen}
+        zones={zones}
+        racks={racks}
+        currentRackId={selectedDevice?.rackId}
+        onConfirm={handleMoveToRack}
+        onClose={() => setRackPickerOpen(false)}
+      />
     </div>
   );
 }

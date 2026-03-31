@@ -20,6 +20,10 @@ interface TemplateOverlayProps {
   blockBorderColors?: Record<string, string>;
   blockOpacity?:  Record<string, number>;
   blockLabels?:   Record<string, string>;
+  /** Maps blockId → short badge text rendered in the top-left corner (e.g. PCIe card name) */
+  blockBadge?:    Record<string, string>;
+  /** Maps blockId → CSS border-style value (e.g. 'dashed', 'dotted') */
+  blockBorderStyle?: Record<string, string>;
 }
 
 export function TemplateOverlay({
@@ -27,6 +31,7 @@ export function TemplateOverlay({
   selectedId, onBlockClick, onBlockContextMenu, onBlockMouseEnter, onBlockMouseLeave,
   showLabels = true, interactive = false,
   blockColors, blockBorderColors, blockOpacity, blockLabels,
+  blockBadge, blockBorderStyle,
 }: TemplateOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cellW = width / gridCols;
@@ -47,6 +52,8 @@ export function TemplateOverlay({
       const opacity     = blockOpacity?.[block.id] ?? 1;
       const isSelected  = selectedId === block.id;
       const label       = blockLabels?.[block.id] ?? (block.label || def?.label || block.type);
+      const badge       = blockBadge?.[block.id];
+      const borderSt    = isSelected ? 'solid' : (blockBorderStyle?.[block.id] ?? 'solid');
 
       return (
         <div
@@ -60,7 +67,7 @@ export function TemplateOverlay({
             position: 'absolute',
             left: x, top: y, width: w, height: h,
             background: color,
-            border: `1px solid ${isSelected ? 'var(--accent, #c47c5a)' : borderColor}`,
+            border: `1px ${borderSt} ${isSelected ? 'var(--accent, #c47c5a)' : borderColor}`,
             borderRadius: 2,
             boxSizing: 'border-box',
             cursor: interactive ? 'pointer' : 'default',
@@ -71,6 +78,28 @@ export function TemplateOverlay({
             opacity,
           }}
         >
+          {badge && (
+            <span style={{
+              position: 'absolute',
+              top: 1,
+              left: 2,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 6,
+              lineHeight: 1,
+              color: 'var(--accent, #c47c5a)',
+              background: 'rgba(0,0,0,0.6)',
+              padding: '1px 2px',
+              borderRadius: 1,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              maxWidth: '90%',
+              textOverflow: 'ellipsis',
+              pointerEvents: 'none',
+              zIndex: 3,
+            }}>
+              ◈
+            </span>
+          )}
           {showLabels && w > 14 && h > 10 && (
             <span style={{
               fontFamily: "'JetBrains Mono', monospace",
@@ -85,7 +114,7 @@ export function TemplateOverlay({
         </div>
       );
     }),
-  [blocks, cellW, cellH, selectedId, onBlockClick, onBlockContextMenu, onBlockMouseEnter, onBlockMouseLeave, showLabels, interactive, blockColors, blockBorderColors, blockOpacity, blockLabels]);
+  [blocks, cellW, cellH, selectedId, onBlockClick, onBlockContextMenu, onBlockMouseEnter, onBlockMouseLeave, showLabels, interactive, blockColors, blockBorderColors, blockOpacity, blockLabels, blockBadge, blockBorderStyle]);
 
   return (
     <div ref={containerRef} className={styles.container} style={{ width, height }}>

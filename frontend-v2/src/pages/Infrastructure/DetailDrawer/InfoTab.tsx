@@ -10,9 +10,11 @@ interface InfoTabProps {
   zones: Zone[];
   onSave: (updated: Partial<DeviceInstance> & { id: string }) => void;
   onDelete: (id: string) => void;
+  onMoveToRack?: () => void;
+  onMoveToUnassigned?: () => void;
 }
 
-export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, onDelete }: InfoTabProps) {
+export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, onDelete, onMoveToRack, onMoveToUnassigned }: InfoTabProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(device.name);
   const [typeId, setTypeId] = useState(device.typeId);
@@ -35,6 +37,7 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
   const tpl = templates.find(t => t.id === device.templateId);
   const rack = racks.find(r => r.id === device.rackId);
   const zone = zones.find(z => z.id === device.zoneId);
+  const isRacked = !!device.rackId;
 
   function handleSave() {
     onSave({
@@ -57,6 +60,16 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
     setAssetTag(device.assetTag ?? '');
     setNotes(device.notes ?? '');
     setEditing(false);
+  }
+
+  function handleMoveToUnassigned() {
+    if (!window.confirm(`Remove "${device.name}" from its rack? All cable connections will be deleted.`)) return;
+    onMoveToUnassigned?.();
+  }
+
+  function handleDelete() {
+    if (!window.confirm(`Permanently delete "${device.name}"? This cannot be undone.`)) return;
+    onDelete(device.id);
   }
 
   return (
@@ -83,7 +96,13 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
           </dl>
           <div className={styles.actions}>
             <button className={styles.btnPrimary} onClick={() => setEditing(true)}>Edit</button>
-            <button className={styles.btnDanger} onClick={() => onDelete(device.id)}>Delete</button>
+            {isRacked && onMoveToUnassigned && (
+              <button className={styles.btnGhost} onClick={handleMoveToUnassigned}>Move to Unassigned</button>
+            )}
+            {onMoveToRack && (
+              <button className={styles.btnGhost} onClick={onMoveToRack}>Move to Rack</button>
+            )}
+            <button className={styles.btnDanger} onClick={handleDelete}>Delete</button>
           </div>
         </>
       ) : (
