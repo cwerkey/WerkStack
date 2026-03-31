@@ -20,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Devices', path: '/infrastructure/devices' },
     ],
   },
+  { label: 'Topology', icon: '⬡', path: '/topology' },
   {
     label: 'Storage', icon: '⬢',
     children: [
@@ -29,7 +30,6 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   { label: 'OS Overview', icon: '⬡', path: '/os' },
-  { label: 'Topology', icon: '⬡', path: '/topology' },
   {
     label: 'Network', icon: '⬡',
     children: [
