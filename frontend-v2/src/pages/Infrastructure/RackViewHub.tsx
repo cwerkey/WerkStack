@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { DrawerTab, DeviceInstance } from '@werkstack/shared';
+import type { DrawerTab, DeviceInstance, Connection, PlacedBlock } from '@werkstack/shared';
 import { useNavStore } from '@/stores/navStore';
 import { useTypesStore } from '@/stores/typesStore';
 import { useSiteStore } from '@/stores/siteStore';
@@ -8,14 +8,24 @@ import { useGetZones } from '@/api/zones';
 import { useGetRacks } from '@/api/racks';
 import { useGetDevices, useUpdateDevice, useDeleteDevice, useUpdateDevicePosition } from '@/api/devices';
 import { useGetDeviceTemplates, useGetPcieTemplates } from '@/api/templates';
-import { useGetDeviceConnections, useDeleteConnectionsByDevice } from '@/api/connections';
+import {
+  useGetDeviceConnections,
+  useGetSiteConnections,
+  useCreateConnection,
+  useUpdateConnection,
+  useDeleteConnection,
+  useDeleteConnectionsByDevice,
+} from '@/api/connections';
 import { useGetModules } from '@/api/modules';
 import { ZoneSidebar } from './ZoneSidebar';
 import { RackView } from './RackView';
 import { DetailDrawer } from './DetailDrawer/DetailDrawer';
 import { InfoTab } from './DetailDrawer/InfoTab';
+import { PortsTab } from './DetailDrawer/PortsTab';
 import { StubTab } from './DetailDrawer/StubTab';
 import { DeployWizard } from '@/wizards/DeployWizard';
+import { ConnectionWizard } from '@/wizards/ConnectionWizard';
+import { ConnectionEditModal } from '@/wizards/ConnectionEditModal';
 import { RackPickerModal } from './RackPickerModal';
 import styles from './RackViewHub.module.css';
 
@@ -31,19 +41,25 @@ export default function RackViewHub() {
   const drawerOpen = useNavStore(s => s.drawerOpen);
   const drawerTab = useNavStore(s => s.drawerTab);
 
+  // Types
+  const deviceTypes = useTypesStore(s => s.deviceTypes);
+  const cableTypes = useTypesStore(s => s.cableTypes);
+
   // Queries
   const { data: zones = [] } = useGetZones(siteId);
   const { data: racks = [] } = useGetRacks(siteId);
   const { data: devices = [] } = useGetDevices(siteId);
   const { data: templates = [] } = useGetDeviceTemplates();
   const { data: pcieTemplates = [] } = useGetPcieTemplates();
-  const deviceTypes = useTypesStore(s => s.deviceTypes);
 
-  // Connections + modules for selected device
+  // Connections — per-device for the drawer, site-wide for the wizard
   const { data: selectedDeviceConnections = [] } = useGetDeviceConnections(
     siteId,
     selectedDeviceId ?? '',
   );
+  const { data: siteConnections = [] } = useGetSiteConnections(siteId);
+
+  // Modules for selected device
   const { data: selectedDeviceModules = [] } = useGetModules(
     siteId,
     selectedDeviceId ?? '',
@@ -54,6 +70,9 @@ export default function RackViewHub() {
   const deleteDevice = useDeleteDevice(siteId);
   const updatePosition = useUpdateDevicePosition(siteId);
   const deleteConnections = useDeleteConnectionsByDevice(siteId);
+  const createConnection = useCreateConnection(siteId);
+  const updateConnection = useUpdateConnection(siteId);
+  const deleteConnection = useDeleteConnection(siteId);
 
   // Face toggle
   const [face, setFace] = useState<'front' | 'rear'>('front');
@@ -61,6 +80,13 @@ export default function RackViewHub() {
   // Deploy wizard state
   const [deployWizardOpen, setDeployWizardOpen] = useState(false);
   const [deployTargetU, setDeployTargetU] = useState<number | undefined>();
+
+  // Connection wizard state
+  const [connWizardOpen, setConnWizardOpen] = useState(false);
+  const [connWizardSrcBlock, setConnWizardSrcBlock] = useState<PlacedBlock | null>(null);
+
+  // Connection edit modal state
+  const [editingConn, setEditingConn] = useState<Connection | null>(null);
 
   // Rack picker state
   const [rackPickerOpen, setRackPickerOpen] = useState(false);
@@ -104,7 +130,6 @@ export default function RackViewHub() {
   function handleZoneSelect(zoneId: string) {
     const store = useNavStore.getState();
     store.setZone(zoneId);
-    // Auto-select first rack in zone
     const zoneRacks = racks.filter(r => r.zoneId === zoneId);
     if (zoneRacks.length > 0) store.setRack(zoneRacks[0].id);
     store.closeDrawer();
@@ -155,7 +180,6 @@ export default function RackViewHub() {
   function handleMoveToUnassigned() {
     const device = devices.find(d => d.id === selectedDeviceId);
     if (!device) return;
-    // Delete connections first, then remove from rack
     deleteConnections.mutate(device.id, {
       onSettled: () => {
         updateDevice.mutate({
@@ -176,20 +200,76 @@ export default function RackViewHub() {
     setRackPickerOpen(false);
   }
 
+  // Connection handlers
+  function handleAddConnection(block: PlacedBlock) {
+    setConnWizardSrcBlock(block);
+    setConnWizardOpen(true);
+  }
+
+  function handleEditConnection(conn: Connection) {
+    setEditingConn(conn);
+  }
+
+  function handleDeleteConnection(connId: string) {
+    const conn = siteConnections.find(c => c.id === connId)
+      ?? selectedDeviceConnections.find(c => c.id === connId);
+    deleteConnection.mutate({
+      connId,
+      srcDeviceId: conn?.srcDeviceId,
+      dstDeviceId: conn?.dstDeviceId ?? undefined,
+    });
+  }
+
+  function handleConnectionWizardSubmit(payload: Omit<Connection, 'id' | 'orgId' | 'siteId' | 'createdAt'>) {
+    createConnection.mutate(payload, {
+      onSuccess: () => {
+        setConnWizardOpen(false);
+        setConnWizardSrcBlock(null);
+      },
+    });
+  }
+
+  function handleEditConnectionSave(updated: Connection) {
+    updateConnection.mutate({
+      id: updated.id,
+      srcDeviceId: updated.srcDeviceId,
+      srcPort: updated.srcPort,
+      srcBlockId: updated.srcBlockId,
+      srcBlockType: updated.srcBlockType,
+      dstDeviceId: updated.dstDeviceId,
+      dstPort: updated.dstPort,
+      dstBlockId: updated.dstBlockId,
+      dstBlockType: updated.dstBlockType,
+      externalLabel: updated.externalLabel,
+      cableTypeId: updated.cableTypeId,
+      label: updated.label,
+      notes: updated.notes,
+    }, {
+      onSuccess: () => setEditingConn(null),
+    });
+  }
+
+  function handleEditConnectionDelete(connId: string) {
+    if (!editingConn) return;
+    deleteConnection.mutate({
+      connId,
+      srcDeviceId: editingConn.srcDeviceId,
+      dstDeviceId: editingConn.dstDeviceId ?? undefined,
+    }, {
+      onSuccess: () => setEditingConn(null),
+    });
+  }
+
   // Current rack
   const currentRack = racks.find(r => r.id === selectedRackId);
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
+  const selectedTemplate = templates.find(t => t.id === selectedDevice?.templateId);
 
   // Rack tabs for current zone
   const zoneRacks = racks.filter(r => r.zoneId === selectedZoneId);
 
-  // Build all connections for current rack's devices (for port rendering)
-  const rackDeviceIds = new Set(
-    devices.filter(d => d.rackId === selectedRackId).map(d => d.id),
-  );
-  const rackConnections = selectedDeviceId
-    ? selectedDeviceConnections
-    : [];
+  // Connections passed to RackView
+  const rackConnections = selectedDeviceId ? selectedDeviceConnections : [];
 
   return (
     <div className={styles.hub}>
@@ -283,7 +363,21 @@ export default function RackViewHub() {
             onMoveToUnassigned={handleMoveToUnassigned}
           />
         )}
-        {selectedDevice && drawerTab !== 'info' && (
+        {selectedDevice && drawerTab === 'ports' && (
+          <PortsTab
+            device={selectedDevice}
+            template={selectedTemplate}
+            modules={selectedDeviceModules}
+            pcieTemplates={pcieTemplates}
+            connections={selectedDeviceConnections}
+            allDevices={devices}
+            cableTypes={cableTypes}
+            onAddConnection={handleAddConnection}
+            onEditConnection={handleEditConnection}
+            onDeleteConnection={handleDeleteConnection}
+          />
+        )}
+        {selectedDevice && drawerTab !== 'info' && drawerTab !== 'ports' && (
           <StubTab tab={drawerTab} />
         )}
       </DetailDrawer>
@@ -293,6 +387,38 @@ export default function RackViewHub() {
         open={deployWizardOpen}
         rackU={deployTargetU}
         onClose={() => setDeployWizardOpen(false)}
+      />
+
+      {/* Connection Wizard */}
+      {connWizardOpen && connWizardSrcBlock && selectedDevice && (
+        <ConnectionWizard
+          open={connWizardOpen}
+          siteId={siteId}
+          srcDevice={selectedDevice}
+          srcBlock={connWizardSrcBlock}
+          devices={devices}
+          templates={templates}
+          modules={selectedDeviceModules}
+          pcieTemplates={pcieTemplates}
+          cableTypes={cableTypes}
+          allConnections={siteConnections}
+          onSubmit={handleConnectionWizardSubmit}
+          onClose={() => {
+            setConnWizardOpen(false);
+            setConnWizardSrcBlock(null);
+          }}
+        />
+      )}
+
+      {/* Connection Edit Modal */}
+      <ConnectionEditModal
+        open={editingConn !== null}
+        connection={editingConn}
+        devices={devices}
+        cableTypes={cableTypes}
+        onSave={handleEditConnectionSave}
+        onDelete={handleEditConnectionDelete}
+        onClose={() => setEditingConn(null)}
       />
 
       {/* Rack Picker Modal */}

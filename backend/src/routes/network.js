@@ -133,6 +133,45 @@ function ipInCidr(ip, cidr) {
 module.exports = function networkRoutes(db) {
   const router = express.Router({ mergeParams: true });
 
+  router.get('/:siteId/devices/:deviceId/connections', requireAuth, requireSiteAccess(db), async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId, deviceId } = req.params;
+    try {
+      const result = await withOrg(db, orgId, c =>
+        c.query(
+          `SELECT * FROM connections
+           WHERE site_id = $1 AND org_id = $2
+             AND (src_device_id = $3 OR dst_device_id = $3)
+           ORDER BY created_at`,
+          [siteId, orgId, deviceId]
+        )
+      );
+      res.json(result.rows.map(toConnection));
+    } catch (err) {
+      console.error(`[GET /devices/${deviceId}/connections]`, err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
+  router.delete('/:siteId/devices/:deviceId/connections', requireAuth, requireSiteAccess(db), requireRole('member'), async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId, deviceId } = req.params;
+    try {
+      await withOrg(db, orgId, c =>
+        c.query(
+          `DELETE FROM connections
+           WHERE site_id = $1 AND org_id = $2
+             AND (src_device_id = $3 OR dst_device_id = $3)`,
+          [siteId, orgId, deviceId]
+        )
+      );
+      res.status(204).end();
+    } catch (err) {
+      console.error(`[DELETE /devices/${deviceId}/connections]`, err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
   router.get('/:siteId/connections', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId }  = req.user;
     const { siteId } = req.params;
