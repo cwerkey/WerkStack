@@ -28,6 +28,7 @@ const gitSyncRoutes     = require('./routes/git_sync');
 const conflictsRoutes   = require('./routes/conflicts');
 const auditLogRoutes    = require('./routes/audit_log');
 const modulesRoutes     = require('./routes/modules');
+const taxonomiesRoutes  = require('./routes/taxonomies');
 const startWorkers      = require('./workers');
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -96,6 +97,7 @@ async function start() {
   app.use('/api/sites/:siteId/conflicts',   conflictsRoutes(db));
   app.use('/api/sites/:siteId/audit-log',   auditLogRoutes(db));
   app.use('/api/sites',                     modulesRoutes(db));
+  app.use('/api/sites/:siteId/taxonomies',  taxonomiesRoutes(db));
 
   startWorkers(db);
 

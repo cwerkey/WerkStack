@@ -1,0 +1,100 @@
+.hub {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  height: 38px;
+  border-bottom: 1px solid var(--color-border, #2a3038);
+  background: var(--color-surface, #1a2028);
+  flex-shrink: 0;
+}
+
+.rackTabs {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+}
+
+.rackTab {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted, #888);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rackTab:hover {
+  color: var(--color-text, #d4d9dd);
+}
+
+.rackTabActive {
+  color: var(--color-accent, #c47c5a);
+  border-bottom-color: var(--color-accent, #c47c5a);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.faceToggle {
+  display: flex;
+  border: 1px solid var(--color-border, #2a3038);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.faceBtn {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted, #888);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.faceBtn:hover {
+  color: var(--color-text, #d4d9dd);
+}
+
+.faceBtnActive {
+  color: #fff;
+  background: var(--color-accent, #c47c5a);
+}
+
+.rackArea {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.noRack {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-muted, #5a6068);
+  font-size: 13px;
+}

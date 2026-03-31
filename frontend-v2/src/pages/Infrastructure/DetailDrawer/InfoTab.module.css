@@ -1,0 +1,141 @@
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.deviceName {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text, #d4d9dd);
+  margin: 0;
+}
+
+.typeBadge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.dt {
+  color: var(--color-text-muted, #5a6068);
+  font-weight: 500;
+}
+
+.dd {
+  color: var(--color-text, #d4d9dd);
+  margin: 0;
+  word-break: break-word;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.btnPrimary {
+  padding: 5px 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--color-accent, #c47c5a);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btnPrimary:hover {
+  filter: brightness(1.1);
+}
+
+.btnGhost {
+  padding: 5px 14px;
+  font-size: 11px;
+  color: var(--color-text-muted, #888);
+  background: none;
+  border: 1px solid var(--color-border, #2a3038);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btnGhost:hover {
+  color: var(--color-text, #d4d9dd);
+  border-color: var(--color-text-muted, #5a6068);
+}
+
+.btnDanger {
+  padding: 5px 14px;
+  font-size: 11px;
+  color: #e8615a;
+  background: none;
+  border: 1px solid #e8615a44;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btnDanger:hover {
+  background: #e8615a18;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted, #5a6068);
+}
+
+.input {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--color-text, #d4d9dd);
+  background: var(--color-input-bg, #0e1012);
+  border: 1px solid var(--color-border, #2a3038);
+  border-radius: 4px;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--color-accent, #c47c5a);
+}
+
+.textarea {
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--color-text, #d4d9dd);
+  background: var(--color-input-bg, #0e1012);
+  border: 1px solid var(--color-border, #2a3038);
+  border-radius: 4px;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.textarea:focus {
+  border-color: var(--color-accent, #c47c5a);
+}

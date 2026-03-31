@@ -1,7 +1,7 @@
 import { lazy } from 'react';
 
 export const OverviewPage    = lazy(() => import('@/pages/OverviewPage'));
-export const RackViewHub     = lazy(() => import('@/pages/RackViewHub'));
+export const RackViewHub     = lazy(() => import('@/pages/Infrastructure/RackViewHub'));
 export const DeviceLibrary   = lazy(() => import('@/pages/DeviceLibrary'));
 export const PoolsPage       = lazy(() => import('@/pages/PoolsPage'));
 export const SharesPage      = lazy(() => import('@/pages/SharesPage'));

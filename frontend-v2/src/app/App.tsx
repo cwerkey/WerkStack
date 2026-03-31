@@ -47,7 +47,10 @@ export default function App() {
               }
             >
               <Route index element={<OverviewPage />} />
-              <Route path="infrastructure/rack"    element={<RackViewHub />} />
+              <Route path="infrastructure/rack"                              element={<RackViewHub />} />
+              <Route path="infrastructure/rack/:zoneId"                    element={<RackViewHub />} />
+              <Route path="infrastructure/rack/:zoneId/:rackId"            element={<RackViewHub />} />
+              <Route path="infrastructure/rack/:zoneId/:rackId/:deviceId"  element={<RackViewHub />} />
               <Route path="infrastructure/devices" element={<DeviceLibrary />} />
               <Route path="storage/pools"          element={<PoolsPage />} />
               <Route path="storage/shares"         element={<SharesPage />} />
