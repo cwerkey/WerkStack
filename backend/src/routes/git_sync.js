@@ -4,12 +4,12 @@ const express = require('express');
 const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
+const { fetchGuides, hasChanges, pushGuides, withToken } = require('../lib/git_sync_push');
 
-const GitSyncConfigSchema = z.object({
-  repoUrl:      z.string().min(1).max(500),
-  branch:       z.string().min(1).max(100).default('main'),
-  enabled:      z.boolean().default(false),
-  pushInterval: z.number().int().min(60).max(86400).default(300),
+const ConfigSchema = z.object({
+  remoteUrl:  z.string().min(1).max(500),
+  branch:     z.string().min(1).max(100).default('main'),
+  authToken:  z.string().max(500).optional(),
 });
 
 async function withOrg(db, orgId, fn) {
@@ -24,55 +24,14 @@ async function withOrg(db, orgId, fn) {
 
 function toConfig(row) {
   return {
-    id:            row.id,
-    orgId:         row.org_id,
-    siteId:        row.site_id,
-    repoUrl:       row.repo_url,
-    branch:        row.branch,
-    enabled:       row.enabled,
-    pushInterval:  row.push_interval,
-    lastPushAt:    row.last_push_at  ?? undefined,
-    lastPushError: row.last_push_error ?? undefined,
-    createdAt:     row.created_at,
-    updatedAt:     row.updated_at,
+    remoteUrl:      row.repo_url,
+    branch:         row.branch,
+    authToken:      row.auth_token ? '••••••••••••' : null,
+    enabled:        row.enabled ?? true,
+    lastSyncAt:     row.last_sync_at   ?? row.last_push_at   ?? undefined,
+    lastSyncStatus: row.last_sync_status
+                      ?? (row.last_push_error ? 'error' : row.last_push_at ? 'success' : undefined),
   };
-}
-
-async function exportSiteData(db, orgId, siteId) {
-  const client = await db.connect();
-  try {
-    await client.query(`SELECT set_config('app.current_org_id', $1, true)`, [orgId]);
-
-    const [
-      sitesRes, racksRes, devicesRes, connsRes,
-      subnetsRes, ipsRes, poolsRes, drivesRes, sharesRes,
-    ] = await Promise.all([
-      client.query(`SELECT * FROM sites WHERE id=$1 AND org_id=$2`, [siteId, orgId]),
-      client.query(`SELECT * FROM racks WHERE site_id=$1 AND org_id=$2 ORDER BY name`, [siteId, orgId]),
-      client.query(`SELECT * FROM device_instances WHERE site_id=$1 AND org_id=$2 ORDER BY name`, [siteId, orgId]),
-      client.query(`SELECT * FROM connections WHERE site_id=$1 AND org_id=$2`, [siteId, orgId]),
-      client.query(`SELECT * FROM subnets WHERE site_id=$1 AND org_id=$2`, [siteId, orgId]),
-      client.query(`SELECT * FROM ip_assignments WHERE site_id=$1 AND org_id=$2`, [siteId, orgId]),
-      client.query(`SELECT * FROM storage_pools WHERE site_id=$1 AND org_id=$2`, [siteId, orgId]),
-      client.query(`SELECT * FROM drives WHERE site_id=$1 AND org_id=$2`, [siteId, orgId]),
-      client.query(`SELECT * FROM shares WHERE site_id=$1 AND org_id=$2`, [siteId, orgId]),
-    ]);
-
-    return {
-      exportedAt: new Date().toISOString(),
-      site:       sitesRes.rows[0] || null,
-      racks:      racksRes.rows,
-      devices:    devicesRes.rows,
-      connections: connsRes.rows,
-      subnets:    subnetsRes.rows,
-      ips:        ipsRes.rows,
-      pools:      poolsRes.rows,
-      drives:     drivesRes.rows,
-      shares:     sharesRes.rows,
-    };
-  } finally {
-    client.release();
-  }
 }
 
 module.exports = function gitSyncRoutes(db) {
@@ -80,132 +39,176 @@ module.exports = function gitSyncRoutes(db) {
   router.use(requireAuth);
   router.use(requireSiteAccess(db));
 
-  router.get('/', async (req, res) => {
+  // GET /config
+  router.get('/config', async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId } = req.params;
+    try {
+      const result = await withOrg(db, orgId, c =>
+        c.query(`SELECT * FROM git_sync_config WHERE site_id=$1 AND org_id=$2`, [siteId, orgId])
+      );
+      if (result.rows.length === 0) return res.json(null);
+      res.json(toConfig(result.rows[0]));
+    } catch (err) {
+      console.error('[GET /git-sync/config]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
+  // PUT /config
+  router.put('/config', requireRole('admin'), validate(ConfigSchema), async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId } = req.params;
+    const { remoteUrl, branch, authToken } = req.body;
+    try {
+      const existing = await withOrg(db, orgId, c =>
+        c.query(`SELECT auth_token FROM git_sync_config WHERE site_id=$1 AND org_id=$2`, [siteId, orgId])
+      );
+      const tokenToStore = authToken || (existing.rows[0]?.auth_token ?? null);
+
+      const result = await withOrg(db, orgId, c =>
+        c.query(
+          `INSERT INTO git_sync_config (org_id, site_id, repo_url, branch, auth_token, enabled, push_interval)
+           VALUES ($1,$2,$3,$4,$5,true,300)
+           ON CONFLICT (org_id, site_id)
+           DO UPDATE SET repo_url=$3, branch=$4, auth_token=$5, updated_at=now()
+           RETURNING *`,
+          [orgId, siteId, remoteUrl, branch, tokenToStore]
+        )
+      );
+      res.json(toConfig(result.rows[0]));
+    } catch (err) {
+      console.error('[PUT /git-sync/config]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
+  // PATCH /enabled — toggle auto-sync on/off
+  router.patch('/enabled', requireRole('admin'), async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId } = req.params;
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+    try {
+      const result = await withOrg(db, orgId, c =>
+        c.query(
+          `UPDATE git_sync_config SET enabled=$1, updated_at=now()
+           WHERE site_id=$2 AND org_id=$3 RETURNING *`,
+          [enabled, siteId, orgId]
+        )
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: 'not configured' });
+      res.json(toConfig(result.rows[0]));
+    } catch (err) {
+      console.error('[PATCH /git-sync/enabled]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
+  // GET /status
+  router.get('/status', async (req, res) => {
     const { orgId }  = req.user;
     const { siteId } = req.params;
     try {
       const result = await withOrg(db, orgId, c =>
         c.query(
-          `SELECT * FROM git_sync_config WHERE site_id=$1 AND org_id=$2`,
+          `SELECT last_sync_at, last_sync_status, last_push_at, last_push_error
+           FROM git_sync_config WHERE site_id=$1 AND org_id=$2`,
           [siteId, orgId]
         )
       );
-      if (result.rows.length === 0) return res.json(null);
-      res.json(toConfig(result.rows[0]));
+      if (result.rows.length === 0) return res.json({ lastSyncAt: null, lastSyncStatus: null });
+      const row = result.rows[0];
+      res.json({
+        lastSyncAt:     row.last_sync_at   ?? row.last_push_at   ?? null,
+        lastSyncStatus: row.last_sync_status
+                          ?? (row.last_push_error ? 'error' : row.last_push_at ? 'success' : null),
+      });
     } catch (err) {
-      console.error('[GET /git-sync]', err);
+      console.error('[GET /git-sync/status]', err);
       res.status(500).json({ error: 'server error' });
     }
   });
 
-  router.put(
-    '/',
-    requireRole('admin'), validate(GitSyncConfigSchema),
-    async (req, res) => {
-      const { orgId }  = req.user;
-      const { siteId } = req.params;
-      const { repoUrl, branch, enabled, pushInterval } = req.body;
-      try {
-        const result = await withOrg(db, orgId, c =>
-          c.query(
-            `INSERT INTO git_sync_config (org_id, site_id, repo_url, branch, enabled, push_interval)
-             VALUES ($1,$2,$3,$4,$5,$6)
-             ON CONFLICT (org_id, site_id)
-             DO UPDATE SET repo_url=$3, branch=$4, enabled=$5, push_interval=$6, updated_at=now()
-             RETURNING *`,
-            [orgId, siteId, repoUrl, branch, enabled, pushInterval]
-          )
-        );
-        res.json(toConfig(result.rows[0]));
-      } catch (err) {
-        console.error('[PUT /git-sync]', err);
-        res.status(500).json({ error: 'server error' });
-      }
-    }
-  );
-
-  router.post(
-    '/push',
-    requireRole('admin'),
-    async (req, res) => {
-      const { orgId }  = req.user;
-      const { siteId } = req.params;
-
-      try {
-        const configRes = await withOrg(db, orgId, c =>
-          c.query(
-            `SELECT * FROM git_sync_config WHERE site_id=$1 AND org_id=$2`,
-            [siteId, orgId]
-          )
-        );
-        if (configRes.rows.length === 0) {
-          return res.status(404).json({ error: 'git-sync not configured' });
-        }
-
-        const config = configRes.rows[0];
-
-        const data = await exportSiteData(db, orgId, siteId);
-
-        let pushError = null;
-        try {
-          const simpleGit = require('simple-git');
-          const path = require('path');
-          const fs   = require('fs');
-
-          const repoDir = path.join('/tmp', 'werkstack-sync', siteId);
-          fs.mkdirSync(repoDir, { recursive: true });
-
-          const git = simpleGit(repoDir);
-
-          const isRepo = fs.existsSync(path.join(repoDir, '.git'));
-          if (!isRepo) {
-            await git.clone(config.repo_url, repoDir, ['--branch', config.branch]);
-          } else {
-            await git.pull('origin', config.branch);
-          }
-
-          const filePath = path.join(repoDir, 'site-data.json');
-          fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-
-          await git.add('.');
-          const status = await git.status();
-          if (status.files.length > 0) {
-            await git.commit(`WerkStack auto-sync: ${new Date().toISOString()}`);
-            await git.push('origin', config.branch);
-          }
-        } catch (gitErr) {
-          pushError = gitErr.message;
-        }
-
-        await withOrg(db, orgId, c =>
-          c.query(
-            `UPDATE git_sync_config
-             SET last_push_at = now(), last_push_error = $1, updated_at = now()
-             WHERE site_id = $2 AND org_id = $3`,
-            [pushError, siteId, orgId]
-          )
-        );
-
-        if (pushError) {
-          return res.status(500).json({ error: `git push failed: ${pushError}` });
-        }
-
-        res.json({ status: 'push completed', pushedAt: new Date().toISOString() });
-      } catch (err) {
-        console.error('[POST /git-sync/push]', err);
-        res.status(500).json({ error: 'server error' });
-      }
-    }
-  );
-
-  router.get('/export', async (req, res) => {
+  // POST /test
+  router.post('/test', requireRole('admin'), async (req, res) => {
     const { orgId }  = req.user;
     const { siteId } = req.params;
+    const { remoteUrl, branch, authToken } = req.body;
+
+    let url   = remoteUrl;
+    let token = authToken;
+    let br    = branch || 'main';
+
+    if (!url) {
+      const stored = await withOrg(db, orgId, c =>
+        c.query(`SELECT repo_url, branch, auth_token FROM git_sync_config WHERE site_id=$1 AND org_id=$2`, [siteId, orgId])
+      );
+      if (stored.rows.length === 0) return res.status(400).json({ error: 'no config saved yet' });
+      url   = stored.rows[0].repo_url;
+      token = token || stored.rows[0].auth_token;
+      br    = stored.rows[0].branch;
+    }
+
     try {
-      const data = await exportSiteData(db, orgId, siteId);
-      res.json(data);
+      const simpleGit      = require('simple-git');
+      const authenticated  = withToken(url, token);
+      await simpleGit().listRemote(['--heads', authenticated]);
+      res.json({ ok: true, message: `Connected to ${url} (branch: ${br})` });
     } catch (err) {
-      console.error('[GET /git-sync/export]', err);
+      const safe = (err.message || 'connection failed').replace(/x-access-token:[^@]+@/, 'x-access-token:***@');
+      res.json({ ok: false, message: safe });
+    }
+  });
+
+  // POST /sync — manual trigger
+  router.post('/sync', requireRole('admin'), async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId } = req.params;
+
+    try {
+      const configRes = await withOrg(db, orgId, c =>
+        c.query(`SELECT * FROM git_sync_config WHERE site_id=$1 AND org_id=$2`, [siteId, orgId])
+      );
+      if (configRes.rows.length === 0) {
+        return res.status(404).json({ error: 'git-sync not configured' });
+      }
+
+      const config = configRes.rows[0];
+      if (!config.repo_url) return res.status(400).json({ error: 'no remote URL configured' });
+
+      const { guides, manuals } = await fetchGuides(db, orgId, siteId);
+
+      let syncError = null;
+      let pushed    = false;
+      try {
+        ({ pushed } = await pushGuides(config, guides, manuals));
+      } catch (gitErr) {
+        syncError = gitErr.message.replace(/x-access-token:[^@]+@/, 'x-access-token:***@');
+      }
+
+      const status = syncError ? 'error' : 'success';
+      await withOrg(db, orgId, c =>
+        c.query(
+          `UPDATE git_sync_config
+           SET last_sync_at=$1, last_sync_status=$2, updated_at=now()
+           WHERE site_id=$3 AND org_id=$4`,
+          [new Date().toISOString(), status, siteId, orgId]
+        )
+      );
+
+      if (syncError) {
+        return res.status(500).json({ ok: false, message: `sync failed: ${syncError}` });
+      }
+
+      const msg = pushed
+        ? `Synced ${guides.length} guide(s) to ${config.repo_url}`
+        : `No changes since last sync — nothing pushed`;
+      res.json({ ok: true, message: msg });
+    } catch (err) {
+      console.error('[POST /git-sync/sync]', err);
       res.status(500).json({ error: 'server error' });
     }
   });

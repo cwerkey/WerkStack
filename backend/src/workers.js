@@ -120,104 +120,67 @@ const GIT_SYNC_CHECK_CRON = '* * * * *'; // every minute
 function startGitSyncScheduler(db, cron) {
   console.log('[worker:git-sync] starting git-sync scheduler');
 
+  const { fetchGuides, hasChanges, pushGuides } = require('./lib/git_sync_push');
+
   cron.schedule(GIT_SYNC_CHECK_CRON, async () => {
     try {
+      // Only pick up configs that are enabled and whose interval has elapsed
       const dueRes = await db.query(
         `SELECT * FROM git_sync_config
          WHERE enabled = true
-           AND (last_push_at IS NULL
-                OR last_push_at + (push_interval || ' seconds')::interval < now())`
+           AND repo_url IS NOT NULL
+           AND (last_sync_at IS NULL
+                OR last_sync_at + (push_interval || ' seconds')::interval < now())`
       );
 
       for (const config of dueRes.rows) {
         try {
-          const simpleGit = require('simple-git');
-          const path = require('path');
-          const fs   = require('fs');
+          // Skip if no guide content has changed since the last sync
+          const changed = await hasChanges(db, config.org_id, config.site_id, config.last_sync_at);
+          if (!changed) {
+            console.log(`[worker:git-sync] no changes for site ${config.site_id}, skipping`);
+            // Bump last_sync_at so we don't re-check every minute forever
+            const c = await db.connect();
+            try {
+              await c.query(`SELECT set_config('app.current_org_id', $1, true)`, [config.org_id]);
+              await c.query(
+                `UPDATE git_sync_config SET last_sync_at=now(), last_sync_status='success', updated_at=now() WHERE id=$1`,
+                [config.id]
+              );
+            } finally { c.release(); }
+            continue;
+          }
 
-          const client = await db.connect();
-          let data;
+          const { guides, manuals } = await fetchGuides(db, config.org_id, config.site_id);
+          const { pushed } = await pushGuides(config, guides, manuals);
+
+          const c = await db.connect();
           try {
-            await client.query(`SELECT set_config('app.current_org_id', $1, true)`, [config.org_id]);
-
-            const [sitesRes, racksRes, devicesRes, connsRes, subnetsRes, ipsRes, poolsRes, drivesRes, sharesRes] = await Promise.all([
-              client.query(`SELECT * FROM sites WHERE id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-              client.query(`SELECT * FROM racks WHERE site_id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-              client.query(`SELECT * FROM device_instances WHERE site_id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-              client.query(`SELECT * FROM connections WHERE site_id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-              client.query(`SELECT * FROM subnets WHERE site_id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-              client.query(`SELECT * FROM ip_assignments WHERE site_id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-              client.query(`SELECT * FROM storage_pools WHERE site_id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-              client.query(`SELECT * FROM drives WHERE site_id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-              client.query(`SELECT * FROM shares WHERE site_id=$1 AND org_id=$2`, [config.site_id, config.org_id]),
-            ]);
-
-            data = {
-              exportedAt:  new Date().toISOString(),
-              site:        sitesRes.rows[0] || null,
-              racks:       racksRes.rows,
-              devices:     devicesRes.rows,
-              connections: connsRes.rows,
-              subnets:     subnetsRes.rows,
-              ips:         ipsRes.rows,
-              pools:       poolsRes.rows,
-              drives:      drivesRes.rows,
-              shares:      sharesRes.rows,
-            };
-          } finally {
-            client.release();
-          }
-
-          const repoDir = path.join('/tmp', 'werkstack-sync', config.site_id);
-          fs.mkdirSync(repoDir, { recursive: true });
-
-          const git = simpleGit(repoDir);
-          const isRepo = fs.existsSync(path.join(repoDir, '.git'));
-
-          if (!isRepo) {
-            await git.clone(config.repo_url, repoDir, ['--branch', config.branch]);
-          } else {
-            await git.pull('origin', config.branch);
-          }
-
-          const filePath = path.join(repoDir, 'site-data.json');
-          fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-
-          await git.add('.');
-          const status = await git.status();
-          if (status.files.length > 0) {
-            await git.commit(`WerkStack auto-sync: ${new Date().toISOString()}`);
-            await git.push('origin', config.branch);
-          }
-
-          const updateClient = await db.connect();
-          try {
-            await updateClient.query(`SELECT set_config('app.current_org_id', $1, true)`, [config.org_id]);
-            await updateClient.query(
+            await c.query(`SELECT set_config('app.current_org_id', $1, true)`, [config.org_id]);
+            await c.query(
               `UPDATE git_sync_config
-               SET last_push_at = now(), last_push_error = NULL, updated_at = now()
-               WHERE id = $1`,
+               SET last_sync_at=now(), last_sync_status='success', updated_at=now()
+               WHERE id=$1`,
               [config.id]
             );
-          } finally {
-            updateClient.release();
-          }
+          } finally { c.release(); }
 
-          console.log(`[worker:git-sync] pushed site ${config.site_id}`);
-        } catch (gitErr) {
-          const errClient = await db.connect();
-          try {
-            await errClient.query(`SELECT set_config('app.current_org_id', $1, true)`, [config.org_id]);
-            await errClient.query(
-              `UPDATE git_sync_config
-               SET last_push_error = $1, updated_at = now()
-               WHERE id = $2`,
-              [gitErr.message, config.id]
-            );
-          } finally {
-            errClient.release();
+          if (pushed) {
+            console.log(`[worker:git-sync] pushed ${guides.length} guide(s) for site ${config.site_id}`);
           }
-          console.error(`[worker:git-sync] push failed for site ${config.site_id}:`, gitErr.message);
+        } catch (gitErr) {
+          const safe = (gitErr.message || '').replace(/x-access-token:[^@]+@/, 'x-access-token:***@');
+          const c = await db.connect();
+          try {
+            await c.query(`SELECT set_config('app.current_org_id', $1, true)`, [config.org_id]);
+            await c.query(
+              `UPDATE git_sync_config
+               SET last_sync_at=now(), last_sync_status='error', updated_at=now()
+               WHERE id=$1`,
+              [config.id]
+            );
+          } finally { c.release(); }
+          console.error(`[worker:git-sync] push failed for site ${config.site_id}:`, safe);
         }
       }
     } catch (err) {

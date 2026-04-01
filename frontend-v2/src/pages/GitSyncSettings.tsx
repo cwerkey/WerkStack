@@ -10,6 +10,7 @@ interface GitSyncConfig {
   remoteUrl: string;
   branch: string;
   authToken: string;
+  enabled: boolean;
   lastSyncAt?: string;
   lastSyncStatus?: 'success' | 'error' | 'pending';
 }
@@ -52,6 +53,13 @@ function useTriggerSync(siteId: string) {
   });
 }
 
+function useToggleEnabled(siteId: string) {
+  return useMutation({
+    mutationFn: (enabled: boolean) =>
+      api.patch<GitSyncConfig>(`/api/sites/${siteId}/git-sync/enabled`, { enabled }),
+  });
+}
+
 function useTestConnection(siteId: string) {
   return useMutation({
     mutationFn: (body: { remoteUrl: string; branch: string; authToken?: string }) =>
@@ -71,11 +79,12 @@ function StatusBadge({ status }: { status?: string }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function GitSyncSettings({ siteId }: { siteId: string }) {
-  const { data: config, isLoading } = useGetGitSyncConfig(siteId);
+  const { data: config, isLoading, refetch: refetchConfig } = useGetGitSyncConfig(siteId);
   const { data: statusData } = useGetGitSyncStatus(siteId);
-  const saveMut = useSaveGitSyncConfig(siteId);
-  const syncMut = useTriggerSync(siteId);
-  const testMut = useTestConnection(siteId);
+  const saveMut   = useSaveGitSyncConfig(siteId);
+  const syncMut   = useTriggerSync(siteId);
+  const testMut   = useTestConnection(siteId);
+  const toggleMut = useToggleEnabled(siteId);
 
   const [remoteUrl, setRemoteUrl] = useState('');
   const [branch, setBranch] = useState('main');
@@ -287,13 +296,25 @@ export default function GitSyncSettings({ siteId }: { siteId: string }) {
               </div>
             )}
 
-            <div style={{ marginTop: '14px' }}>
+            <div style={{ marginTop: '14px', display: 'flex', gap: '8px', alignItems: 'center' }}>
               <button
                 className={settingsStyles.primaryBtn}
                 onClick={handleSync}
-                disabled={syncMut.isPending}
+                disabled={syncMut.isPending || !(config?.enabled ?? true)}
               >
                 {syncMut.isPending ? 'Syncing...' : 'Sync Now'}
+              </button>
+              <button
+                className={settingsStyles.ghostBtn}
+                onClick={() => {
+                  const next = !(config?.enabled ?? true);
+                  toggleMut.mutate(next, { onSuccess: () => refetchConfig() });
+                }}
+                disabled={toggleMut.isPending}
+              >
+                {toggleMut.isPending
+                  ? '...'
+                  : (config?.enabled ?? true) ? 'Pause Auto-Sync' : 'Resume Auto-Sync'}
               </button>
             </div>
           </div>
