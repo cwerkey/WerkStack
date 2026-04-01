@@ -8,7 +8,7 @@
 
 .sectionTitle {
   font-size: 10px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 12px;
@@ -16,8 +16,8 @@
 }
 
 .card {
-  background: #1a1e22;
-  border: 1px solid #2a3038;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 16px;
 }
@@ -28,7 +28,7 @@
 
 .label {
   font-size: 10px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
@@ -38,10 +38,10 @@
 
 .input {
   background: #161a1d;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 5px 10px;
-  color: #d4d9dd;
+  color: var(--color-text);
   font-size: 12px;
   font-family: Inter, system-ui, sans-serif;
   outline: none;
@@ -50,7 +50,7 @@
 }
 
 .input:focus {
-  border-color: #c47c5a;
+  border-color: var(--color-accent);
 }
 
 .inputRow {
@@ -84,13 +84,13 @@
   gap: 8px;
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid #2a3038;
+  border-top: 1px solid var(--color-border);
 }
 
 .statusSection {
   padding: 14px 0 0;
   margin-top: 14px;
-  border-top: 1px solid #2a3038;
+  border-top: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -98,7 +98,7 @@
 
 .statusLabel {
   font-size: 11px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   font-family: Inter, system-ui, sans-serif;
 }
 
@@ -124,9 +124,9 @@
 }
 
 .pillPending {
-  background: #262c30;
-  color: #8a9299;
-  border: 1px solid #2a3038;
+  background: var(--color-hover);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .inlineResult {
@@ -152,7 +152,7 @@
 .emptyState {
   text-align: center;
   padding: 40px 20px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   font-size: 13px;
   font-family: Inter, system-ui, sans-serif;
 }

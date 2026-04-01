@@ -76,7 +76,7 @@
   font-family: 'Inter', system-ui, sans-serif;
   font-size: 11px;
   font-weight: 500;
-  color: #d4d9dd;
+  color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

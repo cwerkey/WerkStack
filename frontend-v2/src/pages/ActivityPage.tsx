@@ -9,22 +9,12 @@ import {
   type DeviceEvent,
   type DeviceStatusEntry,
 } from '@/api/activity';
+import QueryErrorState from '@/components/QueryErrorState';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
 import styles from './ActivityPage.module.css';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const content = [headers, ...rows]
-    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([content], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -119,12 +109,13 @@ export default function ActivityPage() {
   const navigate = useNavigate();
   const siteId = useSiteStore(s => s.currentSite?.id ?? '');
 
+  const statusQ = useGetActivityStatus(siteId);
   const {
     data: statusData = [],
     isLoading: statusLoading,
     dataUpdatedAt,
     isFetching,
-  } = useGetActivityStatus(siteId);
+  } = statusQ;
 
   const { data: allEvents = [], isLoading: eventsLoading } = useGetActivityEvents(siteId);
 
@@ -171,20 +162,20 @@ export default function ActivityPage() {
     });
   }, [allEvents, eventTypeFilter, deviceFilter]);
 
-  function handleExport() {
-    const headers = ['Timestamp', 'Device', 'Event Type', 'From State', 'To State'];
-    const rows = filteredEvents.map(ev => [
-      ev.createdAt,
-      deviceNameMap.get(ev.deviceId) ?? ev.deviceId,
-      ev.eventType,
-      ev.fromState ?? '',
-      ev.toState ?? '',
-    ]);
-    exportCsv('activity-log.csv', headers, rows);
+  function handleExportCsv() {
+    const data = filteredEvents.map(ev => ({
+      Timestamp: ev.createdAt,
+      Device: deviceNameMap.get(ev.deviceId) ?? ev.deviceId,
+      'Event Type': ev.eventType,
+      'From State': ev.fromState ?? '',
+      'To State': ev.toState ?? '',
+    }));
+    exportToCSV(data, 'werkstack-activity.csv');
   }
 
   return (
     <div className={styles.page}>
+      {statusQ.error && <QueryErrorState error={statusQ.error} onRetry={() => statusQ.refetch()} />}
       {/* Header */}
       <div className={styles.header}>
         <h1>Activity</h1>
@@ -192,9 +183,12 @@ export default function ActivityPage() {
           {isFetching && <span className={styles.spinner} />}
           Last updated: {timeAgo}
         </div>
-        <button className={styles.exportBtn} onClick={handleExport}>
-          Export CSV
-        </button>
+        <ExportDropdown
+          options={[
+            { label: 'Export CSV', onSelect: handleExportCsv },
+          ]}
+          disabled={filteredEvents.length === 0}
+        />
       </div>
 
       {/* Scrollable body */}

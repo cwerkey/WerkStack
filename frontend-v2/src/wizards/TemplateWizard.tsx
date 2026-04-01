@@ -90,6 +90,12 @@ function PaletteItem({ def, active, onClick }: { def: BlockDef; active: boolean;
 }
 
 // ── Grid editor ───────────────────────────────────────────────────────────────
+// NOTE: GridEditor intentionally duplicates some rendering math from
+// TemplateOverlay. TemplateOverlay is read-only (presentation); GridEditor adds
+// click-to-place, hover preview, collision detection, and block deletion.
+// Shared positioning math (block dims from PlacedBlock + cellW) could be
+// extracted into a utility if the two diverge further — tracked as a future
+// cleanup task.
 
 interface GridEditorProps {
   blocks: PlacedBlock[];

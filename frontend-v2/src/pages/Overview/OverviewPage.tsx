@@ -15,6 +15,7 @@ import { DeviceListWidget } from './widgets/DeviceListWidget';
 import { NetworkWidget }    from './widgets/NetworkWidget';
 import { StorageWidget }    from './widgets/StorageWidget';
 import { ActivityWidget }   from './widgets/ActivityWidget';
+import QueryErrorState from '@/components/QueryErrorState';
 
 const DEFAULT_LAYOUT: LayoutItem[] = [
   { widgetKey: 'device-list', x: 0, y: 0, w: 6, h: 4, visible: true },
@@ -182,6 +183,8 @@ export default function OverviewPage() {
         .react-resizable-handle { opacity: 0.3; }
         .react-resizable-handle:hover { opacity: 0.8; }
       `}</style>
+
+      {summaryQ.error && <QueryErrorState error={summaryQ.error} onRetry={() => summaryQ.refetch()} />}
 
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>

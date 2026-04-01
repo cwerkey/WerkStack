@@ -13,22 +13,10 @@ import { useGetDevices } from '@/api/devices';
 import { useGetRacks } from '@/api/racks';
 import { useSiteStore } from '@/stores/siteStore';
 import { uid } from '@/utils/uid';
+import QueryErrorState from '@/components/QueryErrorState';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
 import { useNavigate } from 'react-router-dom';
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const content = [headers, ...rows]
-    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([content], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -439,7 +427,8 @@ export default function SubnetsPage() {
   const siteId = currentSite?.id ?? '';
   const navigate = useNavigate();
 
-  const { data: subnets = [], isLoading: subnetsLoading } = useGetSubnets(siteId);
+  const subnetsQ = useGetSubnets(siteId);
+  const { data: subnets = [], isLoading: subnetsLoading } = subnetsQ;
   const { data: allIps = [] } = useGetSiteIps(siteId);
   const { data: vlans = [] } = useGetVlans(siteId);
   const { data: devices = [] } = useGetDevices(siteId);
@@ -483,21 +472,20 @@ export default function SubnetsPage() {
     deleteSubnet.mutate(subnet.id);
   }
 
-  function handleExport() {
-    const headers = ['IP', 'Device', 'Subnet CIDR', 'Subnet Name', 'VLAN', 'Gateway'];
-    const rows = allIps.map(ip => {
+  function handleExportCsv() {
+    const data = allIps.map(ip => {
       const subnet = subnets.find(s => s.id === ip.subnetId);
       const dev = ip.deviceId ? deviceMap.get(ip.deviceId) : undefined;
-      return [
-        ip.ip,
-        dev?.name ?? '',
-        subnet?.cidr ?? '',
-        subnet?.name ?? '',
-        subnet?.vlan != null ? String(subnet.vlan) : '',
-        subnet?.gateway ?? '',
-      ];
+      return {
+        IP: ip.ip,
+        Device: dev?.name ?? '',
+        'Subnet CIDR': subnet?.cidr ?? '',
+        'Subnet Name': subnet?.name ?? '',
+        VLAN: subnet?.vlan != null ? String(subnet.vlan) : '',
+        Gateway: subnet?.gateway ?? '',
+      };
     });
-    exportCsv('subnets.csv', headers, rows);
+    exportToCSV(data, 'werkstack-subnets.csv');
   }
 
   const formOpen = showForm || editingSubnet != null;
@@ -516,6 +504,8 @@ export default function SubnetsPage() {
         .form-cancel-btn:hover { background: var(--color-surface-2) !important; color: var(--color-text) !important; }
       `}</style>
 
+      {subnetsQ.error && <QueryErrorState error={subnetsQ.error} onRetry={() => subnetsQ.refetch()} />}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
@@ -525,21 +515,11 @@ export default function SubnetsPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="icon-btn"
-            onClick={handleExport}
-            style={{
-              padding: '6px 12px',
-              fontSize: 12,
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-surface)',
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer',
-            }}
-          >
-            Export CSV
-          </button>
+          <ExportDropdown
+            options={[
+              { label: 'Export CSV', onSelect: handleExportCsv },
+            ]}
+          />
           <button
             className="action-btn"
             onClick={() => {

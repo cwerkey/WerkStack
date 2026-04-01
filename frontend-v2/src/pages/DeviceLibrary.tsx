@@ -7,6 +7,9 @@ import { useGetDeviceTemplates } from '@/api/templates';
 import { useSiteStore } from '@/stores/siteStore';
 import { useTypesStore } from '@/stores/typesStore';
 import { DeployWizard } from '@/wizards/DeployWizard';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
+import QueryErrorState from '@/components/QueryErrorState';
 import type { DeviceInstance, Zone, Rack, DeviceTemplate } from '@werkstack/shared';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -15,19 +18,6 @@ type SortKey = 'name' | 'type' | 'template' | 'rack' | 'zone' | 'rackU' | 'ip' |
 type SortDir = 'asc' | 'desc';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const content = [headers, ...rows]
-    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([content], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 function strSort(a: string, b: string, dir: SortDir) {
   const cmp = a.localeCompare(b, undefined, { sensitivity: 'base' });
@@ -117,7 +107,8 @@ export default function DeviceLibrary() {
   const siteId = useSiteStore(s => s.currentSite?.id ?? '');
   const deviceTypes = useTypesStore(s => s.deviceTypes);
 
-  const { data: devices = [] } = useGetDevices(siteId);
+  const devicesQ = useGetDevices(siteId);
+  const { data: devices = [] } = devicesQ;
   const { data: zones = [] } = useGetZones(siteId);
   const { data: racks = [] } = useGetRacks(siteId);
   const { data: templates = [] } = useGetDeviceTemplates();
@@ -273,23 +264,22 @@ export default function DeviceLibrary() {
   }
 
   // ── Export CSV ───────────────────────────────────────────────────────────────
-  function handleExport() {
-    const headers = ['Name', 'Type', 'Template', 'Rack', 'Zone', 'U Position', 'IP', 'Status'];
-    const rows = sorted.map(d => {
+  function handleExportCsv() {
+    const data = sorted.map(d => {
       const rack = rackMap.get(d.rackId ?? '');
       const zoneId = d.zoneId ?? rack?.zoneId;
-      return [
-        d.name,
-        typeMap.get(d.typeId)?.name ?? '',
-        templateMap.get(d.templateId ?? '')?.model ?? '',
-        rack?.name ?? '',
-        zoneMap.get(zoneId ?? '')?.name ?? '',
-        d.rackU != null ? String(d.rackU) : '',
-        d.ip ?? '',
-        d.isDraft ? 'Draft' : 'Active',
-      ];
+      return {
+        Name: d.name,
+        Type: typeMap.get(d.typeId)?.name ?? '',
+        Template: templateMap.get(d.templateId ?? '')?.model ?? '',
+        Rack: rack?.name ?? '',
+        Zone: zoneMap.get(zoneId ?? '')?.name ?? '',
+        'U Position': d.rackU != null ? String(d.rackU) : '',
+        IP: d.ip ?? '',
+        Status: d.isDraft ? 'Draft' : 'Active',
+      };
     });
-    exportCsv('device-library.csv', headers, rows);
+    exportToCSV(data, 'werkstack-devices.csv');
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -306,6 +296,8 @@ export default function DeviceLibrary() {
         color: '#d4d9dd',
       }}
     >
+      {devicesQ.error && <QueryErrorState error={devicesQ.error} onRetry={() => devicesQ.refetch()} />}
+
       <style>{`
         .dl-row:hover td { background: #1a1e22 !important; }
         .dl-row.clickable { cursor: pointer; }
@@ -335,21 +327,11 @@ export default function DeviceLibrary() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button
-            className="dl-btn-secondary"
-            onClick={handleExport}
-            style={{
-              background: '#1a1e22',
-              border: '1px solid #2a3038',
-              borderRadius: 4,
-              padding: '5px 12px',
-              fontSize: 12,
-              color: '#d4d9dd',
-              cursor: 'pointer',
-            }}
-          >
-            Export CSV
-          </button>
+          <ExportDropdown
+            options={[
+              { label: 'Export CSV', onSelect: handleExportCsv },
+            ]}
+          />
           <button
             className="dl-btn-primary"
             onClick={() => setDeployOpen(true)}

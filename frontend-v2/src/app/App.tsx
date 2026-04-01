@@ -14,7 +14,7 @@ import {
   OsOverviewPage, TopologyPage,
   SubnetsPage, LeasesPage, VlansPage,
   ActivityPage, GuidesPage, TodoListPage,
-  SettingsPage, LoginPage, NotFoundPage,
+  SettingsPage, LoginPage, SetupPage, NotFoundPage,
 } from '@/app/routes';
 
 function AuthHydrator() {
@@ -40,6 +40,7 @@ export default function App() {
           <Suspense fallback={<div style={{ padding: 24, color: '#888' }}>Loading…</div>}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/setup" element={<SetupPage />} />
               <Route
                 path="/*"
                 element={

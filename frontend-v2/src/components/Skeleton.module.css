@@ -13,7 +13,7 @@
 /* table-row variant */
 .tableRow td {
   padding: 9px 12px;
-  border-bottom: 1px solid #1e2428;
+  border-bottom: 1px solid var(--color-surface-2);
 }
 
 .tableCell {
@@ -27,7 +27,7 @@
 
 /* card variant */
 .card {
-  border: 1px solid #1e2428;
+  border: 1px solid var(--color-surface-2);
   border-radius: 6px;
   padding: 12px 14px;
   height: 80px;

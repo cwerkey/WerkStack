@@ -10,7 +10,7 @@
 
 .message {
   font-size: 12px;
-  color: #e06060;
+  color: var(--color-error);
   flex: 1;
   margin: 0;
 }
@@ -22,7 +22,7 @@
   border: 1px solid #5c2828;
   border-radius: 4px;
   background: transparent;
-  color: #e06060;
+  color: var(--color-error);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -30,5 +30,5 @@
 
 .retryBtn:hover {
   background: #2a1212;
-  border-color: #e06060;
+  border-color: var(--color-error);
 }

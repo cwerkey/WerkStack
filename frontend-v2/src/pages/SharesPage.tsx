@@ -7,21 +7,11 @@ import { useGetRacks } from '@/api/racks';
 import { useSiteStore } from '@/stores/siteStore';
 import FilterPills from '@/components/FilterPills';
 import Skeleton from '@/components/Skeleton';
+import QueryErrorState from '@/components/QueryErrorState';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const content = [headers, ...rows]
-    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([content], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const PROTOCOL_COLORS: Record<ShareProtocol, { bg: string; color: string }> = {
   smb:   { bg: '#1e3a5f', color: '#60a5fa' },
@@ -68,7 +58,8 @@ export default function SharesPage() {
   const currentSite = useSiteStore(s => s.currentSite);
   const siteId = currentSite?.id ?? '';
 
-  const { data: shares = [], isLoading: sharesLoading } = useGetSiteShares(siteId);
+  const sharesQ = useGetSiteShares(siteId);
+  const { data: shares = [], isLoading: sharesLoading } = sharesQ;
   const { data: pools = [] } = useGetSitePools(siteId);
   const { data: devices = [] } = useGetDevices(siteId);
   const { data: racks = [] } = useGetRacks(siteId);
@@ -142,23 +133,22 @@ export default function SharesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, sortCol, sortDir, poolMap, rackMap]);
 
-  function handleExport() {
-    const headers = ['Share Name', 'Protocol', 'Pool', 'Device', 'Rack', 'Path', 'Access Mode'];
-    const rows = sorted.map(s => {
+  function handleExportCsv() {
+    const data = sorted.map(s => {
       const pool = s.poolId ? poolMap.get(s.poolId) : undefined;
       const dev = getShareDevice(s);
       const rack = dev?.rackId ? rackMap.get(dev.rackId)?.name ?? '' : '';
-      return [
-        s.name,
-        s.protocol,
-        pool?.name ?? '',
-        dev?.name ?? '',
-        rack,
-        s.path ?? '',
-        s.accessMode,
-      ];
+      return {
+        'Share Name': s.name,
+        Protocol: s.protocol,
+        Pool: pool?.name ?? '',
+        Device: dev?.name ?? '',
+        Rack: rack,
+        Path: s.path ?? '',
+        'Access Mode': s.accessMode,
+      };
     });
-    exportCsv('shares.csv', headers, rows);
+    exportToCSV(data, 'werkstack-shares.csv');
   }
 
   const pillGroups = [
@@ -217,6 +207,8 @@ export default function SharesPage() {
         .icon-btn:hover { background: var(--color-surface-2) !important; }
       `}</style>
 
+      {sharesQ.error && <QueryErrorState error={sharesQ.error} onRetry={() => sharesQ.refetch()} />}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
@@ -226,21 +218,12 @@ export default function SharesPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="icon-btn"
-            onClick={handleExport}
-            style={{
-              padding: '6px 12px',
-              fontSize: 12,
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-surface)',
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer',
-            }}
-          >
-            Export CSV
-          </button>
+          <ExportDropdown
+            options={[
+              { label: 'Export CSV', onSelect: handleExportCsv },
+            ]}
+            disabled={sorted.length === 0}
+          />
           <button
             className="action-btn"
             onClick={() => alert('Select a device in the Rack View to create a share')}

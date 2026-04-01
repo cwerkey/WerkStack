@@ -14,7 +14,7 @@
   min-height: 0;
   background: #141820;
   border-radius: 6px;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
 }
 
 .controls {
@@ -33,17 +33,17 @@
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   background: #1a1f24;
-  color: #d4d9dd;
+  color: var(--color-text);
   cursor: pointer;
   font-size: 14px;
   transition: background 0.15s, border-color 0.15s;
 }
 
 .controlBtn:hover {
-  background: #262c30;
-  border-color: #3a4248;
+  background: var(--color-hover);
+  border-color: var(--color-border-2);
 }
 
 .empty {
@@ -53,7 +53,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #5a6068;
+  color: var(--color-text-dim);
   font-size: 13px;
 }
 
@@ -67,6 +67,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5a6068;
+  color: var(--color-text-dim);
   font-size: 13px;
 }

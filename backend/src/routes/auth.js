@@ -43,6 +43,17 @@ async function uniqueSlug(client, base) {
 module.exports = function authRoutes(db) {
   const router = express.Router();
 
+  // Returns whether the application needs first-time setup (no users exist)
+  router.get('/setup-required', async (_req, res) => {
+    try {
+      const result = await db.query('SELECT COUNT(*)::int AS count FROM users');
+      res.json({ setupRequired: result.rows[0].count === 0 });
+    } catch (err) {
+      console.error('[GET /api/auth/setup-required]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
   router.get('/me', requireAuth, async (req, res) => {
     try {
       const userResult = await db.query(
@@ -129,6 +140,13 @@ module.exports = function authRoutes(db) {
     const client = await db.connect();
     try {
       await client.query('BEGIN');
+
+      // Only allow registration when no users exist (first-time setup)
+      const countResult = await client.query('SELECT COUNT(*)::int AS count FROM users');
+      if (countResult.rows[0].count > 0) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'registration is disabled — users must be invited by an admin' });
+      }
 
       const hash    = await bcrypt.hash(password, 12);
       const baseSlug = slugify(orgName);

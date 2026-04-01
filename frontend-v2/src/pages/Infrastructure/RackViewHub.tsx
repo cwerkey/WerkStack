@@ -52,6 +52,7 @@ import { DockerComposeImport } from '@/wizards/DockerComposeImport';
 import { RackPickerModal } from './RackPickerModal';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { exportToPNG, exportRackToPDF } from '@/utils/exportUtils';
+import QueryErrorState from '@/components/QueryErrorState';
 import styles from './RackViewHub.module.css';
 
 export default function RackViewHub() {
@@ -73,7 +74,8 @@ export default function RackViewHub() {
   // Queries
   const { data: zones = [] } = useGetZones(siteId);
   const { data: racks = [] } = useGetRacks(siteId);
-  const { data: devices = [] } = useGetDevices(siteId);
+  const devicesQ = useGetDevices(siteId);
+  const { data: devices = [] } = devicesQ;
   const { data: templates = [] } = useGetDeviceTemplates();
   const { data: pcieTemplates = [] } = useGetPcieTemplates();
 
@@ -365,6 +367,7 @@ export default function RackViewHub() {
 
   return (
     <div className={styles.hub}>
+      {devicesQ.error && <QueryErrorState error={devicesQ.error} onRetry={() => devicesQ.refetch()} />}
       <ZoneSidebar
         zones={zones}
         racks={racks}

@@ -6,6 +6,9 @@ import { useGetRacks } from '@/api/racks';
 import { useGetOsHosts, useGetOsVms, useGetOsApps } from '@/api/os-stack';
 import { useGetSiteContainers } from '@/api/containers';
 import FilterPills, { type PillGroup } from '@/components/FilterPills';
+import QueryErrorState from '@/components/QueryErrorState';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
 import type { DeviceInstance, Rack, OsHost, OsVm, OsApp, Container } from '@werkstack/shared';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -534,7 +537,7 @@ function DeviceCard({
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 
-interface CsvRow {
+interface CsvRow extends Record<string, string> {
   Device: string;
   Rack: string;
   U: string;
@@ -548,14 +551,14 @@ interface CsvRow {
   Ports: string;
 }
 
-function buildCsv(
+function buildCsvRows(
   devices: DeviceInstance[],
   racks: Rack[],
   osHosts: OsHost[],
   allVms: OsVm[],
   containers: Container[],
   apps: OsApp[],
-): string {
+): CsvRow[] {
   const rackMap = new Map(racks.map(r => [r.id, r]));
   const rows: CsvRow[] = [];
 
@@ -647,24 +650,7 @@ function buildCsv(
     }
   }
 
-  const headers: (keyof CsvRow)[] = [
-    'Device', 'Rack', 'U', 'OS', 'VM', 'Type', 'Name', 'ImageOrUrl', 'Status', 'IP', 'Ports',
-  ];
-  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-  return [
-    headers.join(','),
-    ...rows.map(r => headers.map(h => esc(r[h])).join(',')),
-  ].join('\n');
-}
-
-function downloadCsv(content: string, filename: string) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  return rows;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -674,7 +660,8 @@ export default function OsOverviewPage() {
   const currentSite = useSiteStore(s => s.currentSite);
   const siteId = currentSite?.id ?? '';
 
-  const { data: devices = [], isLoading: devicesLoading }    = useGetDevices(siteId);
+  const devicesQ = useGetDevices(siteId);
+  const { data: devices = [], isLoading: devicesLoading } = devicesQ;
   const { data: racks = [],   isLoading: racksLoading }      = useGetRacks(siteId);
   const { data: osHosts = [], isLoading: hostsLoading }      = useGetOsHosts(siteId);
   const { data: allVms = [],  isLoading: vmsLoading }        = useGetOsVms(siteId);
@@ -721,10 +708,9 @@ export default function OsOverviewPage() {
     options: racks.map(r => ({ value: r.id, label: r.name })),
   };
 
-  function handleExport() {
-    const csv = buildCsv(filteredDevices, racks, osHosts, allVms, containers, apps);
-    const siteName = currentSite?.name ?? 'site';
-    downloadCsv(csv, `os-overview-${siteName.toLowerCase().replace(/\s+/g, '-')}.csv`);
+  function handleExportCsv() {
+    const rows = buildCsvRows(filteredDevices, racks, osHosts, allVms, containers, apps);
+    exportToCSV(rows, 'werkstack-os-overview.csv');
   }
 
   return (
@@ -741,6 +727,8 @@ export default function OsOverviewPage() {
         .device-name-link:hover { color: var(--color-accent) !important; text-decoration: underline; }
       `}</style>
 
+      {devicesQ.error && <QueryErrorState error={devicesQ.error} onRetry={() => devicesQ.refetch()} />}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
         <div>
@@ -751,26 +739,12 @@ export default function OsOverviewPage() {
             Cascading view of devices, operating systems, VMs, containers, and apps
           </p>
         </div>
-        <button
-          className="action-btn"
-          onClick={handleExport}
+        <ExportDropdown
+          options={[
+            { label: 'Export CSV', onSelect: handleExportCsv },
+          ]}
           disabled={isLoading || sortedDevices.length === 0}
-          style={{
-            flexShrink: 0,
-            padding: '7px 16px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-surface)',
-            color: 'var(--color-text)',
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: (isLoading || sortedDevices.length === 0) ? 'default' : 'pointer',
-            transition: 'background 0.12s, color 0.12s',
-            opacity: (isLoading || sortedDevices.length === 0) ? 0.45 : 1,
-          }}
-        >
-          Export CSV
-        </button>
+        />
       </div>
 
       {/* Filter pills */}

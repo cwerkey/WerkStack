@@ -8,7 +8,7 @@
 .zonesPanel {
   width: 300px;
   flex-shrink: 0;
-  border-right: 1px solid #2a3038;
+  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -38,7 +38,7 @@
 
 .panelTitle {
   font-size: 10px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-family: Inter, system-ui, sans-serif;
@@ -46,34 +46,34 @@
 }
 
 .zoneCard {
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 10px 12px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.1s;
-  background: #1a1e22;
+  background: var(--color-surface);
   margin-bottom: 6px;
 }
 
 .zoneCard:hover {
-  border-color: #3a4248;
+  border-color: var(--color-border-2);
 }
 
 .zoneCardActive {
-  border-color: #c47c5a;
-  background: #1e2428;
+  border-color: var(--color-accent);
+  background: var(--color-surface-2);
 }
 
 .zoneName {
   font-size: 13px;
   font-weight: 500;
-  color: #d4d9dd;
+  color: var(--color-text);
   font-family: Inter, system-ui, sans-serif;
 }
 
 .zoneDesc {
   font-size: 11px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   margin-top: 3px;
   overflow: hidden;
   white-space: nowrap;
@@ -101,14 +101,14 @@
 
 .sectionTitle {
   font-size: 10px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-family: Inter, system-ui, sans-serif;
 }
 
 .tableWrap {
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   overflow: hidden;
   flex: 1;
@@ -125,27 +125,27 @@
 .th {
   text-align: left;
   padding: 8px 12px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #2a3038;
+  border-bottom: 1px solid var(--color-border);
   font-weight: 500;
-  background: #1a1e22;
+  background: var(--color-surface);
   position: sticky;
   top: 0;
 }
 
 .td {
   padding: 8px 12px;
-  color: #d4d9dd;
-  border-bottom: 1px solid #1e2428;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-surface-2);
 }
 
 .tdMuted {
   padding: 8px 12px;
-  color: #8a9299;
-  border-bottom: 1px solid #1e2428;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-surface-2);
   font-size: 12px;
 }
 
@@ -154,7 +154,7 @@
 }
 
 .tableRow:hover {
-  background: #1e2428;
+  background: var(--color-surface-2);
 }
 
 .tableRow:last-child .td,
@@ -163,8 +163,8 @@
 }
 
 .inlineForm {
-  background: #1a1e22;
-  border: 1px solid #2a3038;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 12px;
   margin-bottom: 10px;
@@ -186,7 +186,7 @@
 
 .label {
   font-size: 10px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-family: Inter, system-ui, sans-serif;
@@ -194,10 +194,10 @@
 
 .input {
   background: #161a1d;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 5px 10px;
-  color: #d4d9dd;
+  color: var(--color-text);
   font-size: 12px;
   font-family: Inter, system-ui, sans-serif;
   outline: none;
@@ -206,13 +206,13 @@
 }
 
 .input:focus {
-  border-color: #c47c5a;
+  border-color: var(--color-accent);
 }
 
 .emptyState {
   text-align: center;
   padding: 40px 20px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   font-size: 13px;
   font-family: Inter, system-ui, sans-serif;
 }
@@ -223,9 +223,9 @@
   border-radius: 10px;
   font-size: 10px;
   font-family: Inter, system-ui, sans-serif;
-  background: #262c30;
-  color: #8a9299;
-  border: 1px solid #2a3038;
+  background: var(--color-hover);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .errorMsg {

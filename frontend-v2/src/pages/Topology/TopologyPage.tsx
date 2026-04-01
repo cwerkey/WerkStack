@@ -10,6 +10,7 @@ import { TopologyFilterPanel } from './TopologyFilterPanel';
 import { LogicalFilterPanel } from './LogicalFilterPanel';
 import type { PhysicalTopologyHandle } from './PhysicalTopology';
 import type { LogicalTopologyHandle } from './LogicalTopology';
+import QueryErrorState from '@/components/QueryErrorState';
 import styles from './TopologyPage.module.css';
 
 type Mode = 'physical' | 'logical';
@@ -25,7 +26,8 @@ export default function TopologyPage() {
   const currentSite = useSiteStore(s => s.currentSite);
   const siteId = currentSite?.id ?? '';
   const navigate = useNavigate();
-  const { data: devices = [] } = useGetDevices(siteId);
+  const devicesQ = useGetDevices(siteId);
+  const { data: devices = [] } = devicesQ;
   const { data: racks = [] } = useGetRacks(siteId);
   const { data: hosts = [] } = useGetOsHosts(siteId);
   const { data: apps = [] } = useGetOsApps(siteId);
@@ -133,6 +135,7 @@ export default function TopologyPage() {
 
   return (
     <div className={styles.page}>
+      {devicesQ.error && <QueryErrorState error={devicesQ.error} onRetry={() => devicesQ.refetch()} />}
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className={styles.header}>
         <div className={styles.modeToggle}>

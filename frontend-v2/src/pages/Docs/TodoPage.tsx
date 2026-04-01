@@ -20,6 +20,7 @@ import {
 } from '@/api/todos';
 import { useCreateGuide } from '@/api/guides';
 import { uid } from '@/utils/uid';
+import QueryErrorState from '@/components/QueryErrorState';
 
 // ── Priority / Status helpers ─────────────────────────────────────────────────
 
@@ -819,7 +820,8 @@ export default function TodoPage() {
   const [editingFolderName, setEditingFolderName] = useState('');
 
   const { data: folders = [], refetch: refetchFolders } = useGetFolders(siteId);
-  const { data: todos = [], refetch: refetchTodos } = useGetTodos(siteId, selectedFolderId);
+  const todosQ = useGetTodos(siteId, selectedFolderId);
+  const { data: todos = [], refetch: refetchTodos } = todosQ;
 
   const createFolder = useCreateFolder(siteId);
   const updateFolder = useUpdateFolder(siteId);
@@ -906,6 +908,8 @@ export default function TodoPage() {
         .todo-add-btn:hover { background: var(--color-accent-dark) !important; }
         .todo-cancel-btn:hover { background: var(--color-surface-2) !important; }
       `}</style>
+
+      {todosQ.error && <QueryErrorState error={todosQ.error} onRetry={() => todosQ.refetch()} />}
 
       {/* Page header */}
       <div

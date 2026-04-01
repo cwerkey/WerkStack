@@ -11,22 +11,12 @@ import { api } from '@/utils/api';
 import { uid } from '@/utils/uid';
 import FilterPills from '@/components/FilterPills';
 import type { PillGroup } from '@/components/FilterPills';
+import QueryErrorState from '@/components/QueryErrorState';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
 import { useNavigate } from 'react-router-dom';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const content = [headers, ...rows]
-    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([content], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 // Natural sort for IPs
 function compareIp(a: string, b: string): number {
@@ -235,7 +225,8 @@ export default function LeasesPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const { data: allIps = [], isLoading: ipsLoading } = useGetSiteIps(siteId);
+  const ipsQ = useGetSiteIps(siteId);
+  const { data: allIps = [], isLoading: ipsLoading } = ipsQ;
   const { data: subnets = [] } = useGetSubnets(siteId);
   const { data: vlans = [] } = useGetVlans(siteId);
   const { data: devices = [] } = useGetDevices(siteId);
@@ -318,16 +309,22 @@ export default function LeasesPage() {
     });
   }, [filtered, sortCol, sortDir, deviceMap, rackMap, subnetMap]);
 
-  function handleExport() {
-    const headers = ['IP', 'Device', 'Rack', 'Subnet CIDR', 'VLAN', 'Label', 'Notes'];
-    const rows = sorted.map(ip => {
+  function handleExportCsv() {
+    const data = sorted.map(ip => {
       const dev = ip.deviceId ? deviceMap.get(ip.deviceId) : undefined;
       const rack = dev?.rackId ? rackMap.get(dev.rackId) : undefined;
       const subnet = subnetMap.get(ip.subnetId);
-      const vlan = subnet?.vlan != null ? String(subnet.vlan) : '';
-      return [ip.ip, dev?.name ?? '', rack?.name ?? '', subnet?.cidr ?? '', vlan, ip.label ?? '', ip.notes ?? ''];
+      return {
+        IP: ip.ip,
+        Device: dev?.name ?? '',
+        Rack: rack?.name ?? '',
+        'Subnet CIDR': subnet?.cidr ?? '',
+        VLAN: subnet?.vlan != null ? String(subnet.vlan) : '',
+        Label: ip.label ?? '',
+        Notes: ip.notes ?? '',
+      };
     });
-    exportCsv('leases.csv', headers, rows);
+    exportToCSV(data, 'werkstack-leases.csv');
   }
 
   const pillGroups: PillGroup[] = [
@@ -378,6 +375,8 @@ export default function LeasesPage() {
         .nav-link:hover { color: var(--color-accent) !important; }
       `}</style>
 
+      {ipsQ.error && <QueryErrorState error={ipsQ.error} onRetry={() => ipsQ.refetch()} />}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
@@ -387,17 +386,12 @@ export default function LeasesPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="icon-btn"
-            onClick={handleExport}
-            style={{
-              padding: '6px 12px', fontSize: 12,
-              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-surface)', color: 'var(--color-text-muted)', cursor: 'pointer',
-            }}
-          >
-            Export CSV
-          </button>
+          <ExportDropdown
+            options={[
+              { label: 'Export CSV', onSelect: handleExportCsv },
+            ]}
+            disabled={sorted.length === 0}
+          />
           <button
             className="action-btn"
             onClick={() => setShowAddForm(f => !f)}

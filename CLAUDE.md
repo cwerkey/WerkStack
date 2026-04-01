@@ -17,7 +17,8 @@ Full specifications live in `../Project Guidelines/`. Read the relevant doc befo
 
 - **Frontend:** React 18, TypeScript, Vite, React Router v6, TanStack Query v5, Zustand
 - **Backend:** Node.js, Express 4, PostgreSQL (pg driver), Zod validation, JWT (httpOnly cookies)
-- **Styling:** Single `index.css` file — no CSS modules, no CSS-in-JS, no Tailwind
+- **Styling (Rev 1 `frontend/`):** Single `index.css` file — no CSS modules, no CSS-in-JS, no Tailwind
+- **Styling (Rev 2 `frontend-v2/`):** CSS Modules (`.module.css` per component) + `theme.css` for root CSS custom properties. Theme cascade maintained via `:root` tokens and `documentElement.style` injection from themeStore. No Tailwind, no CSS-in-JS
 - **Deployment:** Docker Compose (frontend + backend + PostgreSQL)
 - **Monorepo:** npm workspaces — `shared/`, `frontend/`, `backend/`
 
@@ -75,7 +76,7 @@ app/
 
 5. **Theme tokens from useThemeStore.** Never import color/font hex values directly from constants. Components read colors from the theme store's active mode (homelab-dark, enterprise-dark, enterprise-light).
 
-6. **Single index.css.** No `.module.css` files. No CSS-in-JS. No Tailwind. The accent system depends on CSS custom properties cascading in a single stylesheet.
+6. **CSS Modules + theme cascade (Rev 2).** One `.module.css` per component for scoped styles. Theme tokens defined in `theme.css` at `:root` and injected dynamically via `themeStore.ts`. No CSS-in-JS, no Tailwind. (Rev 1 `frontend/` uses a single `index.css` — do not add CSS modules there.)
 
 7. **Hover states are CSS only.** Never use `onMouseOver`/`onMouseOut` for hover effects. Always use CSS class hover rules with `!important` in the `<style>` block.
 

@@ -7,21 +7,11 @@ import { useGetRacks } from '@/api/racks';
 import { useSiteStore } from '@/stores/siteStore';
 import FilterPills from '@/components/FilterPills';
 import Skeleton from '@/components/Skeleton';
+import QueryErrorState from '@/components/QueryErrorState';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const content = [headers, ...rows]
-    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([content], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const DRIVE_TYPE_META: Record<DriveType, { label: string; bg: string; color: string }> = {
   hdd:   { label: 'HDD',   bg: '#1e3a5f', color: '#60a5fa' },
@@ -74,7 +64,8 @@ export default function DisksPage() {
   const currentSite = useSiteStore(s => s.currentSite);
   const siteId = currentSite?.id ?? '';
 
-  const { data: drives = [], isLoading: drivesLoading } = useGetSiteDrives(siteId);
+  const drivesQ = useGetSiteDrives(siteId);
+  const { data: drives = [], isLoading: drivesLoading } = drivesQ;
   const { data: pools = [] } = useGetSitePools(siteId);
   const { data: devices = [] } = useGetDevices(siteId);
   const { data: racks = [] } = useGetRacks(siteId);
@@ -137,25 +128,24 @@ export default function DisksPage() {
     });
   }, [filtered, sortCol, sortDir, deviceMap, rackMap, poolMap]);
 
-  function handleExport() {
-    const headers = ['Model', 'Label', 'Capacity', 'Serial', 'Type', 'Device', 'Rack', 'Pool', 'Boot'];
-    const rows = sorted.map(d => {
+  function handleExportCsv() {
+    const data = sorted.map(d => {
       const dev = d.deviceId ? deviceMap.get(d.deviceId) : undefined;
       const rack = dev?.rackId ? rackMap.get(dev.rackId)?.name ?? '' : '';
       const pool = d.poolId ? poolMap.get(d.poolId)?.name ?? '' : '';
-      return [
-        d.model ?? '',
-        d.label ?? '',
-        d.capacity,
-        d.serial ?? '',
-        d.driveType,
-        dev?.name ?? '',
-        rack,
-        pool,
-        d.isBoot ? 'Yes' : 'No',
-      ];
+      return {
+        Model: d.model ?? '',
+        Label: d.label ?? '',
+        Capacity: d.capacity,
+        Serial: d.serial ?? '',
+        Type: d.driveType,
+        Device: dev?.name ?? '',
+        Rack: rack,
+        Pool: pool,
+        Boot: d.isBoot ? 'Yes' : 'No',
+      };
     });
-    exportCsv('disks.csv', headers, rows);
+    exportToCSV(data, 'werkstack-disks.csv');
   }
 
   const pillGroups = [
@@ -214,6 +204,8 @@ export default function DisksPage() {
         .icon-btn:hover { background: var(--color-surface-2) !important; }
       `}</style>
 
+      {drivesQ.error && <QueryErrorState error={drivesQ.error} onRetry={() => drivesQ.refetch()} />}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
@@ -223,21 +215,12 @@ export default function DisksPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="icon-btn"
-            onClick={handleExport}
-            style={{
-              padding: '6px 12px',
-              fontSize: 12,
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-surface)',
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer',
-            }}
-          >
-            Export CSV
-          </button>
+          <ExportDropdown
+            options={[
+              { label: 'Export CSV', onSelect: handleExportCsv },
+            ]}
+            disabled={sorted.length === 0}
+          />
           <button
             className="action-btn"
             onClick={() => alert('Select a device in the Rack View to add a disk')}

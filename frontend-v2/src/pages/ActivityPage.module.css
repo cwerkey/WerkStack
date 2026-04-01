@@ -5,7 +5,7 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  background: #161a1d;
+  background: var(--color-bg);
   font-family: Inter, system-ui, sans-serif;
 }
 
@@ -16,7 +16,7 @@
   align-items: center;
   gap: 12px;
   padding: 16px 24px;
-  border-bottom: 1px solid #2a3038;
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -24,7 +24,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #d4d9dd;
+  color: var(--color-text);
   flex: 1;
 }
 
@@ -33,7 +33,7 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #8a9299;
+  color: var(--color-text-muted);
 }
 
 /* ── Spinner ─────────────────────────────────────────────────────────────────── */
@@ -47,8 +47,8 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid #2a3038;
-  border-top-color: #c47c5a;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -71,7 +71,7 @@
 .sectionLabel {
   font-size: 10px;
   font-weight: 600;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 10px;
@@ -96,8 +96,8 @@
 }
 
 .deviceCard {
-  background: #1a1e22;
-  border: 1px solid #2a3038;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 12px 14px;
   cursor: pointer;
@@ -105,8 +105,8 @@
 }
 
 .deviceCard:hover {
-  border-color: #3a4248;
-  background: #1e2428;
+  border-color: var(--color-border-2);
+  background: var(--color-surface-2);
 }
 
 .cardTop {
@@ -126,7 +126,7 @@
 .cardName {
   font-size: 13px;
   font-weight: 600;
-  color: #d4d9dd;
+  color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -148,7 +148,7 @@
 
 .cardDetail {
   font-size: 11px;
-  color: #8a9299;
+  color: var(--color-text-muted);
 }
 
 /* ── Log Section ─────────────────────────────────────────────────────────────── */
@@ -157,7 +157,7 @@
   display: flex;
   flex-direction: column;
   margin-top: 20px;
-  border-top: 1px solid #2a3038;
+  border-top: 1px solid var(--color-border);
 }
 
 .logHeader {
@@ -165,7 +165,7 @@
   align-items: center;
   gap: 12px;
   padding: 14px 24px;
-  border-bottom: 1px solid #2a3038;
+  border-bottom: 1px solid var(--color-border);
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -173,7 +173,7 @@
 .logTitle {
   font-size: 13px;
   font-weight: 600;
-  color: #d4d9dd;
+  color: var(--color-text);
   margin-right: 4px;
 }
 
@@ -188,9 +188,9 @@
 .filterPill {
   padding: 3px 10px;
   border-radius: 10px;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   background: none;
-  color: #8a9299;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-family: Inter, system-ui, sans-serif;
   cursor: pointer;
@@ -198,22 +198,22 @@
 }
 
 .filterPill:hover {
-  border-color: #3a4248;
-  color: #d4d9dd;
+  border-color: var(--color-border-2);
+  color: var(--color-text);
 }
 
 .filterPillActive {
-  border-color: #c47c5a;
-  color: #c47c5a;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
   background: rgba(196, 124, 90, 0.1);
 }
 
 .deviceSelect {
-  background: #1a1e22;
-  border: 1px solid #2a3038;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 3px 8px;
-  color: #d4d9dd;
+  color: var(--color-text);
   font-size: 11px;
   font-family: Inter, system-ui, sans-serif;
   cursor: pointer;
@@ -234,11 +234,11 @@
   padding: 8px 12px;
   font-size: 10px;
   font-weight: 600;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  border-bottom: 1px solid #2a3038;
-  background: #1a1e22;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
   white-space: nowrap;
 }
 
@@ -247,17 +247,17 @@
 }
 
 .eventRow {
-  border-bottom: 1px solid #1e2428;
+  border-bottom: 1px solid var(--color-surface-2);
   transition: background 0.1s;
 }
 
 .eventRow:hover {
-  background: #1e2428;
+  background: var(--color-surface-2);
 }
 
 .eventTd {
   padding: 9px 12px;
-  color: #d4d9dd;
+  color: var(--color-text);
   vertical-align: middle;
 }
 
@@ -267,13 +267,13 @@
 
 .eventTime {
   font-size: 11px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 
 .eventDevice {
   font-size: 13px;
-  color: #d4d9dd;
+  color: var(--color-text);
   font-weight: 500;
 }
 
@@ -315,7 +315,7 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #8a9299;
+  color: var(--color-text-muted);
 }
 
 /* ── Empty / Loading States ──────────────────────────────────────────────────── */
@@ -327,26 +327,26 @@
   justify-content: center;
   padding: 48px 24px;
   text-align: center;
-  color: #8a9299;
+  color: var(--color-text-muted);
 }
 
 .emptyTitle {
   font-size: 14px;
   font-weight: 600;
-  color: #d4d9dd;
+  color: var(--color-text);
   margin-bottom: 6px;
 }
 
 .emptySubtext {
   font-size: 12px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   max-width: 280px;
 }
 
 .loadingText {
   padding: 32px 24px;
   font-size: 13px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-align: center;
 }
 
@@ -357,16 +357,16 @@
   font-size: 11px;
   font-family: Inter, system-ui, sans-serif;
   background: none;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   cursor: pointer;
   transition: all 0.15s;
   flex-shrink: 0;
 }
 
 .exportBtn:hover {
-  background: #262c30;
-  border-color: #3a4248;
-  color: #d4d9dd;
+  background: var(--color-hover);
+  border-color: var(--color-border-2);
+  color: var(--color-text);
 }

@@ -31,6 +31,7 @@ import {
 } from '@/api/guides';
 import { BlockEditor, type GuideBlock } from '@/components/BlockEditor';
 import { uid } from '@/utils/uid';
+import QueryErrorState from '@/components/QueryErrorState';
 
 // ── Markdown ↔ Block conversion ───────────────────────────────────────────────
 
@@ -179,7 +180,8 @@ export default function GuidesPage() {
   const siteId = currentSite?.id ?? '';
 
   const { data: manuals = [], isLoading: manualsLoading } = useGetManuals(siteId);
-  const { data: guides  = [], isLoading: guidesLoading  } = useGetGuides(siteId);
+  const guidesQ = useGetGuides(siteId);
+  const { data: guides  = [], isLoading: guidesLoading  } = guidesQ;
 
   const createManual = useCreateManual(siteId);
   const updateManual = useUpdateManual(siteId);
@@ -383,6 +385,8 @@ export default function GuidesPage() {
         .guide-add-btn:hover    { background: var(--color-surface-2) !important; }
         .guide-rename-input:focus { outline: 1px solid var(--color-accent) !important; }
       `}</style>
+
+      {guidesQ.error && <QueryErrorState error={guidesQ.error} onRetry={() => guidesQ.refetch()} />}
 
       {/* Entity filter bar */}
       <div style={{

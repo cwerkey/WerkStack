@@ -6,6 +6,9 @@ import { useGetSubnets } from '@/api/network';
 import { useSiteStore } from '@/stores/siteStore';
 import { uid } from '@/utils/uid';
 import Skeleton from '@/components/Skeleton';
+import QueryErrorState from '@/components/QueryErrorState';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -26,19 +29,6 @@ function vlanToForm(v: Vlan): VlanFormState {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const content = [headers, ...rows]
-    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([content], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const sortBtnStyle: React.CSSProperties = {
   background: 'none',
@@ -391,7 +381,8 @@ export default function VlansPage() {
   const currentSite = useSiteStore(s => s.currentSite);
   const siteId = currentSite?.id ?? '';
 
-  const { data: vlans = [], isLoading: vlansLoading } = useGetVlans(siteId);
+  const vlansQ = useGetVlans(siteId);
+  const { data: vlans = [], isLoading: vlansLoading } = vlansQ;
   const { data: subnets = [] } = useGetSubnets(siteId);
 
   const createVlan = useCreateVlan(siteId);
@@ -456,13 +447,18 @@ export default function VlansPage() {
     deleteVlan.mutate(id);
   }
 
-  function handleExport() {
-    const headers = ['VLAN ID', 'Name', 'Color', 'Subnets', 'Notes'];
-    const rows = sorted.map(v => {
+  function handleExportCsv() {
+    const data = sorted.map(v => {
       const linked = subnets.filter(s => s.vlan === v.vlanId).map(s => s.cidr).join('; ');
-      return [String(v.vlanId), v.name, v.color, linked, v.notes ?? ''];
+      return {
+        'VLAN ID': String(v.vlanId),
+        Name: v.name,
+        Color: v.color,
+        Subnets: linked,
+        Notes: v.notes ?? '',
+      };
     });
-    exportCsv('vlans.csv', headers, rows);
+    exportToCSV(data, 'werkstack-vlans.csv');
   }
 
   const thStyle: React.CSSProperties = {
@@ -489,6 +485,8 @@ export default function VlansPage() {
         .del-btn:hover { background: var(--color-error-tint) !important; color: var(--color-error) !important; border-color: var(--color-error) !important; }
       `}</style>
 
+      {vlansQ.error && <QueryErrorState error={vlansQ.error} onRetry={() => vlansQ.refetch()} />}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
@@ -498,19 +496,12 @@ export default function VlansPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="icon-btn"
-            onClick={handleExport}
+          <ExportDropdown
+            options={[
+              { label: 'Export CSV', onSelect: handleExportCsv },
+            ]}
             disabled={sorted.length === 0}
-            style={{
-              padding: '6px 12px', fontSize: 12,
-              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-surface)', color: 'var(--color-text-muted)', cursor: 'pointer',
-              opacity: sorted.length === 0 ? 0.45 : 1,
-            }}
-          >
-            Export CSV
-          </button>
+          />
           <button
             className="action-btn"
             onClick={() => setShowForm(f => !f)}

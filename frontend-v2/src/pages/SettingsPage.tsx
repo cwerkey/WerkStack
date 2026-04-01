@@ -18,6 +18,7 @@ import TemplatesSettings from './TemplatesSettings';
 import ZonesRacksSettings from './ZonesRacksSettings';
 import GitSyncSettings from './GitSyncSettings';
 import ThemeSettings from './ThemeSettings';
+import QueryErrorState from '@/components/QueryErrorState';
 import styles from './SettingsPage.module.css';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -298,10 +299,15 @@ function PermissionMatrix({
 // ── Users Sub-tab ─────────────────────────────────────────────────────────────
 
 function UsersTab({ siteId }: { siteId: string }) {
-  const { data: users, isLoading } = useGetOrgUsers();
+  const usersQ = useGetOrgUsers();
+  const { data: users, isLoading } = usersQ;
   const { data: groups } = useGetSecurityGroups(siteId);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+
+  if (usersQ.error) {
+    return <QueryErrorState error={usersQ.error} onRetry={() => usersQ.refetch()} />;
+  }
 
   if (isLoading) {
     return <div style={S.emptyState}>Loading users...</div>;

@@ -8,7 +8,7 @@
 .tabBtn {
   background: none;
   border: none;
-  color: #8a9299;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 8px 16px;
   font-size: 13px;
@@ -18,19 +18,19 @@
 }
 
 .tabBtn:hover {
-  color: #c47c5a;
+  color: var(--color-accent);
 }
 
 .tabBtnActive {
-  color: #d4d9dd;
-  border-bottom-color: #c47c5a;
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
 }
 
 .subTab {
   background: none;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 4px 12px;
   font-size: 11px;
@@ -39,14 +39,14 @@
 }
 
 .subTab:hover {
-  color: #c47c5a;
-  border-color: #3a4248;
+  color: var(--color-accent);
+  border-color: var(--color-border-2);
 }
 
 .subTabActive {
-  color: #d4d9dd;
-  background: #262c30;
-  border-color: #c47c5a;
+  color: var(--color-text);
+  background: var(--color-hover);
+  border-color: var(--color-accent);
 }
 
 .tableRow {
@@ -54,28 +54,28 @@
 }
 
 .tableRow:hover {
-  background: #1e2428;
+  background: var(--color-surface-2);
 }
 
 .groupCard {
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 12px 14px;
   cursor: pointer;
   transition: border-color 0.15s;
-  background: #1a1e22;
+  background: var(--color-surface);
 }
 
 .groupCard:hover {
-  border-color: #3a4248;
+  border-color: var(--color-border-2);
 }
 
 .groupCardActive {
-  border-color: #c47c5a;
+  border-color: var(--color-accent);
 }
 
 .primaryBtn {
-  background: #c47c5a;
+  background: var(--color-accent);
   border: none;
   color: #fff;
   padding: 5px 14px;
@@ -87,13 +87,13 @@
 }
 
 .primaryBtn:hover {
-  background: #a8653e;
+  background: var(--color-accent-dark);
 }
 
 .ghostBtn {
   background: none;
-  border: 1px solid #2a3038;
-  color: #8a9299;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
   padding: 5px 14px;
   border-radius: 4px;
   font-size: 11px;
@@ -103,15 +103,15 @@
 }
 
 .ghostBtn:hover {
-  background: #262c30;
-  border-color: #3a4248;
-  color: #d4d9dd;
+  background: var(--color-hover);
+  border-color: var(--color-border-2);
+  color: var(--color-text);
 }
 
 .dangerBtn {
   background: none;
   border: 1px solid #5c2828;
-  color: #e06060;
+  color: var(--color-error);
   padding: 5px 14px;
   border-radius: 4px;
   font-size: 11px;
@@ -122,14 +122,14 @@
 
 .dangerBtn:hover {
   background: #3a1818;
-  border-color: #e06060;
+  border-color: var(--color-error);
 }
 
 .checkbox {
   appearance: none;
   width: 16px;
   height: 16px;
-  border: 1px solid #3a4248;
+  border: 1px solid var(--color-border-2);
   border-radius: 3px;
   background: #161a1d;
   cursor: pointer;
@@ -138,8 +138,8 @@
 }
 
 .checkbox:checked {
-  background: #c47c5a;
-  border-color: #c47c5a;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .checkbox:checked::after {
@@ -155,7 +155,7 @@
 }
 
 .checkbox:hover {
-  border-color: #c47c5a;
+  border-color: var(--color-accent);
 }
 
 .pill {
@@ -164,9 +164,9 @@
   border-radius: 10px;
   font-size: 10px;
   font-family: Inter, system-ui, sans-serif;
-  background: #262c30;
-  color: #8a9299;
-  border: 1px solid #2a3038;
+  background: var(--color-hover);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .modalOverlay {
@@ -180,8 +180,8 @@
 }
 
 .modalPanel {
-  background: #1a1e22;
-  border: 1px solid #2a3038;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 20px 24px;
   min-width: 400px;

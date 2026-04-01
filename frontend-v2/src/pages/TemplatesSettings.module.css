@@ -16,7 +16,7 @@
 
 .sectionTitle {
   font-size: 10px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 8px;
@@ -24,7 +24,7 @@
 }
 
 .tableWrap {
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -39,25 +39,25 @@
 .th {
   text-align: left;
   padding: 8px 12px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #2a3038;
+  border-bottom: 1px solid var(--color-border);
   font-weight: 500;
-  background: #1a1e22;
+  background: var(--color-surface);
 }
 
 .td {
   padding: 8px 12px;
-  color: #d4d9dd;
-  border-bottom: 1px solid #1e2428;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-surface-2);
 }
 
 .tdMuted {
   padding: 8px 12px;
-  color: #8a9299;
-  border-bottom: 1px solid #1e2428;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-surface-2);
   font-size: 12px;
 }
 
@@ -67,11 +67,11 @@
 }
 
 .tableRow:hover {
-  background: #1e2428;
+  background: var(--color-surface-2);
 }
 
 .tableRowActive {
-  background: #1e2428;
+  background: var(--color-surface-2);
 }
 
 .tableRow:last-child .td,
@@ -103,7 +103,7 @@
 
 .label {
   font-size: 10px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-family: Inter, system-ui, sans-serif;
@@ -111,10 +111,10 @@
 
 .input {
   background: #161a1d;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 5px 10px;
-  color: #d4d9dd;
+  color: var(--color-text);
   font-size: 12px;
   font-family: Inter, system-ui, sans-serif;
   outline: none;
@@ -123,15 +123,15 @@
 }
 
 .input:focus {
-  border-color: #c47c5a;
+  border-color: var(--color-accent);
 }
 
 .select {
   background: #161a1d;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 5px 10px;
-  color: #d4d9dd;
+  color: var(--color-text);
   font-size: 12px;
   font-family: Inter, system-ui, sans-serif;
   outline: none;
@@ -140,12 +140,12 @@
 }
 
 .select:focus {
-  border-color: #c47c5a;
+  border-color: var(--color-accent);
 }
 
 .inlineForm {
-  background: #1a1e22;
-  border: 1px solid #2a3038;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 14px;
   margin-bottom: 12px;
@@ -154,7 +154,7 @@
 .inlineFormTitle {
   font-size: 12px;
   font-weight: 600;
-  color: #d4d9dd;
+  color: var(--color-text);
   margin: 0 0 12px;
   font-family: Inter, system-ui, sans-serif;
 }
@@ -172,9 +172,9 @@
   border-radius: 10px;
   font-size: 10px;
   font-family: Inter, system-ui, sans-serif;
-  background: #262c30;
-  color: #8a9299;
-  border: 1px solid #2a3038;
+  background: var(--color-hover);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
   white-space: nowrap;
 }
 
@@ -184,7 +184,7 @@
   height: 20px;
   border-radius: 3px;
   cursor: pointer;
-  border: 1px solid #3a4248;
+  border: 1px solid var(--color-border-2);
   flex-shrink: 0;
   vertical-align: middle;
 }
@@ -197,10 +197,10 @@
 
 .colorInput {
   background: #161a1d;
-  border: 1px solid #2a3038;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 4px 8px;
-  color: #d4d9dd;
+  color: var(--color-text);
   font-size: 12px;
   font-family: 'JetBrains Mono', monospace;
   outline: none;
@@ -208,19 +208,19 @@
 }
 
 .colorInput:focus {
-  border-color: #c47c5a;
+  border-color: var(--color-accent);
 }
 
 .skeletonRow {
   padding: 10px 12px;
-  border-bottom: 1px solid #1e2428;
+  border-bottom: 1px solid var(--color-surface-2);
   display: flex;
   gap: 12px;
 }
 
 .skeletonCell {
   height: 14px;
-  background: #262c30;
+  background: var(--color-hover);
   border-radius: 3px;
   animation: shimmer 1.4s ease-in-out infinite;
 }
@@ -234,7 +234,7 @@
 .emptyState {
   text-align: center;
   padding: 40px 20px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   font-size: 13px;
   font-family: Inter, system-ui, sans-serif;
 }
@@ -248,11 +248,11 @@
 .groupHeader {
   padding: 6px 12px;
   font-size: 10px;
-  color: #8a9299;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   background: #161a1d;
-  border-bottom: 1px solid #1e2428;
+  border-bottom: 1px solid var(--color-surface-2);
 }
 
 .errorMsg {

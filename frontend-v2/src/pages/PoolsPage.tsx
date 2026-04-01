@@ -7,21 +7,11 @@ import { useGetRacks } from '@/api/racks';
 import { useSiteStore } from '@/stores/siteStore';
 import FilterPills from '@/components/FilterPills';
 import Skeleton from '@/components/Skeleton';
+import QueryErrorState from '@/components/QueryErrorState';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToCSV } from '@/utils/exportUtils';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-
-function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const content = [headers, ...rows]
-    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-  const blob = new Blob([content], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const HEALTH_COLORS: Record<PoolHealth, { bg: string; color: string }> = {
   online:   { bg: '#14532d',  color: '#22c55e' },
@@ -102,7 +92,8 @@ export default function PoolsPage() {
   const currentSite = useSiteStore(s => s.currentSite);
   const siteId = currentSite?.id ?? '';
 
-  const { data: pools = [], isLoading: poolsLoading } = useGetSitePools(siteId);
+  const poolsQ = useGetSitePools(siteId);
+  const { data: pools = [], isLoading: poolsLoading } = poolsQ;
   const { data: devices = [] } = useGetDevices(siteId);
   const { data: racks = [] } = useGetRacks(siteId);
 
@@ -174,22 +165,21 @@ export default function PoolsPage() {
     });
   }, [filtered, sortCol, sortDir, deviceMap, rackMap, driveCountByPool]);
 
-  function handleExport() {
-    const headers = ['Pool Name', 'Type', 'Device', 'Rack', 'Health', 'Drive Count', 'RAID Level'];
-    const rows = sorted.map(p => {
+  function handleExportCsv() {
+    const data = sorted.map(p => {
       const dev = deviceMap.get(p.deviceId);
       const rack = dev?.rackId ? rackMap.get(dev.rackId)?.name ?? '' : '';
-      return [
-        p.name,
-        p.poolType,
-        dev?.name ?? '',
-        rack,
-        p.health,
-        String(driveCountByPool.get(p.id) ?? 0),
-        p.raidLevel,
-      ];
+      return {
+        'Pool Name': p.name,
+        Type: p.poolType,
+        Device: dev?.name ?? '',
+        Rack: rack,
+        Health: p.health,
+        'Drive Count': String(driveCountByPool.get(p.id) ?? 0),
+        'RAID Level': p.raidLevel,
+      };
     });
-    exportCsv('pools.csv', headers, rows);
+    exportToCSV(data, 'werkstack-pools.csv');
   }
 
   const pillGroups = [
@@ -239,6 +229,8 @@ export default function PoolsPage() {
         .expand-row { background: var(--color-bg); }
       `}</style>
 
+      {poolsQ.error && <QueryErrorState error={poolsQ.error} onRetry={() => poolsQ.refetch()} />}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
@@ -248,21 +240,12 @@ export default function PoolsPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            className="icon-btn"
-            onClick={handleExport}
-            style={{
-              padding: '6px 12px',
-              fontSize: 12,
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--color-surface)',
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer',
-            }}
-          >
-            Export CSV
-          </button>
+          <ExportDropdown
+            options={[
+              { label: 'Export CSV', onSelect: handleExportCsv },
+            ]}
+            disabled={sorted.length === 0}
+          />
           <button
             className="action-btn"
             onClick={() => alert('Select a device in the Rack View to create a pool')}

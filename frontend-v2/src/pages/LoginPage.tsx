@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/utils/api';
 import type { User } from '@werkstack/shared';
@@ -9,6 +9,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+
+  useEffect(() => {
+    api.get<{ setupRequired: boolean }>('/api/auth/setup-required')
+      .then(res => { if (res.setupRequired) navigate('/setup', { replace: true }); })
+      .catch(() => {});
+  }, [navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
