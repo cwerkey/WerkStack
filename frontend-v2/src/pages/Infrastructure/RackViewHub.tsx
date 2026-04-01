@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { DrawerTab, DeviceInstance, Connection, PlacedBlock } from '@werkstack/shared';
+import type { DrawerTab, DeviceInstance, Connection, PlacedBlock, OsVm, Container } from '@werkstack/shared';
 import { useNavStore } from '@/stores/navStore';
 import { useTypesStore } from '@/stores/typesStore';
 import { useSiteStore } from '@/stores/siteStore';
@@ -24,18 +24,31 @@ import {
   useCreatePool,
   useGetSiteShares,
 } from '@/api/storage';
+import {
+  useGetOsHosts,
+  useGetOsVms,
+  useCreateOsVm,
+  useGetOsApps,
+} from '@/api/os-stack';
+import { useGetDeviceContainers } from '@/api/containers';
+import { useGetSubnets, useGetSiteIps } from '@/api/network';
 import { ZoneSidebar } from './ZoneSidebar';
 import { RackView } from './RackView';
 import { DetailDrawer } from './DetailDrawer/DetailDrawer';
 import { InfoTab } from './DetailDrawer/InfoTab';
 import { PortsTab } from './DetailDrawer/PortsTab';
 import { StorageTab } from './DetailDrawer/StorageTab';
+import { OsStackTab } from './DetailDrawer/OsStackTab';
+import { NetworkTab } from './DetailDrawer/NetworkTab';
+import { IpAssignmentModal } from './DetailDrawer/IpAssignmentModal';
 import { StubTab } from './DetailDrawer/StubTab';
 import { DeployWizard } from '@/wizards/DeployWizard';
 import { ConnectionWizard } from '@/wizards/ConnectionWizard';
 import { ConnectionEditModal } from '@/wizards/ConnectionEditModal';
 import { PoolWizard } from '@/wizards/PoolWizard';
 import { ExternalStorageWizard } from '@/wizards/ExternalStorageWizard';
+import { VmWizard } from '@/wizards/VmWizard';
+import { DockerComposeImport } from '@/wizards/DockerComposeImport';
 import { RackPickerModal } from './RackPickerModal';
 import styles from './RackViewHub.module.css';
 
@@ -81,6 +94,16 @@ export default function RackViewHub() {
   const { data: sitePools = [] } = useGetSitePools(siteId);
   const { data: siteShares = [] } = useGetSiteShares(siteId);
 
+  // OS stack data
+  const { data: osHosts = [] } = useGetOsHosts(siteId);
+  const { data: osVms = [] } = useGetOsVms(siteId);
+  const { data: osApps = [] } = useGetOsApps(siteId);
+  const { data: osContainers = [] } = useGetDeviceContainers(siteId, selectedDeviceId ?? '');
+
+  // Network data
+  const { data: subnets = [] } = useGetSubnets(siteId);
+  const { data: siteIps = [] } = useGetSiteIps(siteId);
+
   // Mutations
   const updateDevice = useUpdateDevice(siteId);
   const deleteDevice = useDeleteDevice(siteId);
@@ -91,6 +114,7 @@ export default function RackViewHub() {
   const deleteConnection = useDeleteConnection(siteId);
   const createPool = useCreatePool(siteId);
   const installModule = useInstallModule(siteId, selectedDeviceId ?? '');
+  const createOsVm = useCreateOsVm(siteId);
 
   // Face toggle
   const [face, setFace] = useState<'front' | 'rear'>('front');
@@ -114,6 +138,16 @@ export default function RackViewHub() {
 
   // Rack picker state
   const [rackPickerOpen, setRackPickerOpen] = useState(false);
+
+  // VM wizard state
+  const [vmWizardOpen, setVmWizardOpen] = useState(false);
+  const [vmWizardHostId, setVmWizardHostId] = useState('');
+
+  // Docker Compose import state
+  const [composeImportOpen, setComposeImportOpen] = useState(false);
+
+  // IP assignment modal state
+  const [ipAssignOpen, setIpAssignOpen] = useState(false);
 
   // Sync URL params → navStore on mount
   const initialized = useRef(false);
@@ -413,7 +447,35 @@ export default function RackViewHub() {
             onConnectExternal={() => setExtStorageWizardOpen(true)}
           />
         )}
-        {selectedDevice && drawerTab !== 'info' && drawerTab !== 'ports' && drawerTab !== 'storage' && (
+        {selectedDevice && drawerTab === 'os' && (
+          <OsStackTab
+            device={selectedDevice}
+            hosts={osHosts}
+            vms={osVms}
+            apps={osApps}
+            containers={osContainers}
+            onAddVm={(hostId) => {
+              setVmWizardHostId(hostId);
+              setVmWizardOpen(true);
+            }}
+            onAddContainer={() => {/* TODO: container editor */}}
+            onImportCompose={() => setComposeImportOpen(true)}
+          />
+        )}
+        {selectedDevice && drawerTab === 'network' && (
+          <NetworkTab
+            device={selectedDevice}
+            subnets={subnets}
+            allIpAssignments={siteIps}
+            connections={selectedDeviceConnections}
+            hosts={osHosts}
+            vms={osVms}
+            apps={osApps}
+            containers={osContainers}
+            onAssignIp={() => setIpAssignOpen(true)}
+          />
+        )}
+        {selectedDevice && drawerTab === 'guides' && (
           <StubTab tab={drawerTab} />
         )}
       </DetailDrawer>
@@ -496,6 +558,61 @@ export default function RackViewHub() {
             });
           }}
           onClose={() => setExtStorageWizardOpen(false)}
+        />
+      )}
+
+      {/* VM Wizard */}
+      {vmWizardOpen && selectedDevice && (() => {
+        const host = osHosts.find(h => h.id === vmWizardHostId);
+        const hostOsName = host
+          ? `${host.hostOs}${host.osVersion ? ` ${host.osVersion}` : ''}`
+          : 'Unknown';
+        return (
+          <VmWizard
+            open={vmWizardOpen}
+            hostId={vmWizardHostId}
+            hostOsName={hostOsName}
+            siteId={siteId}
+            onSubmit={(payload) => {
+              createOsVm.mutate(payload, {
+                onSuccess: () => {
+                  setVmWizardOpen(false);
+                  setVmWizardHostId('');
+                },
+              });
+            }}
+            onClose={() => {
+              setVmWizardOpen(false);
+              setVmWizardHostId('');
+            }}
+          />
+        );
+      })()}
+
+      {/* Docker Compose Import */}
+      {composeImportOpen && selectedDevice && (() => {
+        const host = osHosts.find(h => h.deviceId === selectedDevice.id);
+        return (
+          <DockerComposeImport
+            open={composeImportOpen}
+            siteId={siteId}
+            hostId={host?.id}
+            onClose={() => setComposeImportOpen(false)}
+            onImported={() => setComposeImportOpen(false)}
+          />
+        );
+      })()}
+
+      {/* IP Assignment Modal */}
+      {ipAssignOpen && selectedDevice && (
+        <IpAssignmentModal
+          open={ipAssignOpen}
+          siteId={siteId}
+          deviceId={selectedDevice.id}
+          subnets={subnets}
+          allIpAssignments={siteIps}
+          onClose={() => setIpAssignOpen(false)}
+          onAssigned={() => setIpAssignOpen(false)}
         />
       )}
 

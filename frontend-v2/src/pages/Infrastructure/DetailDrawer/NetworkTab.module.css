@@ -1,0 +1,243 @@
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Section headers ──────────────────────────────────────────────────── */
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #1e2428;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: #8a9299;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.addBtn {
+  appearance: none;
+  background: none;
+  border: 1px solid #2a3038;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #8a9299;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.addBtn:hover {
+  border-color: #c47c5a;
+  color: #c47c5a;
+}
+
+/* ── IP assignment rows ──────────────────────────────────────────────── */
+
+.ipRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.ipRow:hover {
+  background: #1e2428;
+}
+
+.ipAddress {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #d4d9dd;
+  min-width: 110px;
+  flex-shrink: 0;
+}
+
+.ipSubnet {
+  font-size: 10px;
+  color: #8a9299;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ipLabel {
+  font-size: 10px;
+  color: #5a6068;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── VLAN badge ──────────────────────────────────────────────────────── */
+
+.vlanBadge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  color: #fff;
+}
+
+/* ── VLAN membership rows ────────────────────────────────────────────── */
+
+.vlanRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.vlanRow:hover {
+  background: #1e2428;
+}
+
+.vlanCidr {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8a9299;
+  flex: 1;
+}
+
+.vlanCount {
+  font-size: 10px;
+  color: #5a6068;
+  flex-shrink: 0;
+}
+
+/* ── Subnet info rows ────────────────────────────────────────────────── */
+
+.subnetRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.subnetRow:hover {
+  background: #1e2428;
+}
+
+.subnetName {
+  color: #d4d9dd;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.subnetCidr {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8a9299;
+  flex: 1;
+}
+
+.subnetGateway {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #5a6068;
+  flex-shrink: 0;
+}
+
+.subnetIpCount {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #1e2428;
+  color: #8a9299;
+  flex-shrink: 0;
+}
+
+/* ── Interface rows ──────────────────────────────────────────────────── */
+
+.interfaceRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.interfaceRow:hover {
+  background: #1e2428;
+}
+
+.interfaceSource {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.sourceMgmt {
+  background: #1a2a2a;
+  color: #4a9a8a;
+}
+
+.sourceHost {
+  background: #2a2a1a;
+  color: #9a9a4a;
+}
+
+.sourceVm {
+  background: #1a1a2a;
+  color: #6a6aba;
+}
+
+.sourceApp {
+  background: #2a1a2a;
+  color: #9a6a9a;
+}
+
+.sourceContainer {
+  background: #2a1f15;
+  color: #c47c5a;
+}
+
+.interfaceName {
+  color: #d4d9dd;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.interfaceIp {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #8a9299;
+  flex-shrink: 0;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────── */
+
+.empty {
+  text-align: center;
+  color: #5a6068;
+  font-size: 12px;
+  padding: 16px 0;
+  font-family: 'Inter', system-ui, sans-serif;
+}

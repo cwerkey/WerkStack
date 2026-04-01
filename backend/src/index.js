@@ -25,6 +25,7 @@ const blueprintRoutes   = require('./routes/blueprints');
 const ledgerRoutes      = require('./routes/ledger');
 const monitorRoutes     = require('./routes/monitor');
 const gitSyncRoutes     = require('./routes/git_sync');
+const containersRoutes  = require('./routes/containers');
 const conflictsRoutes   = require('./routes/conflicts');
 const auditLogRoutes    = require('./routes/audit_log');
 const modulesRoutes     = require('./routes/modules');
@@ -35,12 +36,14 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 
 const app = express();
 
-const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173')
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173,http://localhost:5174,http://localhost:5175')
   .split(',').map(o => o.trim());
 
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // Allow any localhost origin in development
+    if (origin && origin.match(/^https?:\/\/localhost:\d+$/)) return cb(null, true);
     cb(new Error(`CORS: ${origin} not allowed`));
   },
   credentials: true,
@@ -88,6 +91,7 @@ async function start() {
   app.use('/api/sites',     storageRoutes(db));
   app.use('/api/sites',     osStackRoutes(db));
   app.use('/api/sites',     networkRoutes(db));
+  app.use('/api/sites',     containersRoutes(db));
   app.use('/api/sites/:siteId/overview', overviewRoutes(db));
   app.use('/api/sites/:siteId/tickets',  ticketsRoutes(db));
   app.use('/api/sites/:siteId/guides',        guidesRoutes(db));

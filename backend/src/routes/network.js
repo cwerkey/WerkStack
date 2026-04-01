@@ -370,6 +370,25 @@ module.exports = function networkRoutes(db) {
     }
   );
 
+  router.get('/:siteId/ips', requireAuth, requireSiteAccess(db), async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId } = req.params;
+    try {
+      const result = await withOrg(db, orgId, c =>
+        c.query(
+          `SELECT * FROM ip_assignments
+           WHERE site_id = $1 AND org_id = $2
+           ORDER BY ip`,
+          [siteId, orgId]
+        )
+      );
+      res.json(result.rows.map(toIp));
+    } catch (err) {
+      console.error(`[GET /sites/${siteId}/ips]`, err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
   router.get('/:siteId/subnets/:subnetId/ips', requireAuth, requireSiteAccess(db), async (req, res) => {
     const { orgId }  = req.user;
     const { siteId, subnetId } = req.params;

@@ -1,0 +1,54 @@
+/* Minimal CSS module for VmWizard -- overlay and panel classes.
+   Most styling is done inline to match ConnectionWizard pattern. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.panel {
+  background: #1a1e22;
+  border: 1px solid #2a3038;
+  border-radius: 8px;
+  padding: 28px 32px;
+  width: 520px;
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-sizing: border-box;
+}
+
+/* Dynamic row list (drives, apps) */
+.dynamicRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dynamicRow:hover .removeBtn {
+  opacity: 1;
+}
+
+.removeBtn {
+  appearance: none;
+  background: none;
+  border: none;
+  color: #5a6068;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.removeBtn:hover {
+  color: #e8615a;
+  opacity: 1;
+}
