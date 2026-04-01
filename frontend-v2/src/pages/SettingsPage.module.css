@@ -1,0 +1,189 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tabBtn {
+  background: none;
+  border: none;
+  color: #8a9299;
+  cursor: pointer;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: Inter, system-ui, sans-serif;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s;
+}
+
+.tabBtn:hover {
+  color: #c47c5a;
+}
+
+.tabBtnActive {
+  color: #d4d9dd;
+  border-bottom-color: #c47c5a;
+}
+
+.subTab {
+  background: none;
+  border: 1px solid #2a3038;
+  border-radius: 4px;
+  color: #8a9299;
+  cursor: pointer;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-family: Inter, system-ui, sans-serif;
+  transition: all 0.15s;
+}
+
+.subTab:hover {
+  color: #c47c5a;
+  border-color: #3a4248;
+}
+
+.subTabActive {
+  color: #d4d9dd;
+  background: #262c30;
+  border-color: #c47c5a;
+}
+
+.tableRow {
+  transition: background 0.1s;
+}
+
+.tableRow:hover {
+  background: #1e2428;
+}
+
+.groupCard {
+  border: 1px solid #2a3038;
+  border-radius: 4px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  background: #1a1e22;
+}
+
+.groupCard:hover {
+  border-color: #3a4248;
+}
+
+.groupCardActive {
+  border-color: #c47c5a;
+}
+
+.primaryBtn {
+  background: #c47c5a;
+  border: none;
+  color: #fff;
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: Inter, system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.primaryBtn:hover {
+  background: #a8653e;
+}
+
+.ghostBtn {
+  background: none;
+  border: 1px solid #2a3038;
+  color: #8a9299;
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: Inter, system-ui, sans-serif;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ghostBtn:hover {
+  background: #262c30;
+  border-color: #3a4248;
+  color: #d4d9dd;
+}
+
+.dangerBtn {
+  background: none;
+  border: 1px solid #5c2828;
+  color: #e06060;
+  padding: 5px 14px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: Inter, system-ui, sans-serif;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.dangerBtn:hover {
+  background: #3a1818;
+  border-color: #e06060;
+}
+
+.checkbox {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #3a4248;
+  border-radius: 3px;
+  background: #161a1d;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+}
+
+.checkbox:checked {
+  background: #c47c5a;
+  border-color: #c47c5a;
+}
+
+.checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox:hover {
+  border-color: #c47c5a;
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-family: Inter, system-ui, sans-serif;
+  background: #262c30;
+  color: #8a9299;
+  border: 1px solid #2a3038;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalPanel {
+  background: #1a1e22;
+  border: 1px solid #2a3038;
+  border-radius: 6px;
+  padding: 20px 24px;
+  min-width: 400px;
+  max-width: 500px;
+}
