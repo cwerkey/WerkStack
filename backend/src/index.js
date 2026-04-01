@@ -32,6 +32,8 @@ const modulesRoutes     = require('./routes/modules');
 const taxonomiesRoutes  = require('./routes/taxonomies');
 const topologyRoutes    = require('./routes/topology');
 const vlansRoutes       = require('./routes/vlans');
+const todosRoutes            = require('./routes/todos');
+const guidesByEntityRoutes   = require('./routes/guides_entity');
 const startWorkers      = require('./workers');
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -112,6 +114,8 @@ async function start() {
   app.use('/api/sites/:siteId/taxonomies',  taxonomiesRoutes(db));
   app.use('/api/sites',                     topologyRoutes(db));
   app.use('/api/sites',                     vlansRoutes(db));
+  app.use('/api/sites',                     todosRoutes(db));
+  app.use('/api/sites/:siteId/guides',      guidesByEntityRoutes(db));
 
   startWorkers(db);
 
