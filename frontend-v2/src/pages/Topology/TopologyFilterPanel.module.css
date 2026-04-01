@@ -1,0 +1,117 @@
+.panel {
+  width: 240px;
+  min-width: 240px;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--color-surface, #1a1f24);
+  border-right: 1px solid var(--color-border, #2a3038);
+}
+
+.section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border, #2a3038);
+}
+
+.sectionTitle {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #5a6068);
+  margin: 0 0 8px;
+}
+
+.allToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text, #d4d9dd);
+  margin-bottom: 2px;
+}
+
+.allToggle:hover {
+  color: var(--color-accent, #c47c5a);
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--color-text, #d4d9dd);
+  cursor: pointer;
+}
+
+.checkItem:hover {
+  color: var(--color-accent, #c47c5a);
+}
+
+.checkItem input[type="checkbox"] {
+  accent-color: var(--color-accent, #c47c5a);
+  margin: 0;
+  cursor: pointer;
+}
+
+.roleGroup {
+  margin-top: 6px;
+}
+
+.roleLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-dim, #3a4248);
+  margin: 6px 0 2px;
+}
+
+.switchItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-text, #d4d9dd);
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+
+.switchItem:hover {
+  background: var(--color-hover, #ffffff08);
+}
+
+.switchItemActive {
+  composes: switchItem;
+  background: var(--color-accent, #c47c5a);
+  color: #fff;
+}
+
+.switchItemActive:hover {
+  background: var(--color-accent-dark, #a8653e);
+}
+
+.colorDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.emptyHint {
+  font-size: 11px;
+  color: var(--color-text-dim, #3a4248);
+  font-style: italic;
+}

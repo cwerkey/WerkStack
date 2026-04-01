@@ -177,6 +177,8 @@ export interface DeviceInstance {
   shelfDeviceId?: string;
   shelfCol?:      number;
   shelfRow?:      number;
+  switchRole?:    'core' | 'edge' | 'access' | 'unclassified';
+  isGateway?:     boolean;
   createdAt:      string;
 }
 

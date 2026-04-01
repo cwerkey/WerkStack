@@ -15,7 +15,7 @@ export default defineConfig({
     port: process.env.PORT ? parseInt(process.env.PORT) : 5174,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3002',
         changeOrigin: true,
       },
     },

@@ -29,6 +29,8 @@ const DeviceInstanceSchema = z.object({
   shelfDeviceId: z.string().uuid().optional(),
   shelfCol:      z.number().int().min(0).optional(),
   shelfRow:      z.number().int().min(0).optional(),
+  switchRole:    z.enum(['core', 'edge', 'access', 'unclassified']).optional(),
+  isGateway:     z.boolean().optional(),
 });
 
 async function withOrg(db, orgId, fn) {
@@ -76,6 +78,8 @@ function toDevice(row) {
     shelfDeviceId:  row.shelf_device_id ?? undefined,
     shelfCol:       row.shelf_col ?? undefined,
     shelfRow:       row.shelf_row ?? undefined,
+    switchRole:     row.switch_role ?? 'unclassified',
+    isGateway:      row.is_gateway ?? false,
     createdAt:      row.created_at,
   };
 }
@@ -232,7 +236,7 @@ module.exports = function racksRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId } = req.params;
-      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow } = req.body;
+      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow, switchRole, isGateway } = req.body;
 
       try {
         if (rackId && rackU && uHeight) {
@@ -252,13 +256,14 @@ module.exports = function racksRoutes(db) {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `INSERT INTO device_instances
-               (org_id, site_id, zone_id, rack_id, template_id, type_id, name, rack_u, u_height, face, ip, serial, asset_tag, notes, is_draft, shelf_device_id, shelf_col, shelf_row)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+               (org_id, site_id, zone_id, rack_id, template_id, type_id, name, rack_u, u_height, face, ip, serial, asset_tag, notes, is_draft, shelf_device_id, shelf_col, shelf_row, switch_role, is_gateway)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
              RETURNING *`,
             [orgId, siteId, zoneId ?? null, rackId ?? null, templateId ?? null,
              typeId, name, rackU ?? null, uHeight ?? null, face || 'front',
              ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false,
-             shelfDeviceId ?? null, shelfCol ?? null, shelfRow ?? null]
+             shelfDeviceId ?? null, shelfCol ?? null, shelfRow ?? null,
+             switchRole ?? 'unclassified', isGateway ?? false]
           )
         );
         res.status(201).json(toDevice(result.rows[0]));
@@ -278,7 +283,7 @@ module.exports = function racksRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, deviceId } = req.params;
-      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow } = req.body;
+      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow, switchRole, isGateway } = req.body;
 
       try {
         if (rackId && rackU && uHeight) {
@@ -301,13 +306,15 @@ module.exports = function racksRoutes(db) {
              SET template_id = $1, type_id = $2, name = $3, rack_id = $4, zone_id = $5,
                  rack_u = $6, u_height = $7, face = $8, ip = $9, serial = $10,
                  asset_tag = $11, notes = $12, is_draft = $13,
-                 shelf_device_id = $14, shelf_col = $15, shelf_row = $16
-             WHERE id = $17 AND site_id = $18 AND org_id = $19
+                 shelf_device_id = $14, shelf_col = $15, shelf_row = $16,
+                 switch_role = $17, is_gateway = $18
+             WHERE id = $19 AND site_id = $20 AND org_id = $21
              RETURNING *`,
             [templateId ?? null, typeId, name, rackId ?? null, zoneId ?? null,
              rackU ?? null, uHeight ?? null, face || 'front',
              ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false,
              shelfDeviceId ?? null, shelfCol ?? null, shelfRow ?? null,
+             switchRole ?? 'unclassified', isGateway ?? false,
              deviceId, siteId, orgId]
           )
         );

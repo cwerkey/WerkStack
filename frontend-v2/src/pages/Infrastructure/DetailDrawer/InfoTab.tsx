@@ -22,6 +22,8 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
   const [serial, setSerial] = useState(device.serial ?? '');
   const [assetTag, setAssetTag] = useState(device.assetTag ?? '');
   const [notes, setNotes] = useState(device.notes ?? '');
+  const [switchRole, setSwitchRole] = useState<'core' | 'edge' | 'access' | 'unclassified'>(device.switchRole ?? 'unclassified');
+  const [isGateway, setIsGateway] = useState(device.isGateway ?? false);
 
   useEffect(() => {
     setName(device.name);
@@ -30,14 +32,17 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
     setSerial(device.serial ?? '');
     setAssetTag(device.assetTag ?? '');
     setNotes(device.notes ?? '');
+    setSwitchRole(device.switchRole ?? 'unclassified');
+    setIsGateway(device.isGateway ?? false);
     setEditing(false);
-  }, [device.id, device.name, device.ip, device.serial, device.assetTag, device.notes, device.typeId]);
+  }, [device.id, device.name, device.ip, device.serial, device.assetTag, device.notes, device.typeId, device.switchRole, device.isGateway]);
 
   const dt = deviceTypes.find(t => t.id === device.typeId);
   const tpl = templates.find(t => t.id === device.templateId);
   const rack = racks.find(r => r.id === device.rackId);
   const zone = zones.find(z => z.id === device.zoneId);
   const isRacked = !!device.rackId;
+  const showSwitchFields = device.typeId.startsWith('dt-switch') || device.typeId.startsWith('dt-router') || (device.switchRole != null && device.switchRole !== 'unclassified');
 
   function handleSave() {
     onSave({
@@ -48,6 +53,8 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
       serial: serial || undefined,
       assetTag: assetTag || undefined,
       notes: notes || undefined,
+      switchRole,
+      isGateway,
     });
     setEditing(false);
   }
@@ -59,6 +66,8 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
     setSerial(device.serial ?? '');
     setAssetTag(device.assetTag ?? '');
     setNotes(device.notes ?? '');
+    setSwitchRole(device.switchRole ?? 'unclassified');
+    setIsGateway(device.isGateway ?? false);
     setEditing(false);
   }
 
@@ -92,6 +101,12 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
             <Field label="Serial" value={device.serial ?? '—'} />
             <Field label="Asset Tag" value={device.assetTag ?? '—'} />
             <Field label="Status" value={device.currentStatus ?? 'unknown'} />
+            {showSwitchFields && (
+              <Field label="Switch Role" value={device.switchRole ?? 'unclassified'} />
+            )}
+            {showSwitchFields && (
+              <Field label="Gateway" value={device.isGateway ? 'Yes' : 'No'} />
+            )}
             <Field label="Notes" value={device.notes ?? '—'} />
           </dl>
           <div className={styles.actions}>
@@ -136,6 +151,23 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
             Notes
             <textarea className={styles.textarea} value={notes} onChange={e => setNotes(e.target.value)} rows={4} />
           </label>
+          {showSwitchFields && (
+            <label className={styles.label}>
+              Switch Role
+              <select className={styles.input} value={switchRole} onChange={e => setSwitchRole(e.target.value as 'core' | 'edge' | 'access' | 'unclassified')}>
+                <option value="unclassified">unclassified</option>
+                <option value="core">core</option>
+                <option value="edge">edge</option>
+                <option value="access">access</option>
+              </select>
+            </label>
+          )}
+          {showSwitchFields && (
+            <label className={styles.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={isGateway} onChange={e => setIsGateway(e.target.checked)} style={{ accentColor: 'var(--color-accent, #c47c5a)' }} />
+              Is Gateway
+            </label>
+          )}
           <div className={styles.actions}>
             <button className={styles.btnDanger} onClick={handleDelete}>Delete</button>
             <div style={{ display: 'flex', gap: 8 }}>
