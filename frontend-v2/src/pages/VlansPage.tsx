@@ -5,6 +5,7 @@ import { useGetVlans, useCreateVlan, useUpdateVlan, useDeleteVlan } from '@/api/
 import { useGetSubnets } from '@/api/network';
 import { useSiteStore } from '@/stores/siteStore';
 import { uid } from '@/utils/uid';
+import Skeleton from '@/components/Skeleton';
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -535,8 +536,16 @@ export default function VlansPage() {
 
       {/* Table */}
       {vlansLoading ? (
-        <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>
-          Loading VLANs…
+        <div style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-md)',
+          overflow: 'hidden',
+          padding: '20px 24px',
+        }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody><Skeleton variant="table-row" count={4} /></tbody>
+          </table>
         </div>
       ) : sorted.length === 0 ? (
         <div style={{

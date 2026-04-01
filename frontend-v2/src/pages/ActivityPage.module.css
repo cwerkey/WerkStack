@@ -1,0 +1,372 @@
+/* ── Page Layout ─────────────────────────────────────────────────────────────── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: #161a1d;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #2a3038;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #d4d9dd;
+  flex: 1;
+}
+
+.refreshInfo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #8a9299;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────────── */
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #2a3038;
+  border-top-color: #c47c5a;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Scrollable Content ──────────────────────────────────────────────────────── */
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ── Cards Section ───────────────────────────────────────────────────────────── */
+
+.cardsSection {
+  padding: 20px 24px 0;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: #8a9299;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .cardsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 580px) {
+  .cardsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.deviceCard {
+  background: #1a1e22;
+  border: 1px solid #2a3038;
+  border-radius: 6px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.deviceCard:hover {
+  border-color: #3a4248;
+  background: #1e2428;
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cardName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4d9dd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.statusText {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cardDetail {
+  font-size: 11px;
+  color: #8a9299;
+}
+
+/* ── Log Section ─────────────────────────────────────────────────────────────── */
+
+.logSection {
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+  border-top: 1px solid #2a3038;
+}
+
+.logHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-bottom: 1px solid #2a3038;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.logTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d4d9dd;
+  margin-right: 4px;
+}
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.filterPill {
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid #2a3038;
+  background: none;
+  color: #8a9299;
+  font-size: 11px;
+  font-family: Inter, system-ui, sans-serif;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.filterPill:hover {
+  border-color: #3a4248;
+  color: #d4d9dd;
+}
+
+.filterPillActive {
+  border-color: #c47c5a;
+  color: #c47c5a;
+  background: rgba(196, 124, 90, 0.1);
+}
+
+.deviceSelect {
+  background: #1a1e22;
+  border: 1px solid #2a3038;
+  border-radius: 4px;
+  padding: 3px 8px;
+  color: #d4d9dd;
+  font-size: 11px;
+  font-family: Inter, system-ui, sans-serif;
+  cursor: pointer;
+  outline: none;
+  margin-left: auto;
+}
+
+/* ── Event Table ─────────────────────────────────────────────────────────────── */
+
+.eventTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.eventTh {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #8a9299;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #2a3038;
+  background: #1a1e22;
+  white-space: nowrap;
+}
+
+.eventTh:first-child {
+  padding-left: 24px;
+}
+
+.eventRow {
+  border-bottom: 1px solid #1e2428;
+  transition: background 0.1s;
+}
+
+.eventRow:hover {
+  background: #1e2428;
+}
+
+.eventTd {
+  padding: 9px 12px;
+  color: #d4d9dd;
+  vertical-align: middle;
+}
+
+.eventTd:first-child {
+  padding-left: 24px;
+}
+
+.eventTime {
+  font-size: 11px;
+  color: #8a9299;
+  white-space: nowrap;
+}
+
+.eventDevice {
+  font-size: 13px;
+  color: #d4d9dd;
+  font-weight: 500;
+}
+
+/* ── Badges ──────────────────────────────────────────────────────────────────── */
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.badgeStatusChange {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+.badgeMissedPing {
+  background: #78350f;
+  color: #f59e0b;
+}
+
+.badgeRecovery {
+  background: #14532d;
+  color: #22c55e;
+}
+
+.badgeManual {
+  background: #1f2937;
+  color: #9ca3af;
+}
+
+.stateArrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8a9299;
+}
+
+/* ── Empty / Loading States ──────────────────────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: #8a9299;
+}
+
+.emptyTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #d4d9dd;
+  margin-bottom: 6px;
+}
+
+.emptySubtext {
+  font-size: 12px;
+  color: #8a9299;
+  max-width: 280px;
+}
+
+.loadingText {
+  padding: 32px 24px;
+  font-size: 13px;
+  color: #8a9299;
+  text-align: center;
+}
+
+/* ── Export Button ───────────────────────────────────────────────────────────── */
+
+.exportBtn {
+  padding: 5px 14px;
+  font-size: 11px;
+  font-family: Inter, system-ui, sans-serif;
+  background: none;
+  border: 1px solid #2a3038;
+  border-radius: 4px;
+  color: #8a9299;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.exportBtn:hover {
+  background: #262c30;
+  border-color: #3a4248;
+  color: #d4d9dd;
+}

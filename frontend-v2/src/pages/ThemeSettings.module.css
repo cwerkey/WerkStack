@@ -1,0 +1,137 @@
+.container {
+  max-width: 480px;
+}
+
+.section {
+  margin-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 10px;
+  color: #8a9299;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 10px;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.card {
+  background: #1a1e22;
+  border: 1px solid #2a3038;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.toggleRow {
+  display: flex;
+  gap: 6px;
+}
+
+.toggleBtn {
+  background: none;
+  border: 1px solid #2a3038;
+  color: #8a9299;
+  padding: 6px 18px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: Inter, system-ui, sans-serif;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggleBtn:hover {
+  border-color: #3a4248;
+  color: #d4d9dd;
+}
+
+.toggleBtnActive {
+  background: #262c30;
+  border-color: #c47c5a;
+  color: #d4d9dd;
+}
+
+.accentRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.colorSwatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid #3a4248;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+
+.colorSwatch:hover {
+  border-color: #c47c5a;
+}
+
+.hexInput {
+  background: #161a1d;
+  border: 1px solid #2a3038;
+  border-radius: 4px;
+  padding: 5px 10px;
+  color: #d4d9dd;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  width: 100px;
+}
+
+.hexInput:focus {
+  border-color: #c47c5a;
+}
+
+.colorPickerHidden {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.previewPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.previewRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.previewLabel {
+  font-size: 11px;
+  color: #8a9299;
+  font-family: Inter, system-ui, sans-serif;
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.previewSwatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid #3a4248;
+  flex-shrink: 0;
+}
+
+.previewText {
+  font-size: 13px;
+  font-family: Inter, system-ui, sans-serif;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid #2a3038;
+}
+
+.resetRow {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #2a3038;
+}

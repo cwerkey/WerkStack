@@ -14,6 +14,10 @@ import {
   type PermissionCategory,
   type CreateGroupPayload,
 } from '@/api/rbac';
+import TemplatesSettings from './TemplatesSettings';
+import ZonesRacksSettings from './ZonesRacksSettings';
+import GitSyncSettings from './GitSyncSettings';
+import ThemeSettings from './ThemeSettings';
 import styles from './SettingsPage.module.css';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -724,8 +728,16 @@ function GroupUsersList({ groupId, siteId }: { groupId: string; siteId: string }
 
 // ── Main Settings Page ────────────────────────────────────────────────────────
 
-type MainTab = 'users-permissions' | 'import';
+type MainTab = 'users-permissions' | 'templates' | 'zones-racks' | 'git-sync' | 'theme';
 type SubTab = 'users' | 'security-groups';
+
+const MAIN_TABS: { id: MainTab; label: string }[] = [
+  { id: 'users-permissions', label: 'Users & Permissions' },
+  { id: 'templates', label: 'Templates' },
+  { id: 'zones-racks', label: 'Zones & Racks' },
+  { id: 'git-sync', label: 'Git Sync' },
+  { id: 'theme', label: 'Theme' },
+];
 
 export default function SettingsPage() {
   const currentSite = useSiteStore((s) => s.currentSite);
@@ -739,18 +751,15 @@ export default function SettingsPage() {
       <div style={S.header}>
         <h1 style={S.h1}>Settings</h1>
         <div style={S.tabBar}>
-          <button
-            className={`${styles.tabBtn} ${mainTab === 'users-permissions' ? styles.tabBtnActive : ''}`}
-            onClick={() => setMainTab('users-permissions')}
-          >
-            Users & Permissions
-          </button>
-          <button
-            className={`${styles.tabBtn} ${mainTab === 'import' ? styles.tabBtnActive : ''}`}
-            onClick={() => setMainTab('import')}
-          >
-            Import
-          </button>
+          {MAIN_TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`${styles.tabBtn} ${mainTab === t.id ? styles.tabBtnActive : ''}`}
+              onClick={() => setMainTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -782,11 +791,19 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {mainTab === 'import' && (
-          <div style={S.emptyState}>
-            <p style={{ color: '#8a9299', fontSize: '13px' }}>Import functionality coming soon</p>
-          </div>
+        {mainTab === 'templates' && <TemplatesSettings siteId={siteId} />}
+
+        {mainTab === 'zones-racks' && (
+          !siteId ? (
+            <div style={S.emptyState}>Select a site to manage zones and racks</div>
+          ) : (
+            <ZonesRacksSettings siteId={siteId} />
+          )
         )}
+
+        {mainTab === 'git-sync' && <GitSyncSettings siteId={siteId} />}
+
+        {mainTab === 'theme' && <ThemeSettings />}
       </div>
     </div>
   );

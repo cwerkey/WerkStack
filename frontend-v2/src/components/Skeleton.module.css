@@ -1,0 +1,58 @@
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, #1e2428 25%, #262c30 50%, #1e2428 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s linear infinite;
+  border-radius: 3px;
+}
+
+/* table-row variant */
+.tableRow td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #1e2428;
+}
+
+.tableCell {
+  height: 14px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #1e2428 25%, #262c30 50%, #1e2428 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s linear infinite;
+  display: block;
+}
+
+/* card variant */
+.card {
+  border: 1px solid #1e2428;
+  border-radius: 6px;
+  padding: 12px 14px;
+  height: 80px;
+  background: linear-gradient(90deg, #1e2428 25%, #262c30 50%, #1e2428 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s linear infinite;
+  margin-bottom: 10px;
+}
+
+/* text variant */
+.textLine {
+  height: 13px;
+  border-radius: 3px;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, #1e2428 25%, #262c30 50%, #1e2428 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s linear infinite;
+}
+
+/* block variant */
+.block {
+  width: 100%;
+  height: 32px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #1e2428 25%, #262c30 50%, #1e2428 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.5s linear infinite;
+}

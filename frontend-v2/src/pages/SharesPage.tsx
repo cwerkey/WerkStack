@@ -6,6 +6,7 @@ import { useGetDevices } from '@/api/devices';
 import { useGetRacks } from '@/api/racks';
 import { useSiteStore } from '@/stores/siteStore';
 import FilterPills from '@/components/FilterPills';
+import Skeleton from '@/components/Skeleton';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -264,8 +265,16 @@ export default function SharesPage() {
 
       {/* Table */}
       {sharesLoading ? (
-        <div style={{ padding: 32, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>
-          Loading shares…
+        <div style={{
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-md)',
+          overflow: 'hidden',
+          padding: '20px 24px',
+        }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody><Skeleton variant="table-row" count={4} /></tbody>
+          </table>
         </div>
       ) : sorted.length === 0 ? (
         <div style={{
