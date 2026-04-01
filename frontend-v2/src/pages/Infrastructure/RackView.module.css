@@ -10,10 +10,12 @@
   flex-direction: column-reverse;
   width: 32px;
   flex-shrink: 0;
+  padding: 1px 0; /* offset rackBody top/bottom borders so labels align with slots */
 }
 
 .uLabel {
   height: 40px;
+  flex-shrink: 0; /* must not shrink — must stay 40px to match rack slot height */
   display: flex;
   align-items: center;
   justify-content: center;

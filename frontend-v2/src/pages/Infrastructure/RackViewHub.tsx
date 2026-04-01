@@ -50,6 +50,8 @@ import { ExternalStorageWizard } from '@/wizards/ExternalStorageWizard';
 import { VmWizard } from '@/wizards/VmWizard';
 import { DockerComposeImport } from '@/wizards/DockerComposeImport';
 import { RackPickerModal } from './RackPickerModal';
+import { ExportDropdown } from '@/components/ExportDropdown';
+import { exportToPNG, exportRackToPDF } from '@/utils/exportUtils';
 import styles from './RackViewHub.module.css';
 
 export default function RackViewHub() {
@@ -148,6 +150,38 @@ export default function RackViewHub() {
 
   // IP assignment modal state
   const [ipAssignOpen, setIpAssignOpen] = useState(false);
+
+  // Rack area ref for export
+  const rackAreaRef = useRef<HTMLDivElement>(null);
+
+  // Export handlers
+  const currentSite = useSiteStore(s => s.currentSite);
+
+  async function handleExportPng() {
+    if (!rackAreaRef.current) return;
+    const rackName = racks.find(r => r.id === selectedRackId)?.name ?? 'rack';
+    await exportToPNG(rackAreaRef.current, `${rackName}.png`);
+  }
+
+  async function handleExportPdf() {
+    if (!rackAreaRef.current) return;
+    const rack = racks.find(r => r.id === selectedRackId);
+    const siteName = currentSite?.name ?? 'Site';
+    const rackName = rack?.name ?? 'Rack';
+    const legend = devices
+      .filter(d => d.rackId === selectedRackId)
+      .map(d => ({
+        name: d.name,
+        type: d.typeId ?? '',
+        uPos: d.rackU != null ? `U${d.rackU}` : '—',
+        ip: d.ip ?? '',
+      }));
+    await exportRackToPDF({
+      title: `${siteName} — ${rackName}`,
+      rackElement: rackAreaRef.current,
+      legend,
+    });
+  }
 
   // Sync URL params → navStore on mount
   const initialized = useRef(false);
@@ -369,11 +403,33 @@ export default function RackViewHub() {
                 Rear
               </button>
             </div>
+            <ExportDropdown
+              disabled={!currentRack}
+              options={[
+                { label: 'Export PNG', onSelect: handleExportPng },
+                { label: 'Export PDF', onSelect: handleExportPdf },
+              ]}
+            />
+            <button
+              onClick={() => setDeployWizardOpen(true)}
+              style={{
+                background: '#c47c5a',
+                border: 'none',
+                borderRadius: 4,
+                padding: '5px 14px',
+                fontFamily: 'Inter,system-ui,sans-serif',
+                fontSize: 12,
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              + Deploy Device
+            </button>
           </div>
         </div>
 
         {/* Rack View */}
-        <div className={styles.rackArea}>
+        <div className={styles.rackArea} ref={rackAreaRef}>
           {currentRack ? (
             <RackView
               rack={currentRack}
@@ -480,11 +536,27 @@ export default function RackViewHub() {
         )}
       </DetailDrawer>
 
-      {/* Deploy Wizard stub */}
+      {/* Deploy Wizard */}
       <DeployWizard
         open={deployWizardOpen}
+        siteId={siteId}
+        rackId={selectedRackId ?? undefined}
         rackU={deployTargetU}
-        onClose={() => setDeployWizardOpen(false)}
+        devices={devices}
+        zones={zones}
+        racks={racks}
+        templates={templates}
+        onClose={() => {
+          setDeployWizardOpen(false);
+          setDeployTargetU(undefined);
+        }}
+        onDeployed={(deviceId, rackId, zoneId) => {
+          setDeployWizardOpen(false);
+          setDeployTargetU(undefined);
+          if (zoneId && rackId) {
+            navigate(`/infrastructure/rack/${zoneId}/${rackId}/${deviceId}`);
+          }
+        }}
       />
 
       {/* Connection Wizard */}

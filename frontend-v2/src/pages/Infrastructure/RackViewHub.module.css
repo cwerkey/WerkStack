@@ -87,6 +87,7 @@
   overflow: auto;
   display: flex;
   justify-content: center;
+  align-items: flex-start; /* prevent rackFrame from being constrained to viewport height */
   padding: 24px;
 }
 

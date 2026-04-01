@@ -26,6 +26,19 @@ function vlanToForm(v: Vlan): VlanFormState {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+function exportCsv(filename: string, headers: string[], rows: string[][]) {
+  const content = [headers, ...rows]
+    .map(r => r.map(c => `"${(c ?? '').replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob([content], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const sortBtnStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
@@ -442,6 +455,15 @@ export default function VlansPage() {
     deleteVlan.mutate(id);
   }
 
+  function handleExport() {
+    const headers = ['VLAN ID', 'Name', 'Color', 'Subnets', 'Notes'];
+    const rows = sorted.map(v => {
+      const linked = subnets.filter(s => s.vlan === v.vlanId).map(s => s.cidr).join('; ');
+      return [String(v.vlanId), v.name, v.color, linked, v.notes ?? ''];
+    });
+    exportCsv('vlans.csv', headers, rows);
+  }
+
   const thStyle: React.CSSProperties = {
     padding: '9px 12px',
     textAlign: 'left',
@@ -459,6 +481,7 @@ export default function VlansPage() {
         .tbl-row:hover { background: var(--color-hover) !important; }
         .sort-btn:hover { color: var(--color-text) !important; }
         .action-btn:hover { background: var(--color-accent-dark) !important; border-color: var(--color-accent-dark) !important; }
+        .icon-btn:hover:not(:disabled) { background: var(--color-surface-2) !important; color: var(--color-text) !important; }
         .form-save-btn:hover:not(:disabled) { background: var(--color-accent-dark) !important; border-color: var(--color-accent-dark) !important; }
         .form-cancel-btn:hover { background: var(--color-surface-2) !important; color: var(--color-text) !important; }
         .edit-btn:hover { background: var(--color-surface-2) !important; color: var(--color-text) !important; border-color: var(--color-border-2) !important; }
@@ -473,17 +496,32 @@ export default function VlansPage() {
             {vlans.length} VLAN{vlans.length !== 1 ? 's' : ''} defined for this site
           </p>
         </div>
-        <button
-          className="action-btn"
-          onClick={() => setShowForm(f => !f)}
-          style={{
-            padding: '6px 14px', fontSize: 12, fontWeight: 600,
-            border: '1px solid var(--color-accent)', borderRadius: 'var(--radius-sm)',
-            background: 'var(--color-accent)', color: 'var(--color-accent-text)', cursor: 'pointer',
-          }}
-        >
-          + Add VLAN
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="icon-btn"
+            onClick={handleExport}
+            disabled={sorted.length === 0}
+            style={{
+              padding: '6px 12px', fontSize: 12,
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
+              background: 'var(--color-surface)', color: 'var(--color-text-muted)', cursor: 'pointer',
+              opacity: sorted.length === 0 ? 0.45 : 1,
+            }}
+          >
+            Export CSV
+          </button>
+          <button
+            className="action-btn"
+            onClick={() => setShowForm(f => !f)}
+            style={{
+              padding: '6px 14px', fontSize: 12, fontWeight: 600,
+              border: '1px solid var(--color-accent)', borderRadius: 'var(--radius-sm)',
+              background: 'var(--color-accent)', color: 'var(--color-accent-text)', cursor: 'pointer',
+            }}
+          >
+            + Add VLAN
+          </button>
+        </div>
       </div>
 
       {/* Inline form */}

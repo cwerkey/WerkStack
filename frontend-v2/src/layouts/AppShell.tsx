@@ -5,6 +5,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useSiteStore } from '@/stores/siteStore';
 import { useGetSites } from '@/api/sites';
+import { useGetTypes } from '@/api/types';
+import { useTypesStore } from '@/stores/typesStore';
+import { OnboardingWizard } from '@/wizards/OnboardingWizard';
 
 type NavItem = {
   label: string;
@@ -95,6 +98,7 @@ function NavItemRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) 
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false);
   const [sitePickerOpen, setSitePickerOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const user      = useAuthStore(s => s.user);
@@ -107,6 +111,13 @@ export function AppShell() {
   const setSite     = useSiteStore(s => s.setSite);
   const { data: sites = [] } = useGetSites();
 
+  // Load all types globally
+  const setAllTypes = useTypesStore(s => s.setAll);
+  const { data: typesData } = useGetTypes();
+  useEffect(() => {
+    if (typesData) setAllTypes(typesData);
+  }, [typesData, setAllTypes]);
+
   // Close picker when clicking outside
   useEffect(() => {
     if (!sitePickerOpen) return;
@@ -118,6 +129,13 @@ export function AppShell() {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [sitePickerOpen]);
+
+  // Show onboarding wizard for new users with no sites
+  useEffect(() => {
+    if (sites.length === 0 && !localStorage.getItem('onboarding_complete')) {
+      setOnboardingOpen(true);
+    }
+  }, [sites]);
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
@@ -192,6 +210,15 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+
+      <OnboardingWizard
+        open={onboardingOpen}
+        onComplete={(site) => {
+          setSite(site);
+          setOnboardingOpen(false);
+          navigate('/infrastructure/rack');
+        }}
+      />
     </div>
   );
 }
