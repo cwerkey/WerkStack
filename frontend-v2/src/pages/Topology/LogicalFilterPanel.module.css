@@ -1,0 +1,89 @@
+.panel {
+  width: 240px;
+  min-width: 240px;
+  border-right: 1px solid var(--color-border, #2a3035);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--color-bg, #1a1e21);
+}
+
+.section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border, #2a3035);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.sectionTitle {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted, #6b7b85);
+}
+
+.toggleAll {
+  font-size: 10px;
+  color: var(--color-accent, #c47c5a);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.toggleAll:hover { text-decoration: underline; }
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  user-select: none;
+}
+.checkItem:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.checkItem input[type="checkbox"] {
+  accent-color: var(--color-accent, #c47c5a);
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.checkLabel {
+  font-size: 12px;
+  color: var(--color-text, #c8d0d6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.checkLabelMuted {
+  color: var(--color-text-muted, #6b7b85);
+  text-decoration: line-through;
+}
+
+.iconGlyph {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.emptyHint {
+  font-size: 11px;
+  color: var(--color-text-muted, #6b7b85);
+  font-style: italic;
+  padding: 4px 2px;
+}

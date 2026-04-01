@@ -3,14 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import { useSiteStore } from '@/stores/siteStore';
 import { useGetDevices } from '@/api/devices';
 import { useGetRacks } from '@/api/racks';
+import { useGetOsHosts } from '@/api/os-stack';
+import { useGetSiteContainers } from '@/api/containers';
+import { useGetOsApps } from '@/api/os-stack';
 import { TopologyFilterPanel } from './TopologyFilterPanel';
+import { LogicalFilterPanel } from './LogicalFilterPanel';
 import type { PhysicalTopologyHandle } from './PhysicalTopology';
+import type { LogicalTopologyHandle } from './LogicalTopology';
 import styles from './TopologyPage.module.css';
 
 type Mode = 'physical' | 'logical';
 
-// Lazy load PhysicalTopology
+// Common handle shape shared by both topology modes
+type TopologyHandle = PhysicalTopologyHandle | LogicalTopologyHandle;
+
+// Lazy load heavy topology renderers
 const LazyPhysicalTopology = lazy(() => import('./PhysicalTopology'));
+const LazyLogicalTopology = lazy(() => import('./LogicalTopology'));
 
 export default function TopologyPage() {
   const currentSite = useSiteStore(s => s.currentSite);
@@ -18,6 +27,9 @@ export default function TopologyPage() {
   const navigate = useNavigate();
   const { data: devices = [] } = useGetDevices(siteId);
   const { data: racks = [] } = useGetRacks(siteId);
+  const { data: hosts = [] } = useGetOsHosts(siteId);
+  const { data: apps = [] } = useGetOsApps(siteId);
+  const { data: containers = [] } = useGetSiteContainers(siteId);
 
   const handleNodeClick = useCallback((deviceId: string) => {
     const device = devices.find(d => d.id === deviceId);
@@ -33,12 +45,24 @@ export default function TopologyPage() {
   const [mode, setMode] = useState<Mode>('physical');
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef<HTMLDivElement>(null);
-  const topoRef = useRef<PhysicalTopologyHandle>(null);
 
-  // Filter state
+  // Separate refs for each mode so both can be mounted simultaneously if needed
+  const physicalRef = useRef<PhysicalTopologyHandle>(null);
+  const logicalRef = useRef<LogicalTopologyHandle>(null);
+
+  // Physical filter state
   const [rackFilter, setRackFilter] = useState<Set<string> | null>(null);
   const [switchFilter, setSwitchFilter] = useState<string | null>(null);
   const [vlanFilter, setVlanFilter] = useState<Set<number> | null>(null);
+
+  // Logical filter state
+  const [hiddenDevices, setHiddenDevices] = useState<Set<string>>(new Set());
+  const [hiddenHosts, setHiddenHosts] = useState<Set<string>>(new Set());
+  const [hiddenApps, setHiddenApps] = useState<Set<string>>(new Set());
+
+  // Active topology ref based on current mode
+  const activeRef = (): TopologyHandle | null =>
+    mode === 'physical' ? physicalRef.current : logicalRef.current;
 
   // Close export dropdown on outside click
   useEffect(() => {
@@ -53,26 +77,25 @@ export default function TopologyPage() {
   }, [exportOpen]);
 
   const handleFit = useCallback(() => {
-    topoRef.current?.fit();
-  }, []);
+    activeRef()?.fit();
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleExportPng = useCallback(async () => {
     setExportOpen(false);
-    const blob = await topoRef.current?.exportPng();
+    const blob = await activeRef()?.exportPng();
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'topology.png';
+    a.download = `topology-${mode}.png`;
     a.click();
     URL.revokeObjectURL(url);
-  }, []);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleExportSvg = useCallback(() => {
     setExportOpen(false);
-    const svg = topoRef.current?.exportSvg();
+    const svg = activeRef()?.exportSvg();
     if (!svg) {
-      // Fall back to PNG if SVG not available
       handleExportPng();
       return;
     }
@@ -80,10 +103,33 @@ export default function TopologyPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'topology.svg';
+    a.download = `topology-${mode}.svg`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [handleExportPng]);
+  }, [mode, handleExportPng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Toggle helpers for logical filters
+  function toggleDevice(id: string) {
+    setHiddenDevices(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleHost(id: string) {
+    setHiddenHosts(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleApp(id: string) {
+    setHiddenApps(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className={styles.page}>
@@ -106,7 +152,7 @@ export default function TopologyPage() {
 
         <div className={styles.headerActions}>
           <button className={styles.actionBtn} onClick={handleFit}>
-            Fit
+            {mode === 'physical' ? 'Fit' : 'Top'}
           </button>
           <div className={styles.exportWrapper} ref={exportRef}>
             <button
@@ -131,7 +177,8 @@ export default function TopologyPage() {
 
       {/* ── Body ────────────────────────────────────────────────────────────── */}
       <div className={styles.body}>
-        {mode === 'physical' && (
+        {/* Left filter panel — swaps based on mode */}
+        {mode === 'physical' ? (
           <TopologyFilterPanel
             siteId={siteId}
             rackFilter={rackFilter}
@@ -141,13 +188,27 @@ export default function TopologyPage() {
             vlanFilter={vlanFilter}
             onVlanFilterChange={setVlanFilter}
           />
+        ) : (
+          <LogicalFilterPanel
+            devices={devices}
+            hosts={hosts}
+            apps={apps}
+            containers={containers}
+            hiddenDevices={hiddenDevices}
+            hiddenHosts={hiddenHosts}
+            hiddenApps={hiddenApps}
+            onToggleDevice={toggleDevice}
+            onToggleHost={toggleHost}
+            onToggleApp={toggleApp}
+          />
         )}
 
-        {mode === 'physical' ? (
+        {/* Canvas area — physical */}
+        {mode === 'physical' && (
           <div className={styles.canvasArea}>
             <Suspense fallback={<div className={styles.comingSoon}>Loading topology...</div>}>
               <LazyPhysicalTopology
-                ref={topoRef}
+                ref={physicalRef}
                 siteId={siteId}
                 rackFilter={rackFilter}
                 switchFilter={switchFilter}
@@ -156,10 +217,20 @@ export default function TopologyPage() {
               />
             </Suspense>
           </div>
-        ) : (
-          <div className={styles.comingSoon}>
-            Logical topology — coming soon
-          </div>
+        )}
+
+        {/* Canvas area — logical */}
+        {mode === 'logical' && (
+          <Suspense fallback={<div className={styles.comingSoon}>Loading stack view...</div>}>
+            <LazyLogicalTopology
+              ref={logicalRef}
+              siteId={siteId}
+              hiddenDevices={hiddenDevices}
+              hiddenHosts={hiddenHosts}
+              hiddenApps={hiddenApps}
+              onNodeClick={handleNodeClick}
+            />
+          </Suspense>
         )}
       </div>
     </div>
