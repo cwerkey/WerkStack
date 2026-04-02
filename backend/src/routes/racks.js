@@ -404,10 +404,7 @@ module.exports = function racksRoutes(db) {
         if (devResult.rows.length === 0) {
           return res.status(404).json({ error: 'device not found' });
         }
-        const uHeight = devResult.rows[0].u_height;
-        if (!uHeight) {
-          return res.status(400).json({ error: 'device has no uHeight — cannot position in rack' });
-        }
+        const uHeight = devResult.rows[0].u_height ?? 1;
 
         const existing = await withOrg(db, orgId, (c) =>
           c.query(
@@ -423,10 +420,11 @@ module.exports = function racksRoutes(db) {
 
         const result = await withOrg(db, orgId, (c) =>
           c.query(
-            `UPDATE device_instances SET rack_id = $1, rack_u = $2, face = $3
+            `UPDATE device_instances SET rack_id = $1, rack_u = $2, face = $3,
+                u_height = COALESCE(u_height, $7), is_draft = false
              WHERE id = $4 AND site_id = $5 AND org_id = $6
              RETURNING *`,
-            [rackId, rackU, face, deviceId, siteId, orgId]
+            [rackId, rackU, face, deviceId, siteId, orgId, uHeight]
           )
         );
         res.json(toDevice(result.rows[0]));
