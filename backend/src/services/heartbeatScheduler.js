@@ -75,7 +75,7 @@ function startHeartbeatScheduler(db, cron) {
       const res = await db.query(
         `SELECT di.id, di.org_id, di.site_id, di.name,
                 di.monitor_ip, di.ip, di.monitor_interval_s,
-                di.current_status,
+                di.current_status, di.maintenance_mode,
                 COALESCE(s.monitor_config, '{}')::jsonb AS monitor_config,
                 h.received_at AS last_heartbeat
          FROM device_instances di
@@ -127,24 +127,28 @@ function startHeartbeatScheduler(db, cron) {
               [status, device.id]
             );
 
-            // Determine event type
-            let eventType = 'status_change';
-            if (status === 'down' && (prevStatus === 'up' || prevStatus === 'degraded')) {
-              eventType = 'heartbeat_missed';
-            } else if (status === 'up' && (prevStatus === 'down' || prevStatus === 'unknown')) {
-              eventType = 'heartbeat_restored';
+            // Skip event creation when device is in maintenance mode
+            if (!device.maintenance_mode) {
+              // Determine event type
+              let eventType = 'status_change';
+              if (status === 'down' && (prevStatus === 'up' || prevStatus === 'degraded')) {
+                eventType = 'heartbeat_missed';
+              } else if (status === 'up' && (prevStatus === 'down' || prevStatus === 'unknown')) {
+                eventType = 'heartbeat_restored';
+              }
+
+              await client.query(
+                `INSERT INTO device_events
+                   (org_id, site_id, device_id, event_type, from_state, to_state, details)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+                [device.org_id, device.site_id, device.id, eventType, prevStatus, status,
+                 JSON.stringify({ ip, latencyMs: result.latency, method: 'ping' })]
+              );
             }
 
-            await client.query(
-              `INSERT INTO device_events
-                 (org_id, site_id, device_id, event_type, from_state, to_state, details)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-              [device.org_id, device.site_id, device.id, eventType, prevStatus, status,
-               JSON.stringify({ ip, latencyMs: result.latency, method: 'ping' })]
-            );
-
             const label = status === 'up' ? '✓ UP' : '✗ DOWN';
-            console.log(`[worker:ping] ${device.name} (${ip}) → ${label} (was ${prevStatus})`);
+            const maintenanceNote = device.maintenance_mode ? ' [maintenance]' : '';
+            console.log(`[worker:ping] ${device.name} (${ip}) → ${label} (was ${prevStatus})${maintenanceNote}`);
           }
         } finally {
           client.release();

@@ -28,6 +28,7 @@ export interface DeviceMonitorUpdate {
   monitorEnabled: boolean;
   monitorIp?: string | null;
   monitorIntervalS?: number;
+  maintenanceMode?: boolean;
 }
 
 export interface DeviceEvent {

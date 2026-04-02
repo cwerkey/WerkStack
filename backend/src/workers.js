@@ -11,7 +11,7 @@ function startHeartbeatChecker(db, cron) {
       const cutoff = new Date(Date.now() - HEARTBEAT_THRESHOLD_MS).toISOString();
 
       const staleRes = await db.query(
-        `SELECT di.id, di.org_id, di.site_id, di.current_status, di.name,
+        `SELECT di.id, di.org_id, di.site_id, di.current_status, di.name, di.maintenance_mode,
                 h.received_at AS last_heartbeat
          FROM device_instances di
          LEFT JOIN LATERAL (
@@ -35,19 +35,23 @@ function startHeartbeatChecker(db, cron) {
             [device.id]
           );
 
-          await client.query(
-            `INSERT INTO device_events
-               (org_id, site_id, device_id, event_type, from_state, to_state,
-                details)
-             VALUES ($1,$2,$3,'heartbeat_missed',$4,'down',$5)`,
-            [device.org_id, device.site_id, device.id, device.current_status,
-             JSON.stringify({
-               lastHeartbeat: device.last_heartbeat,
-               threshold: `${HEARTBEAT_THRESHOLD_MS / 1000}s`,
-             })]
-          );
+          // Skip event creation when device is in maintenance mode
+          if (!device.maintenance_mode) {
+            await client.query(
+              `INSERT INTO device_events
+                 (org_id, site_id, device_id, event_type, from_state, to_state,
+                  details)
+               VALUES ($1,$2,$3,'heartbeat_missed',$4,'down',$5)`,
+              [device.org_id, device.site_id, device.id, device.current_status,
+               JSON.stringify({
+                 lastHeartbeat: device.last_heartbeat,
+                 threshold: `${HEARTBEAT_THRESHOLD_MS / 1000}s`,
+               })]
+            );
+          }
 
-          console.log(`[worker:heartbeat] marked device ${device.name} (${device.id}) as down`);
+          const maintenanceNote = device.maintenance_mode ? ' [maintenance]' : '';
+          console.log(`[worker:heartbeat] marked device ${device.name} (${device.id}) as down${maintenanceNote}`);
         } finally {
           client.release();
         }

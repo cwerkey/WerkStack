@@ -22,6 +22,7 @@ const DeviceMonitorSchema = z.object({
   monitorEnabled:   z.boolean(),
   monitorIp:        z.string().nullable().optional(),
   monitorIntervalS: z.number().int().min(10).max(3600).optional(),
+  maintenanceMode:  z.boolean().optional(),
 });
 
 async function withOrg(db, orgId, fn) {
@@ -78,7 +79,7 @@ module.exports = function monitorRoutes(db) {
       try {
         const result = await withOrg(db, orgId, async (c) => {
           const devRes = await c.query(
-            `SELECT id, current_status FROM device_instances
+            `SELECT id, current_status, maintenance_mode FROM device_instances
              WHERE id=$1 AND site_id=$2 AND org_id=$3`,
             [deviceId, siteId, orgId]
           );
@@ -87,6 +88,7 @@ module.exports = function monitorRoutes(db) {
           }
 
           const prevStatus = devRes.rows[0].current_status || 'unknown';
+          const inMaintenance = devRes.rows[0].maintenance_mode ?? false;
 
           const hbRes = await c.query(
             `INSERT INTO heartbeats (org_id, site_id, device_id, status, latency_ms, payload)
@@ -102,12 +104,14 @@ module.exports = function monitorRoutes(db) {
               [status, deviceId, siteId, orgId]
             );
 
-            await c.query(
-              `INSERT INTO device_events
-                 (org_id, site_id, device_id, event_type, from_state, to_state)
-               VALUES ($1,$2,$3,'status_change',$4,$5)`,
-              [orgId, siteId, deviceId, prevStatus, status]
-            );
+            if (!inMaintenance) {
+              await c.query(
+                `INSERT INTO device_events
+                   (org_id, site_id, device_id, event_type, from_state, to_state)
+                 VALUES ($1,$2,$3,'status_change',$4,$5)`,
+                [orgId, siteId, deviceId, prevStatus, status]
+              );
+            }
           }
 
           return { heartbeat: toHeartbeat(hbRes.rows[0]) };
@@ -256,7 +260,7 @@ module.exports = function monitorRoutes(db) {
     async (req, res) => {
       const { orgId }  = req.user;
       const { siteId, deviceId } = req.params;
-      const { monitorEnabled, monitorIp, monitorIntervalS } = req.body;
+      const { monitorEnabled, monitorIp, monitorIntervalS, maintenanceMode } = req.body;
       try {
         const result = await withOrg(db, orgId, async (c) => {
           const sets = ['monitor_enabled = $4'];
@@ -273,6 +277,11 @@ module.exports = function monitorRoutes(db) {
             params.push(monitorIntervalS);
             idx++;
           }
+          if (maintenanceMode !== undefined) {
+            sets.push(`maintenance_mode = $${idx}`);
+            params.push(maintenanceMode);
+            idx++;
+          }
 
           // If disabling, reset status to unknown
           if (!monitorEnabled) {
@@ -282,7 +291,7 @@ module.exports = function monitorRoutes(db) {
           const r = await c.query(
             `UPDATE device_instances SET ${sets.join(', ')}
              WHERE id = $1 AND site_id = $2 AND org_id = $3
-             RETURNING id, monitor_enabled, monitor_ip, monitor_interval_s, current_status`,
+             RETURNING id, monitor_enabled, monitor_ip, monitor_interval_s, current_status, maintenance_mode`,
             params
           );
           return r.rows[0] || null;
@@ -295,6 +304,7 @@ module.exports = function monitorRoutes(db) {
           monitorIp:        result.monitor_ip,
           monitorIntervalS: result.monitor_interval_s,
           currentStatus:    result.current_status,
+          maintenanceMode:  result.maintenance_mode,
         });
       } catch (err) {
         console.error('[PUT /monitor/devices/:deviceId]', err);

@@ -98,6 +98,7 @@ function toDevice(row) {
     monitorEnabled:   row.monitor_enabled ?? false,
     monitorIp:        row.monitor_ip ?? null,
     monitorIntervalS: row.monitor_interval_s ?? 60,
+    maintenanceMode:  row.maintenance_mode ?? false,
     createdAt:        row.created_at,
   };
 }

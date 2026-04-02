@@ -183,10 +183,11 @@ export interface DeviceInstance {
   isGateway?:     boolean;
   portOverrides?:    Record<string, PortOverride>;
   slotOverrides?:    Record<string, SlotOverride>;
-  monitorEnabled?:   boolean;
-  monitorIp?:        string | null;
-  monitorIntervalS?: number;
-  createdAt:         string;
+  monitorEnabled?:    boolean;
+  monitorIp?:         string | null;
+  monitorIntervalS?:  number;
+  maintenanceMode?:   boolean;
+  createdAt:          string;
 }
 
 export interface PortOverride {

@@ -119,7 +119,7 @@ function DeviceInfoPanel({
   racks: Rack[];
   zones: Zone[];
   onSave: (updated: Partial<DeviceInstance> & { id: string }) => void;
-  onMonitorUpdate: (deviceId: string, enabled: boolean, ip: string | null, intervalS?: number) => void;
+  onMonitorUpdate: (deviceId: string, enabled: boolean, ip: string | null, intervalS?: number, maintenanceMode?: boolean) => void;
 }) {
   const [editing, setEditing] = React.useState(false);
   const [name, setName] = React.useState(device.name);
@@ -810,12 +810,12 @@ export default function DeviceLibrary() {
                 onSuccess: () => setSelectedDevice(s => s ? { ...s, ...updated } : s),
               });
             }}
-            onMonitorUpdate={(deviceId, enabled, monitorIp, intervalS) => {
+            onMonitorUpdate={(deviceId, enabled, monitorIp, intervalS, maintenanceMode) => {
               updateMonitor.mutate(
-                { deviceId, monitorEnabled: enabled, monitorIp, monitorIntervalS: intervalS },
+                { deviceId, monitorEnabled: enabled, monitorIp, monitorIntervalS: intervalS, maintenanceMode },
                 {
                   onSuccess: () => setSelectedDevice(s => s
-                    ? { ...s, monitorEnabled: enabled, monitorIp, monitorIntervalS: intervalS }
+                    ? { ...s, monitorEnabled: enabled, monitorIp, monitorIntervalS: intervalS, maintenanceMode }
                     : s),
                 },
               );

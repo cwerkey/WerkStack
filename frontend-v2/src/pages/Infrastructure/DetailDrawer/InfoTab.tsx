@@ -13,7 +13,7 @@ interface InfoTabProps {
   onDelete: (id: string) => void;
   onMoveToRack?: () => void;
   onMoveToUnassigned?: () => void;
-  onMonitorUpdate?: (deviceId: string, enabled: boolean, ip: string | null, intervalS?: number) => void;
+  onMonitorUpdate?: (deviceId: string, enabled: boolean, ip: string | null, intervalS?: number, maintenanceMode?: boolean) => void;
 }
 
 export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, onDelete, onMoveToRack, onMoveToUnassigned, onMonitorUpdate }: InfoTabProps) {

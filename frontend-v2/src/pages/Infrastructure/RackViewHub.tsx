@@ -617,8 +617,8 @@ export default function RackViewHub() {
             onDelete={handleDeviceDelete}
             onMoveToRack={() => setRackPickerOpen(true)}
             onMoveToUnassigned={handleMoveToUnassigned}
-            onMonitorUpdate={(deviceId, enabled, monitorIp, intervalS) => {
-              updateMonitor.mutate({ deviceId, monitorEnabled: enabled, monitorIp, monitorIntervalS: intervalS });
+            onMonitorUpdate={(deviceId, enabled, monitorIp, intervalS, maintenanceMode) => {
+              updateMonitor.mutate({ deviceId, monitorEnabled: enabled, monitorIp, monitorIntervalS: intervalS, maintenanceMode });
             }}
           />
         )}
