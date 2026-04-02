@@ -15,7 +15,7 @@ import { sanitizeUrl } from '@/utils/sanitize';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type BlockType = 'heading' | 'paragraph' | 'code' | 'callout' | 'list' | 'url';
+export type BlockType = 'heading' | 'paragraph' | 'code' | 'callout' | 'list' | 'url' | 'table';
 export type CalloutVariant = 'info' | 'warning' | 'tip';
 export type HeadingLevel = 1 | 2 | 3;
 
@@ -37,6 +37,16 @@ interface BlockEditorProps {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function newBlock(type: BlockType = 'paragraph'): GuideBlock {
+  if (type === 'table') {
+    return {
+      id: uid(),
+      type,
+      content: JSON.stringify({
+        headers: ['Col 1', 'Col 2', 'Col 3'],
+        rows: [['', '', ''], ['', '', '']],
+      }),
+    };
+  }
   return { id: uid(), type, content: '' };
 }
 
@@ -66,6 +76,34 @@ function parseUrl(content: string): UrlPayload {
 
 function serializeUrl(payload: UrlPayload): string {
   return JSON.stringify(payload);
+}
+
+// ── Table block internals ────────────────────────────────────────────────────
+
+interface TableData { headers: string[]; rows: string[][] }
+
+function parseTableData(content: string): TableData {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (parsed && typeof parsed === 'object') {
+      const p = parsed as Record<string, unknown>;
+      if (Array.isArray(p.headers) && Array.isArray(p.rows)) {
+        return {
+          headers: (p.headers as unknown[]).map(h => typeof h === 'string' ? h : ''),
+          rows: (p.rows as unknown[]).map(r =>
+            Array.isArray(r) ? (r as unknown[]).map(c => typeof c === 'string' ? c : '') : []
+          ),
+        };
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return { headers: ['Col 1', 'Col 2', 'Col 3'], rows: [['', '', ''], ['', '', '']] };
+}
+
+function serializeTableData(data: TableData): string {
+  return JSON.stringify(data);
 }
 
 // ── Style constants ───────────────────────────────────────────────────────────
@@ -173,6 +211,7 @@ const BLOCK_TYPES: { type: BlockType; label: string }[] = [
   { type: 'callout',   label: '!' },
   { type: 'list',      label: '•' },
   { type: 'url',       label: '🔗' },
+  { type: 'table',     label: '⊞' },
 ];
 
 // ── Individual block renderer ─────────────────────────────────────────────────
@@ -229,6 +268,194 @@ function BlockItem({
   }
 
   const rows = countLines(block.content);
+
+  // ── Table block ────────────────────────────────────────────────────────────
+  if (block.type === 'table') {
+    const table = parseTableData(block.content);
+    const cols = table.headers.length;
+
+    function updateTable(next: TableData) {
+      onChange({ ...block, content: serializeTableData(next) });
+    }
+
+    function setHeader(col: number, value: string) {
+      const headers = [...table.headers];
+      headers[col] = value;
+      updateTable({ ...table, headers });
+    }
+
+    function setCell(row: number, col: number, value: string) {
+      const rows = table.rows.map(r => [...r]);
+      rows[row][col] = value;
+      updateTable({ ...table, rows });
+    }
+
+    function addColumn() {
+      const headers = [...table.headers, `Col ${cols + 1}`];
+      const rows = table.rows.map(r => [...r, '']);
+      updateTable({ headers, rows });
+    }
+
+    function addRow() {
+      const rows = [...table.rows, new Array(cols).fill('')];
+      updateTable({ ...table, rows });
+    }
+
+    function deleteColumn() {
+      if (cols <= 1) return;
+      const headers = table.headers.filter((_, i) => i !== cols - 1);
+      const rows = table.rows.map(r => r.filter((_, i) => i !== cols - 1));
+      updateTable({ headers, rows });
+    }
+
+    function deleteRow() {
+      if (table.rows.length <= 1) return;
+      const rows = table.rows.slice(0, -1);
+      updateTable({ ...table, rows });
+    }
+
+    function handleTableKeyDown(e: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) {
+      if (e.key !== 'Tab') return;
+      e.preventDefault();
+
+      // row=-1 means header; flatten to linear index: header cells 0..cols-1, then row cells
+      const totalCells = cols + table.rows.length * cols;
+      const currentIdx = row === -1 ? col : cols + row * cols + col;
+      const nextIdx = e.shiftKey ? currentIdx - 1 : currentIdx + 1;
+
+      if (nextIdx < 0 || nextIdx >= totalCells) return;
+
+      const nextRow = nextIdx < cols ? -1 : Math.floor((nextIdx - cols) / cols);
+      const nextCol = nextIdx < cols ? nextIdx : (nextIdx - cols) % cols;
+
+      const wrapper = e.currentTarget.closest('[data-table-block]');
+      if (!wrapper) return;
+
+      const selector = nextRow === -1
+        ? `[data-table-cell="h-${nextCol}"]`
+        : `[data-table-cell="${nextRow}-${nextCol}"]`;
+
+      const next = wrapper.querySelector(selector) as HTMLInputElement | null;
+      if (next) next.focus();
+    }
+
+    const cellStyle: React.CSSProperties = {
+      padding: '4px 8px',
+      fontSize: '12px',
+      borderRadius: 'var(--radius-sm, 4px)',
+      border: '1px solid var(--color-border, #2e3740)',
+      background: 'var(--color-surface-2, #232a30)',
+      color: 'var(--color-text, #d4d9dd)',
+      outline: 'none',
+      width: '100%',
+      boxSizing: 'border-box',
+    };
+
+    const headerCellStyle: React.CSSProperties = {
+      ...cellStyle,
+      fontWeight: 600,
+      background: 'rgba(255,255,255,0.04)',
+    };
+
+    const readOnlyCellStyle: React.CSSProperties = {
+      padding: '6px 10px',
+      fontSize: '13px',
+      color: 'var(--color-text, #d4d9dd)',
+      borderBottom: '1px solid var(--color-border, #2e3740)',
+    };
+
+    const readOnlyHeaderStyle: React.CSSProperties = {
+      ...readOnlyCellStyle,
+      fontWeight: 600,
+      borderBottom: '2px solid var(--color-border, #2e3740)',
+      color: 'var(--color-text-muted, #8a9ba8)',
+      fontSize: '12px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.3px',
+    };
+
+    return (
+      <div style={S.blockWrap(focused)} onFocus={onFocus} onBlur={onBlur} data-table-block>
+        {!readOnly && (
+          <BlockToolbar
+            block={block}
+            index={index}
+            total={total}
+            onChange={onChange}
+            onDelete={onDelete}
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
+          />
+        )}
+        {!readOnly && (
+          <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+            <button style={S.smallBtn()} onClick={addColumn} title="Add column">+ Col</button>
+            <button style={S.smallBtn()} onClick={addRow} title="Add row">+ Row</button>
+            <button
+              style={{ ...S.smallBtn(true), opacity: cols <= 1 ? 0.3 : 1 }}
+              onClick={deleteColumn}
+              disabled={cols <= 1}
+              title="Delete last column"
+            >
+              − Col
+            </button>
+            <button
+              style={{ ...S.smallBtn(true), opacity: table.rows.length <= 1 ? 0.3 : 1 }}
+              onClick={deleteRow}
+              disabled={table.rows.length <= 1}
+              title="Delete last row"
+            >
+              − Row
+            </button>
+          </div>
+        )}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            tableLayout: 'fixed',
+          }}>
+            <thead>
+              <tr>
+                {table.headers.map((h, ci) => (
+                  <th key={ci} style={readOnly ? readOnlyHeaderStyle : { padding: '2px' }}>
+                    {readOnly ? h : (
+                      <input
+                        style={headerCellStyle}
+                        value={h}
+                        data-table-cell={`h-${ci}`}
+                        onChange={e => setHeader(ci, e.target.value)}
+                        onKeyDown={e => handleTableKeyDown(e, -1, ci)}
+                      />
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {table.rows.map((row, ri) => (
+                <tr key={ri}>
+                  {row.map((cell, ci) => (
+                    <td key={ci} style={readOnly ? readOnlyCellStyle : { padding: '2px' }}>
+                      {readOnly ? cell : (
+                        <input
+                          style={cellStyle}
+                          value={cell}
+                          data-table-cell={`${ri}-${ci}`}
+                          onChange={e => setCell(ri, ci, e.target.value)}
+                          onKeyDown={e => handleTableKeyDown(e, ri, ci)}
+                        />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   // ── URL block ──────────────────────────────────────────────────────────────
   if (block.type === 'url') {
@@ -557,7 +784,20 @@ function BlockToolbar({ block, index, total, onChange, onDelete, onMoveUp, onMov
           key={type}
           style={S.typeBtn(block.type === type)}
           title={type}
-          onClick={() => onChange({ ...block, type, level: type === 'heading' ? (block.level ?? 2) : undefined, variant: type === 'callout' ? (block.variant ?? 'info') : undefined })}
+          onClick={() => {
+            const updated: GuideBlock = {
+              ...block,
+              type,
+              level: type === 'heading' ? (block.level ?? 2) : undefined,
+              variant: type === 'callout' ? (block.variant ?? 'info') : undefined,
+            };
+            if (type === 'table' && block.type !== 'table') {
+              updated.content = JSON.stringify({ headers: ['Col 1', 'Col 2', 'Col 3'], rows: [['', '', ''], ['', '', '']] });
+            } else if (type !== 'table' && block.type === 'table') {
+              updated.content = '';
+            }
+            onChange(updated);
+          }}
         >
           {label}
         </button>
@@ -595,6 +835,7 @@ const ADD_BLOCK_TYPES: { type: BlockType; label: string }[] = [
   { type: 'callout',   label: 'Callout' },
   { type: 'list',      label: 'Bullet list' },
   { type: 'url',       label: 'URL / Link' },
+  { type: 'table',     label: 'Table' },
 ];
 
 interface AddBlockButtonProps {

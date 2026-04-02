@@ -4,7 +4,7 @@ const express = require('express');
 const { z }   = require('zod');
 const { requireAuth, requireSiteAccess, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { fetchGuides, hasChanges, pushGuides, withToken } = require('../lib/git_sync_push');
+const { fetchGuides, hasChanges, pushGuides, withToken, pullRepo, parseImportFiles, slugify } = require('../lib/git_sync_push');
 
 const ConfigSchema = z.object({
   remoteUrl:  z.string().min(1).max(500),
@@ -209,6 +209,188 @@ module.exports = function gitSyncRoutes(db) {
       res.json({ ok: true, message: msg });
     } catch (err) {
       console.error('[POST /git-sync/sync]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
+  // POST /import — preview what would be imported from git
+  router.post('/import', requireRole('admin'), async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId } = req.params;
+
+    try {
+      const configRes = await withOrg(db, orgId, c =>
+        c.query(`SELECT * FROM git_sync_config WHERE site_id=$1 AND org_id=$2`, [siteId, orgId])
+      );
+      if (configRes.rows.length === 0) {
+        return res.status(404).json({ error: 'git-sync not configured' });
+      }
+
+      const config = configRes.rows[0];
+      if (!config.repo_url) return res.status(400).json({ error: 'no remote URL configured' });
+
+      let repoDir;
+      try {
+        repoDir = await pullRepo(config);
+      } catch (gitErr) {
+        const safe = (gitErr.message || 'clone failed').replace(/x-access-token:[^@]+@/, 'x-access-token:***@');
+        return res.status(500).json({ error: `git pull failed: ${safe}` });
+      }
+
+      const parsed = parseImportFiles(repoDir);
+
+      // Fetch existing guides and manuals to detect conflicts
+      const { guides: existingGuides, manuals: existingManuals } = await fetchGuides(db, orgId, siteId);
+
+      const manualsByName = Object.fromEntries(existingManuals.map(m => [m.name.toLowerCase(), m]));
+
+      const files = parsed.map(f => {
+        const manualKey = f.manualName.toLowerCase();
+        const manual = manualsByName[manualKey];
+
+        // Check if a guide with same title exists in the same manual
+        const existing = existingGuides.find(g => {
+          const gManualName = g.manual_name || 'Uncategorized';
+          return g.title.toLowerCase() === f.title.toLowerCase()
+            && gManualName.toLowerCase() === manualKey;
+        });
+
+        let status = 'new';
+        if (existing) {
+          // Compare content to see if unchanged
+          const existingContent = existing.content || '';
+          if (existingContent.trim() === f.content.trim()) {
+            status = 'unchanged';
+          } else {
+            status = 'conflict';
+          }
+        }
+
+        return {
+          path: f.path,
+          title: f.title,
+          manualName: f.manualName,
+          status,
+          existingGuideId: existing?.id ?? undefined,
+        };
+      });
+
+      res.json({ files });
+    } catch (err) {
+      console.error('[POST /git-sync/import]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
+  // POST /import/confirm — actually import selected files
+  router.post('/import/confirm', requireRole('admin'), async (req, res) => {
+    const { orgId, userId } = req.user;
+    const { siteId }        = req.params;
+    const { files }          = req.body;
+
+    if (!Array.isArray(files)) {
+      return res.status(400).json({ error: 'files must be an array' });
+    }
+
+    try {
+      const configRes = await withOrg(db, orgId, c =>
+        c.query(`SELECT * FROM git_sync_config WHERE site_id=$1 AND org_id=$2`, [siteId, orgId])
+      );
+      if (configRes.rows.length === 0) {
+        return res.status(404).json({ error: 'git-sync not configured' });
+      }
+
+      const config = configRes.rows[0];
+      const repoDir = require('path').join('/tmp', 'werkstack-git-sync', config.site_id);
+      const parsed = parseImportFiles(repoDir);
+
+      const parsedByPath = Object.fromEntries(parsed.map(f => [f.path, f]));
+
+      // Fetch existing guides and manuals
+      const { guides: existingGuides, manuals: existingManuals } = await fetchGuides(db, orgId, siteId);
+      const manualsByName = Object.fromEntries(existingManuals.map(m => [m.name.toLowerCase(), m]));
+
+      let imported = 0;
+      let skipped  = 0;
+      const errors = [];
+
+      for (const file of files) {
+        if (!file.path || !file.action) {
+          errors.push(`Invalid file entry: missing path or action`);
+          continue;
+        }
+
+        if (file.action === 'skip') {
+          skipped++;
+          continue;
+        }
+
+        const p = parsedByPath[file.path];
+        if (!p) {
+          errors.push(`File not found in repo: ${file.path}`);
+          continue;
+        }
+
+        try {
+          // Resolve or create manual
+          const manualKey = p.manualName.toLowerCase();
+          let manual = manualsByName[manualKey];
+          if (!manual && manualKey !== 'uncategorized') {
+            const manualRes = await withOrg(db, orgId, c =>
+              c.query(
+                `INSERT INTO guide_manuals (org_id, site_id, name, sort_order)
+                 VALUES ($1, $2, $3, 0)
+                 RETURNING *`,
+                [orgId, siteId, p.manualName]
+              )
+            );
+            manual = manualRes.rows[0];
+            manualsByName[manualKey] = manual;
+          }
+
+          const manualId = manual?.id ?? null;
+
+          if (file.action === 'overwrite') {
+            // Find existing guide to overwrite
+            const existing = existingGuides.find(g => {
+              const gManualName = g.manual_name || 'Uncategorized';
+              return g.title.toLowerCase() === p.title.toLowerCase()
+                && gManualName.toLowerCase() === manualKey;
+            });
+
+            if (existing) {
+              await withOrg(db, orgId, c =>
+                c.query(
+                  `UPDATE guides SET content=$1, updated_at=now()
+                   WHERE id=$2 AND site_id=$3 AND org_id=$4`,
+                  [p.content, existing.id, siteId, orgId]
+                )
+              );
+              imported++;
+            } else {
+              errors.push(`Could not find existing guide to overwrite: ${p.title}`);
+            }
+          } else if (file.action === 'create_new') {
+            await withOrg(db, orgId, c =>
+              c.query(
+                `INSERT INTO guides (org_id, site_id, title, content, manual_id, sort_order, created_by)
+                 VALUES ($1, $2, $3, $4, $5, 0, $6)
+                 RETURNING *`,
+                [orgId, siteId, p.title, p.content, manualId, userId]
+              )
+            );
+            imported++;
+          } else {
+            errors.push(`Unknown action "${file.action}" for ${file.path}`);
+          }
+        } catch (dbErr) {
+          errors.push(`Failed to import ${p.title}: ${dbErr.message}`);
+        }
+      }
+
+      res.json({ imported, skipped, errors });
+    } catch (err) {
+      console.error('[POST /git-sync/import/confirm]', err);
       res.status(500).json({ error: 'server error' });
     }
   });

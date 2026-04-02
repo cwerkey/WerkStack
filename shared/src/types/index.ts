@@ -539,7 +539,8 @@ export type GuideBlockType =
   | 'list'
   | 'ordered'
   | 'divider'
-  | 'callout';
+  | 'callout'
+  | 'table';
 
 export interface GuideBlock {
   id:      string;

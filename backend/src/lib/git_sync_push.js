@@ -147,4 +147,97 @@ async function pushGuides(config, guides, manuals) {
   return { pushed: true };
 }
 
-module.exports = { fetchGuides, hasChanges, pushGuides, withToken };
+function unslugify(slug) {
+  return slug
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/**
+ * Clone or pull the remote repo, return the repo directory path.
+ */
+async function pullRepo(config) {
+  const simpleGit = require('simple-git');
+
+  const repoDir = path.join('/tmp', 'werkstack-git-sync', config.site_id);
+  fs.mkdirSync(repoDir, { recursive: true });
+
+  const authenticatedUrl = withToken(config.repo_url, config.auth_token);
+  const git = simpleGit(repoDir);
+
+  const isRepo = fs.existsSync(path.join(repoDir, '.git'));
+  if (!isRepo) {
+    await git.clone(authenticatedUrl, repoDir, ['--branch', config.branch, '--depth', '1']);
+  } else {
+    await git.remote(['set-url', 'origin', authenticatedUrl]);
+    await git.pull('origin', config.branch, ['--rebase']);
+  }
+
+  return repoDir;
+}
+
+/**
+ * Read all .md files under guides/ in the repo and parse them.
+ * Strips the metadata header that pushGuides adds (# title, > Manual:, > Last updated:).
+ * Returns array of { path, title, manualName, content }.
+ */
+function parseImportFiles(repoDir) {
+  const guidesDir = path.join(repoDir, 'guides');
+  if (!fs.existsSync(guidesDir)) return [];
+
+  const results = [];
+
+  function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        const relativePath = path.relative(guidesDir, full);
+        const raw = fs.readFileSync(full, 'utf8');
+
+        // Derive manual name from parent folder
+        const parts = relativePath.split(path.sep);
+        const folderName = parts.length > 1 ? parts[0] : 'uncategorized';
+        const manualName = folderName === 'uncategorized' ? 'Uncategorized' : unslugify(folderName);
+
+        // Strip metadata header that pushGuides adds
+        const lines = raw.split('\n');
+        let i = 0;
+        let title = entry.name.replace(/\.md$/, '');
+
+        // First line: # Title
+        if (i < lines.length && lines[i].startsWith('# ')) {
+          title = lines[i].slice(2).trim();
+          i++;
+        }
+
+        // Skip empty line after title
+        if (i < lines.length && lines[i].trim() === '') i++;
+
+        // Skip > Manual: line
+        if (i < lines.length && lines[i].startsWith('> Manual:')) i++;
+
+        // Skip > Last updated: line
+        if (i < lines.length && lines[i].startsWith('> Last updated:')) i++;
+
+        // Skip trailing empty line after metadata
+        if (i < lines.length && lines[i].trim() === '') i++;
+
+        const content = lines.slice(i).join('\n');
+
+        results.push({
+          path: relativePath,
+          title,
+          manualName,
+          content,
+        });
+      }
+    }
+  }
+
+  walk(guidesDir);
+  return results;
+}
+
+module.exports = { fetchGuides, hasChanges, pushGuides, withToken, pullRepo, parseImportFiles, slugify };

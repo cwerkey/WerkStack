@@ -46,6 +46,7 @@ import { OsStackTab } from './DetailDrawer/OsStackTab';
 import { NetworkTab } from './DetailDrawer/NetworkTab';
 import { IpAssignmentModal } from './DetailDrawer/IpAssignmentModal';
 import { StubTab } from './DetailDrawer/StubTab';
+import { GuidesTab } from './DetailDrawer/GuidesTab';
 import { PcieTab } from './DetailDrawer/PcieTab';
 import { DeployWizard } from '@/wizards/DeployWizard';
 import { ConnectionWizard } from '@/wizards/ConnectionWizard';
@@ -689,7 +690,7 @@ export default function RackViewHub() {
           />
         )}
         {selectedDevice && drawerTab === 'guides' && (
-          <StubTab tab={drawerTab} />
+          <GuidesTab siteId={siteId} deviceId={selectedDevice.id} />
         )}
       </DetailDrawer>
 

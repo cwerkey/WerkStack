@@ -75,6 +75,29 @@ export function parseMarkdownToBlocks(md: string): GuideBlock[] {
       continue;
     }
 
+    // Pipe table
+    if (/^\|(.+)\|$/.test(line.trim())) {
+      const parseRow = (row: string): string[] =>
+        row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+
+      const headers = parseRow(line);
+      i++; // skip header row
+
+      // skip separator row (|---|---|)
+      if (i < lines.length && /^\|[\s\-:]+\|/.test(lines[i].trim())) {
+        i++;
+      }
+
+      const rows: string[][] = [];
+      while (i < lines.length && /^\|(.+)\|$/.test(lines[i].trim())) {
+        rows.push(parseRow(lines[i]));
+        i++;
+      }
+
+      blocks.push(makeBlock('table', JSON.stringify({ headers, rows })));
+      continue;
+    }
+
     // Unordered list
     if (/^[-*] /.test(line)) {
       blocks.push(makeBlock('list', line.replace(/^[-*] /, '')));
@@ -152,6 +175,20 @@ export function serializeBlocksToMarkdown(blocks: GuideBlock[]): string {
         const lines = block.content.split('\n');
         for (let li = 0; li < lines.length; li++) {
           parts.push(`> ${li === 0 ? prefix : ''}${lines[li]}`);
+        }
+        break;
+      }
+      case 'table': {
+        try {
+          const data = JSON.parse(block.content) as { headers: string[]; rows: string[][] };
+          const esc = (s: string) => s.replace(/\|/g, '\\|');
+          parts.push('| ' + data.headers.map(esc).join(' | ') + ' |');
+          parts.push('| ' + data.headers.map(() => '---').join(' | ') + ' |');
+          for (const row of data.rows) {
+            parts.push('| ' + row.map(esc).join(' | ') + ' |');
+          }
+        } catch {
+          // malformed table content — skip
         }
         break;
       }

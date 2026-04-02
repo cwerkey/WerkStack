@@ -20,6 +20,24 @@ interface GitSyncStatus {
   lastSyncStatus?: 'success' | 'error' | 'pending';
 }
 
+interface ImportFile {
+  path: string;
+  title: string;
+  manualName: string;
+  status: 'new' | 'conflict' | 'unchanged';
+  existingGuideId?: string;
+}
+
+interface ImportPreviewResponse {
+  files: ImportFile[];
+}
+
+interface ImportConfirmResponse {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 
 function useGetGitSyncConfig(siteId: string) {
@@ -67,6 +85,20 @@ function useTestConnection(siteId: string) {
   });
 }
 
+function useImportPreview(siteId: string) {
+  return useMutation({
+    mutationFn: () =>
+      api.post<ImportPreviewResponse>(`/api/sites/${siteId}/git-sync/import`, {}),
+  });
+}
+
+function useConfirmImport(siteId: string) {
+  return useMutation({
+    mutationFn: (files: { path: string; action: 'skip' | 'overwrite' | 'create_new' }[]) =>
+      api.post<ImportConfirmResponse>(`/api/sites/${siteId}/git-sync/import/confirm`, { files }),
+  });
+}
+
 // ── Status badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status?: string }) {
@@ -81,10 +113,12 @@ function StatusBadge({ status }: { status?: string }) {
 export default function GitSyncSettings({ siteId }: { siteId: string }) {
   const { data: config, isLoading, refetch: refetchConfig } = useGetGitSyncConfig(siteId);
   const { data: statusData } = useGetGitSyncStatus(siteId);
-  const saveMut   = useSaveGitSyncConfig(siteId);
-  const syncMut   = useTriggerSync(siteId);
-  const testMut   = useTestConnection(siteId);
-  const toggleMut = useToggleEnabled(siteId);
+  const saveMut    = useSaveGitSyncConfig(siteId);
+  const syncMut    = useTriggerSync(siteId);
+  const testMut    = useTestConnection(siteId);
+  const toggleMut  = useToggleEnabled(siteId);
+  const importMut  = useImportPreview(siteId);
+  const confirmMut = useConfirmImport(siteId);
 
   const [remoteUrl, setRemoteUrl] = useState('');
   const [branch, setBranch] = useState('main');
@@ -95,6 +129,11 @@ export default function GitSyncSettings({ siteId }: { siteId: string }) {
   const [saveResult, setSaveResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Import state
+  const [importFiles, setImportFiles] = useState<ImportFile[] | null>(null);
+  const [importActions, setImportActions] = useState<Record<string, 'skip' | 'overwrite' | 'create_new'>>({});
+  const [importResult, setImportResult] = useState<ImportConfirmResponse | null>(null);
 
   useEffect(() => {
     if (config) {
@@ -154,6 +193,42 @@ export default function GitSyncSettings({ siteId }: { siteId: string }) {
     syncMut.mutate(undefined, {
       onSuccess: (res) => setSyncResult({ ok: res.ok, message: res.message ?? (res.ok ? 'Sync complete.' : 'Sync failed.') }),
       onError: (err) => setSyncResult({ ok: false, message: err instanceof Error ? err.message : 'Sync failed' }),
+    });
+  };
+
+  const handleImportPreview = () => {
+    setImportFiles(null);
+    setImportResult(null);
+    setImportActions({});
+    importMut.mutate(undefined, {
+      onSuccess: (res) => {
+        setImportFiles(res.files);
+        // Set default actions: new → create_new, conflict → skip, unchanged → skip
+        const defaults: Record<string, 'skip' | 'overwrite' | 'create_new'> = {};
+        for (const f of res.files) {
+          if (f.status === 'new') defaults[f.path] = 'create_new';
+          else if (f.status === 'conflict') defaults[f.path] = 'overwrite';
+          else defaults[f.path] = 'skip';
+        }
+        setImportActions(defaults);
+      },
+      onError: (err) => setSyncResult({ ok: false, message: err instanceof Error ? err.message : 'Import preview failed' }),
+    });
+  };
+
+  const handleConfirmImport = () => {
+    if (!importFiles) return;
+    setImportResult(null);
+    const payload = importFiles.map(f => ({
+      path: f.path,
+      action: importActions[f.path] ?? 'skip',
+    }));
+    confirmMut.mutate(payload, {
+      onSuccess: (res) => {
+        setImportResult(res);
+        setImportFiles(null);
+      },
+      onError: (err) => setSyncResult({ ok: false, message: err instanceof Error ? err.message : 'Import failed' }),
     });
   };
 
@@ -306,6 +381,13 @@ export default function GitSyncSettings({ siteId }: { siteId: string }) {
               </button>
               <button
                 className={settingsStyles.ghostBtn}
+                onClick={handleImportPreview}
+                disabled={importMut.isPending}
+              >
+                {importMut.isPending ? 'Scanning...' : 'Import from Git'}
+              </button>
+              <button
+                className={settingsStyles.ghostBtn}
                 onClick={() => {
                   const next = !(config?.enabled ?? true);
                   toggleMut.mutate(next, { onSuccess: () => refetchConfig() });
@@ -317,6 +399,85 @@ export default function GitSyncSettings({ siteId }: { siteId: string }) {
                   : (config?.enabled ?? true) ? 'Pause Auto-Sync' : 'Resume Auto-Sync'}
               </button>
             </div>
+
+            {/* Import preview */}
+            {importFiles && (
+              <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--color-border)' }}>
+                <p className={styles.sectionTitle} style={{ marginBottom: '8px' }}>Import Preview</p>
+                {importFiles.length === 0 ? (
+                  <p style={{ color: 'var(--color-text-muted)', fontSize: '12px', margin: 0 }}>
+                    No markdown files found in the remote repository.
+                  </p>
+                ) : (
+                  <>
+                    <ul className={styles.importList}>
+                      {importFiles.map(f => (
+                        <li key={f.path} className={styles.importItem}>
+                          <span className={`${styles.importDot} ${
+                            f.status === 'new' ? styles.importDotNew
+                            : f.status === 'conflict' ? styles.importDotConflict
+                            : styles.importDotUnchanged
+                          }`} />
+                          <span className={styles.importTitle}>{f.title}</span>
+                          <span className={styles.importManual}>{f.manualName}</span>
+                          {f.status === 'new' && (
+                            <select
+                              className={styles.importSelect}
+                              value={importActions[f.path] ?? 'create_new'}
+                              onChange={e => setImportActions(prev => ({ ...prev, [f.path]: e.target.value as 'create_new' | 'skip' }))}
+                            >
+                              <option value="create_new">Import</option>
+                              <option value="skip">Skip</option>
+                            </select>
+                          )}
+                          {f.status === 'conflict' && (
+                            <select
+                              className={styles.importSelect}
+                              value={importActions[f.path] ?? 'overwrite'}
+                              onChange={e => setImportActions(prev => ({ ...prev, [f.path]: e.target.value as 'overwrite' | 'skip' | 'create_new' }))}
+                            >
+                              <option value="overwrite">Overwrite</option>
+                              <option value="create_new">Create Copy</option>
+                              <option value="skip">Skip</option>
+                            </select>
+                          )}
+                          {f.status === 'unchanged' && (
+                            <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>unchanged</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+                      <button
+                        className={settingsStyles.primaryBtn}
+                        onClick={handleConfirmImport}
+                        disabled={confirmMut.isPending}
+                      >
+                        {confirmMut.isPending ? 'Importing...' : 'Confirm Import'}
+                      </button>
+                      <button
+                        className={settingsStyles.ghostBtn}
+                        onClick={() => { setImportFiles(null); setImportActions({}); }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Import result */}
+            {importResult && (
+              <div className={styles.importSummary}>
+                {importResult.imported} imported, {importResult.skipped} skipped
+                {importResult.errors.length > 0 && (
+                  <div className={styles.importSummaryErrors}>
+                    {importResult.errors.map((e, i) => <div key={i}>{e}</div>)}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
