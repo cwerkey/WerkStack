@@ -8,6 +8,7 @@ export interface GuideManual {
   name: string;
   sortOrder: number;
   parentId: string | null;
+  isShared: boolean;
   createdAt: string;
 }
 
@@ -20,6 +21,7 @@ export interface Guide {
   manualId: string | null;
   sortOrder: number;
   isLocked: boolean;
+  isShared: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -92,7 +94,7 @@ export function useCreateGuide(siteId: string) {
 export function useUpdateGuide(siteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; title?: string; content?: string; manual_id?: string | null }) =>
+    mutationFn: ({ id, ...body }: { id: string; title?: string; content?: string; manual_id?: string | null; is_shared?: boolean }) =>
       api.patch<Guide>(`/api/sites/${siteId}/guides/${id}`, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['guides', siteId] }),
   });

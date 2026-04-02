@@ -2,12 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import styles from './AppShell.module.css';
 import { useAuthStore } from '@/stores/authStore';
-import { useThemeStore } from '@/stores/themeStore';
+import { useThemeStore, type ThemeMode } from '@/stores/themeStore';
 import { useSiteStore } from '@/stores/siteStore';
 import { useGetSites } from '@/api/sites';
 import { useGetTypes } from '@/api/types';
 import { useTypesStore } from '@/stores/typesStore';
 import { OnboardingWizard } from '@/wizards/OnboardingWizard';
+import { ProfileModal } from '@/components/ProfileModal';
+import { ManageUsersModal } from '@/components/ManageUsersModal';
 
 type NavItem = {
   label: string;
@@ -54,6 +56,13 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Settings', icon: '⬡', path: '/settings' },
 ];
 
+const THEMES: { id: ThemeMode; label: string; dot: string }[] = [
+  { id: 'dark',            label: 'homelab dark',     dot: '#c47c5a' },
+  { id: 'enterprise-dark', label: 'enterprise dark',  dot: '#3d8fd9' },
+  { id: 'light',           label: 'enterprise light', dot: '#2e5a8a' },
+  { id: 'terminal',        label: 'terminal',         dot: '#33ff33' },
+];
+
 function NavItemRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const [open, setOpen] = useState(false);
 
@@ -96,10 +105,12 @@ function NavItemRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) 
 }
 
 export function AppShell() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [sitePickerOpen, setSitePickerOpen] = useState(false);
+  const [collapsed, setCollapsed]         = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const pickerRef = useRef<HTMLDivElement>(null);
+  const [avatarOpen, setAvatarOpen]       = useState(false);
+  const [profileOpen, setProfileOpen]     = useState(false);
+  const [usersOpen, setUsersOpen]         = useState(false);
+  const avatarRef = useRef<HTMLDivElement>(null);
 
   const user      = useAuthStore(s => s.user);
   const logout    = useAuthStore(s => s.logout);
@@ -118,17 +129,17 @@ export function AppShell() {
     if (typesData) setAllTypes(typesData);
   }, [typesData, setAllTypes]);
 
-  // Close picker when clicking outside
+  // Close avatar menu when clicking outside
   useEffect(() => {
-    if (!sitePickerOpen) return;
+    if (!avatarOpen) return;
     function handleClick(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setSitePickerOpen(false);
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) {
+        setAvatarOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [sitePickerOpen]);
+  }, [avatarOpen]);
 
   // Show onboarding wizard for new users with no sites
   useEffect(() => {
@@ -143,38 +154,25 @@ export function AppShell() {
     navigate('/login');
   }
 
+  const initial = (user?.username?.[0] ?? user?.email?.[0] ?? 'U').toUpperCase();
+  const accentColor = user?.accentColor ?? 'var(--color-accent, #c47c5a)';
+  const isOwner = user?.role === 'owner';
+
   return (
     <div className={styles.shell} data-theme={theme}>
       {/* Sidebar */}
       <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ''}`}>
         <div className={styles.sidebarTop}>
-          <div ref={pickerRef} className={styles.logoWrap}>
+          <div className={styles.logoWrap}>
             <button
               className={styles.logo}
-              onClick={() => setSitePickerOpen(o => !o)}
-              title="Switch site"
+              onClick={() => navigate('/sites')}
+              title="All sites"
             >
               {collapsed ? 'W' : 'WerkStack'}
             </button>
             {!collapsed && currentSite && (
               <span className={styles.currentSite}>{currentSite.name}</span>
-            )}
-            {sitePickerOpen && (
-              <div className={styles.sitePicker}>
-                <div className={styles.sitePickerTitle}>Select Site</div>
-                {sites.length === 0 && (
-                  <div className={styles.sitePickerEmpty}>No sites found</div>
-                )}
-                {sites.map(site => (
-                  <button
-                    key={site.id}
-                    className={`${styles.siteOption}${currentSite?.id === site.id ? ` ${styles.siteOptionActive}` : ''}`}
-                    onClick={() => { setSite(site); setSitePickerOpen(false); }}
-                  >
-                    {site.name}
-                  </button>
-                ))}
-              </div>
             )}
           </div>
           <button className={styles.collapseBtn} onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expand' : 'Collapse'}>
@@ -186,25 +184,70 @@ export function AppShell() {
             <NavItemRow key={item.label} item={item} collapsed={collapsed} />
           ))}
         </nav>
-        <div className={styles.sidebarBottom}>
-          {!collapsed && user && (
-            <span className={styles.userEmail}>{user.email}</span>
-          )}
-          <button className={styles.logoutBtn} onClick={handleLogout} title="Log out">
-            {collapsed ? '↩' : 'Log out'}
-          </button>
-        </div>
+        <div className={styles.sidebarBottom} />
       </aside>
 
       {/* Main */}
       <div className={styles.main}>
         <header className={styles.header}>
-          <button
-            className={styles.themeToggle}
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          >
-            {theme === 'dark' ? '☀' : '☾'}
-          </button>
+          <div ref={avatarRef} className={styles.avatarWrap}>
+            <button
+              className={styles.avatarBtn}
+              style={{ backgroundColor: accentColor }}
+              onClick={() => setAvatarOpen(o => !o)}
+              title={user?.username ?? 'User'}
+            >
+              {initial}
+            </button>
+
+            {avatarOpen && (
+              <div className={styles.avatarMenu}>
+                {/* User info */}
+                <div className={styles.menuUserInfo}>
+                  <div className={styles.menuAvatar} style={{ backgroundColor: accentColor }}>
+                    {initial}
+                  </div>
+                  <div>
+                    <div className={styles.menuUserName}>{user?.username}</div>
+                    <div className={styles.menuUserEmail}>{user?.email}</div>
+                  </div>
+                </div>
+
+                <div className={styles.menuDivider} />
+
+                <button className={styles.menuItem} onClick={() => { setAvatarOpen(false); setProfileOpen(true); }}>
+                  ✎ edit profile
+                </button>
+                {isOwner && (
+                  <button className={styles.menuItem} onClick={() => { setAvatarOpen(false); setUsersOpen(true); }}>
+                    👤 manage users
+                  </button>
+                )}
+
+                <div className={styles.menuDivider} />
+
+                {/* Theme selector */}
+                <div className={styles.menuSectionLabel}>theme</div>
+                {THEMES.map(t => (
+                  <button
+                    key={t.id}
+                    className={`${styles.menuItem}${theme === t.id ? ' ' + styles.menuItemActive : ''}`}
+                    onClick={() => { useThemeStore.getState().setTheme(t.id); }}
+                  >
+                    <span className={styles.themeDot} style={{ backgroundColor: t.dot }} />
+                    {t.label}
+                    {theme === t.id && <span className={styles.themeCheck}>✓</span>}
+                  </button>
+                ))}
+
+                <div className={styles.menuDivider} />
+
+                <button className={`${styles.menuItem} ${styles.menuItemDanger}`} onClick={() => { setAvatarOpen(false); handleLogout(); }}>
+                  ↩ sign out
+                </button>
+              </div>
+            )}
+          </div>
         </header>
         <main className={styles.content}>
           <Outlet />
@@ -219,6 +262,9 @@ export function AppShell() {
           navigate('/infrastructure/rack');
         }}
       />
+
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
+      <ManageUsersModal open={usersOpen} onClose={() => setUsersOpen(false)} />
     </div>
   );
 }

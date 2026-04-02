@@ -16,5 +16,6 @@ export const GuidesPage      = lazy(() => import('@/pages/GuidesPage'));
 export const TodoListPage    = lazy(() => import('@/pages/TodoListPage'));
 export const SettingsPage    = lazy(() => import('@/pages/SettingsPage'));
 export const LoginPage       = lazy(() => import('@/pages/LoginPage'));
+export const SiteSelectorPage = lazy(() => import('@/pages/SiteSelectorPage'));
 export const SetupPage       = lazy(() => import('@/pages/SetupPage'));
 export const NotFoundPage    = lazy(() => import('@/pages/NotFoundPage'));

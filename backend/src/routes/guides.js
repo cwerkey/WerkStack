@@ -11,6 +11,7 @@ const GuideSchema = z.object({
   content:    z.string().max(200000).default(''),
   manual_id:  z.string().uuid().optional().nullable(),
   sort_order: z.number().int().min(0).optional(),
+  is_shared:  z.boolean().optional(),
 });
 
 const GuidePatchSchema = z.object({
@@ -18,6 +19,7 @@ const GuidePatchSchema = z.object({
   content:    z.string().max(200000).optional(),
   manual_id:  z.string().uuid().optional().nullable(),
   sort_order: z.number().int().min(0).optional(),
+  is_shared:  z.boolean().optional(),
 });
 
 const LockSchema = z.object({
@@ -38,6 +40,7 @@ function toGuide(row) {
     manualId:  row.manual_id   ?? null,
     sortOrder: row.sort_order  ?? 0,
     isLocked:  row.is_locked   ?? false,
+    isShared:  row.is_shared   ?? false,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -93,7 +96,7 @@ module.exports = function guidesRoutes(db) {
          FROM guides g
          LEFT JOIN guide_manuals gm ON gm.id = g.manual_id
          LEFT JOIN guide_links gl   ON gl.guide_id = g.id
-         WHERE g.site_id = $1 AND g.org_id = $2
+         WHERE (g.site_id = $1 OR g.is_shared = true) AND g.org_id = $2
          GROUP BY g.id, gm.name
          ORDER BY g.sort_order ASC, g.updated_at DESC`,
         [siteId, orgId]
@@ -111,13 +114,13 @@ module.exports = function guidesRoutes(db) {
   router.post('/', validate(GuideSchema), async (req, res) => {
     const { siteId }                          = req.params;
     const { orgId, userId }                   = req.user;
-    const { title, content, manual_id, sort_order } = req.body;
+    const { title, content, manual_id, sort_order, is_shared } = req.body;
     try {
       const result = await db.query(
-        `INSERT INTO guides (org_id, site_id, title, content, manual_id, sort_order, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO guides (org_id, site_id, title, content, manual_id, sort_order, is_shared, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [orgId, siteId, title, content ?? '', manual_id ?? null, sort_order ?? 0, userId]
+        [orgId, siteId, title, content ?? '', manual_id ?? null, sort_order ?? 0, is_shared ?? false, userId]
       );
       res.status(201).json(toGuide(result.rows[0]));
     } catch (err) {
@@ -129,7 +132,7 @@ module.exports = function guidesRoutes(db) {
   router.patch('/:id', validate(GuidePatchSchema), async (req, res) => {
     const { siteId, id }                               = req.params;
     const { orgId, userId }                            = req.user;
-    const { title, content, manual_id, sort_order }    = req.body;
+    const { title, content, manual_id, sort_order, is_shared } = req.body;
 
     try {
       const current = await db.query(
@@ -154,6 +157,7 @@ module.exports = function guidesRoutes(db) {
       if (title      !== undefined) { sets.push(`title = $${i++}`);      values.push(title); }
       if (content    !== undefined) { sets.push(`content = $${i++}`);    values.push(content); }
       if (manual_id  !== undefined) { sets.push(`manual_id = $${i++}`);  values.push(manual_id); }
+      if (is_shared  !== undefined) { sets.push(`is_shared = $${i++}`);  values.push(is_shared); }
       if (sort_order !== undefined) { sets.push(`sort_order = $${i++}`); values.push(sort_order); }
       values.push(id, siteId, orgId);
 

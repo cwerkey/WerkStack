@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/utils/api';
+import { useAuthStore } from '@/stores/authStore';
 import type { User } from '@werkstack/shared';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const setUser = useAuthStore(s => s.setUser);
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
@@ -21,8 +23,9 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      await api.post<{ user: User }>('/api/auth/login', { email, password });
-      navigate('/');
+      const res = await api.post<{ user: User }>('/api/auth/login', { email, password });
+      setUser(res.user);
+      navigate('/sites');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

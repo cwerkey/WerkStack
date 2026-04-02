@@ -27,6 +27,7 @@ function toManual(row) {
     name:      row.name,
     sortOrder: row.sort_order,
     parentId:  row.parent_id ?? null,
+    isShared:  row.is_shared ?? false,
     createdAt: row.created_at,
   };
 }
@@ -42,7 +43,7 @@ module.exports = function guideManualsRoutes(db) {
     try {
       const result = await db.query(
         `SELECT * FROM guide_manuals
-         WHERE site_id = $1 AND org_id = $2
+         WHERE (site_id = $1 OR is_shared = true) AND org_id = $2
          ORDER BY sort_order ASC, created_at ASC`,
         [siteId, orgId]
       );

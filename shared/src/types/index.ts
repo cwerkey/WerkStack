@@ -111,12 +111,13 @@ export interface Organization {
 export type UserRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export interface User {
-  id:        string;
-  orgId:     string;
-  email:     string;
-  username:  string;
-  role:      UserRole;
-  createdAt: string;
+  id:           string;
+  orgId:        string;
+  email:        string;
+  username:     string;
+  role:         UserRole;
+  accentColor?: string | null;
+  createdAt:    string;
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────
@@ -495,6 +496,7 @@ export interface GuideManual {
   name:      string;
   sortOrder: number;
   parentId:  string | null;
+  isShared:  boolean;
   createdAt: string;
 }
 
@@ -516,6 +518,7 @@ export interface Guide {
   manualId:   string | null;
   sortOrder:  number;
   isLocked:   boolean;
+  isShared:   boolean;
   manualName: string | null;
   links:      GuideLink[];
   createdBy?: string;

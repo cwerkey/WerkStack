@@ -7,6 +7,15 @@ const { validate }          = require('../middleware/validate');
 const { requireAuth, signToken, setSessionCookie, clearSessionCookie } = require('../middleware/auth');
 
 const LoginSchema    = z.object({ email: z.string().email(), password: z.string().min(1) });
+const ProfileSchema  = z.object({
+  username:        z.string().min(3).max(50).optional(),
+  currentPassword: z.string().min(1).optional(),
+  newPassword:     z.string().min(8).optional(),
+  accentColor:     z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+}).refine(data => {
+  if (data.newPassword && !data.currentPassword) return false;
+  return true;
+}, { message: 'current password required to change password' });
 const RegisterSchema = z.object({
   email:    z.string().email(),
   username: z.string().min(3).max(50),
@@ -57,7 +66,7 @@ module.exports = function authRoutes(db) {
   router.get('/me', requireAuth, async (req, res) => {
     try {
       const userResult = await db.query(
-        `SELECT id, org_id, email, username, role, created_at FROM users WHERE id = $1`,
+        `SELECT id, org_id, email, username, role, accent_color, created_at FROM users WHERE id = $1`,
         [req.user.userId]
       );
       if (userResult.rows.length === 0) {
@@ -79,12 +88,13 @@ module.exports = function authRoutes(db) {
 
       res.json({
         user: {
-          id:        u.id,
-          orgId:     u.org_id,
-          email:     u.email,
-          username:  u.username,
-          role:      u.role,
-          createdAt: u.created_at,
+          id:          u.id,
+          orgId:       u.org_id,
+          email:       u.email,
+          username:    u.username,
+          role:        u.role,
+          accentColor: u.accent_color ?? null,
+          createdAt:   u.created_at,
         },
         org: org
           ? { id: org.id, name: org.name, slug: org.slug, createdAt: org.created_at }
@@ -109,7 +119,7 @@ module.exports = function authRoutes(db) {
     const { email, password } = req.body;
     try {
       const result = await db.query(
-        `SELECT id, org_id, email, username, role, password_hash FROM users WHERE email = $1`,
+        `SELECT id, org_id, email, username, role, accent_color, password_hash FROM users WHERE email = $1`,
         [email]
       );
       const user = result.rows[0];
@@ -122,11 +132,12 @@ module.exports = function authRoutes(db) {
       setSessionCookie(res, token);
       res.json({
         user: {
-          id:       user.id,
-          orgId:    user.org_id,
-          email:    user.email,
-          username: user.username,
-          role:     user.role,
+          id:          user.id,
+          orgId:       user.org_id,
+          email:       user.email,
+          username:    user.username,
+          role:        user.role,
+          accentColor: user.accent_color ?? null,
         },
       });
     } catch (err) {
@@ -199,6 +210,59 @@ module.exports = function authRoutes(db) {
       res.status(500).json({ error: 'server error' });
     } finally {
       client.release();
+    }
+  });
+
+  router.patch('/profile', requireAuth, validate(ProfileSchema), async (req, res) => {
+    const { username, currentPassword, newPassword, accentColor } = req.body;
+    try {
+      const userResult = await db.query(
+        `SELECT id, org_id, email, username, role, accent_color, password_hash FROM users WHERE id = $1`,
+        [req.user.userId]
+      );
+      if (userResult.rows.length === 0) return res.status(404).json({ error: 'user not found' });
+      const u = userResult.rows[0];
+
+      // Verify current password if changing password
+      if (newPassword) {
+        const valid = await bcrypt.compare(currentPassword, u.password_hash);
+        if (!valid) return res.status(400).json({ error: 'current password is incorrect' });
+      }
+
+      const sets   = [];
+      const values = [];
+      let   i      = 1;
+      if (username     !== undefined) { sets.push(`username = $${i++}`);     values.push(username); }
+      if (accentColor  !== undefined) { sets.push(`accent_color = $${i++}`); values.push(accentColor); }
+      if (newPassword) {
+        const hash = await bcrypt.hash(newPassword, 12);
+        sets.push(`password_hash = $${i++}`);
+        values.push(hash);
+      }
+
+      if (sets.length === 0) return res.status(400).json({ error: 'no fields to update' });
+
+      values.push(req.user.userId);
+      const result = await db.query(
+        `UPDATE users SET ${sets.join(', ')} WHERE id = $${i} RETURNING id, org_id, email, username, role, accent_color, created_at`,
+        values
+      );
+      const updated = result.rows[0];
+      res.json({
+        user: {
+          id:          updated.id,
+          orgId:       updated.org_id,
+          email:       updated.email,
+          username:    updated.username,
+          role:        updated.role,
+          accentColor: updated.accent_color ?? null,
+          createdAt:   updated.created_at,
+        },
+      });
+    } catch (err) {
+      if (err.code === '23505') return res.status(409).json({ error: 'username already in use' });
+      console.error('[PATCH /api/auth/profile]', err);
+      res.status(500).json({ error: 'server error' });
     }
   });
 

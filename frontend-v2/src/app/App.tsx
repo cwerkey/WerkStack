@@ -1,5 +1,5 @@
 import { Suspense, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/app/providers/QueryProvider';
 import { AppShell } from '@/layouts/AppShell';
@@ -15,6 +15,7 @@ import {
   SubnetsPage, LeasesPage, VlansPage,
   ActivityPage, GuidesPage, TodoListPage,
   SettingsPage, LoginPage, SetupPage, NotFoundPage,
+  SiteSelectorPage,
 } from '@/app/routes';
 
 function AuthHydrator() {
@@ -41,6 +42,7 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/setup" element={<SetupPage />} />
+              <Route path="/sites" element={<RequireAuth><SiteSelectorPage /></RequireAuth>} />
               <Route
                 path="/*"
                 element={

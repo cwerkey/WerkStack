@@ -80,6 +80,68 @@
   --color-type-default:  #5c8a5c;
 }
 
+/* ─── Enterprise Dark ────────────────────────────────────────────────────── */
+[data-theme='enterprise-dark'] {
+  --color-bg:          #12151a;
+  --color-surface:     #1c2028;
+  --color-surface-2:   #212630;
+  --color-sidebar-bg:  #151820;
+  --color-hover:       #222830;
+  --color-input-bg:    #12151a;
+  --color-device-bg:   #1e2024;
+
+  --color-border:      #2e3440;
+  --color-border-2:    #3e4650;
+
+  --color-text:        #d4d9dd;
+  --color-text-muted:  #8896a0;
+  --color-text-dim:    #5a6470;
+
+  --color-accent:      #3d8fd9;
+  --color-accent-dark: #2e6faa;
+  --color-accent-tint: #3d8fd918;
+  --color-accent-text: #fff;
+
+  --shadow-sm:  0 1px 4px rgba(0,0,0,0.35);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.45);
+  --shadow-lg:  0 8px 24px rgba(0,0,0,0.55);
+}
+
+/* ─── Terminal (Homelab) ─────────────────────────────────────────────────── */
+[data-theme='terminal'] {
+  --color-bg:          #0a0a0a;
+  --color-surface:     #0e0e0e;
+  --color-surface-2:   #121212;
+  --color-sidebar-bg:  #080808;
+  --color-hover:       #1a1a1a;
+  --color-input-bg:    #0a0a0a;
+  --color-device-bg:   #111111;
+
+  --color-border:      #1a2e1a;
+  --color-border-2:    #264026;
+
+  --color-text:        #33ff33;
+  --color-text-muted:  #1a9f1a;
+  --color-text-dim:    #0d5a0d;
+
+  --color-accent:      #33ff33;
+  --color-accent-dark: #22cc22;
+  --color-accent-tint: #33ff3318;
+  --color-accent-text: #0a0a0a;
+
+  --color-success:     #33ff33;
+  --color-warning:     #ffcc00;
+  --color-error:       #ff3333;
+  --color-info:        #33ccff;
+
+  --shadow-sm:  0 1px 4px rgba(0,255,0,0.06);
+  --shadow-md:  0 4px 12px rgba(0,255,0,0.08);
+  --shadow-lg:  0 8px 24px rgba(0,255,0,0.1);
+
+  --font-ui:    'JetBrains Mono', monospace;
+  --font-hero:  'JetBrains Mono', monospace;
+}
+
 /* ─── Light mode ─────────────────────────────────────────────────────────── */
 [data-theme='light'] {
   --color-bg:          #f0f2f5;

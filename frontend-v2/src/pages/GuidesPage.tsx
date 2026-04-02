@@ -558,6 +558,7 @@ export default function GuidesPage() {
                 key={g.id}
                 guide={g}
                 active={selectedGuideId === g.id}
+                currentSiteId={siteId}
                 onSelect={() => setSelectedGuideId(g.id)}
                 onDelete={() => handleDeleteGuide(g.id)}
               />
@@ -583,12 +584,17 @@ export default function GuidesPage() {
               showTagForm={showTagForm}
               tagEntityType={tagEntityType}
               tagEntityId={tagEntityId}
+              readOnly={selectedGuide.isShared && selectedGuide.siteId !== siteId}
               onTitleClick={() => { setEditingTitle(true); }}
               onTitleChange={setTitleValue}
               onTitleBlur={handleTitleBlur}
               onTitleKeyDown={(e) => { if (e.key === 'Enter') { e.currentTarget.blur(); } }}
               onBlocksChange={handleBlocksChange}
               onManualSave={handleManualSave}
+              onToggleShared={async () => {
+                if (!selectedGuideId) return;
+                await updateGuide.mutateAsync({ id: selectedGuideId, is_shared: !selectedGuide.isShared });
+              }}
               onShowTagForm={() => setShowTagForm(true)}
               onHideTagForm={() => { setShowTagForm(false); setTagEntityId(''); }}
               onTagEntityTypeChange={setTagEntityType}
@@ -726,12 +732,14 @@ function ManualTreeItem({
 interface GuideTocItemProps {
   guide: Guide;
   active: boolean;
+  currentSiteId: string;
   onSelect: () => void;
   onDelete: () => void;
 }
 
-function GuideTocItem({ guide, active, onSelect, onDelete }: GuideTocItemProps) {
+function GuideTocItem({ guide, active, currentSiteId, onSelect, onDelete }: GuideTocItemProps) {
   const [hovered, setHovered] = useState(false);
+  const isFromOtherSite = guide.isShared && guide.siteId !== currentSiteId;
 
   return (
     <div
@@ -758,7 +766,22 @@ function GuideTocItem({ guide, active, onSelect, onDelete }: GuideTocItemProps) 
       }}>
         {guide.title}
       </span>
-      {hovered && (
+      {isFromOtherSite && (
+        <span style={{
+          fontSize: '9px',
+          fontWeight: 600,
+          padding: '1px 5px',
+          borderRadius: '8px',
+          background: 'var(--color-accent-tint, #c47c5a18)',
+          color: 'var(--color-accent, #c47c5a)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          flexShrink: 0,
+        }}>
+          shared
+        </span>
+      )}
+      {hovered && !isFromOtherSite && (
         <button
           className="guide-del-btn"
           title="Delete guide"
@@ -782,12 +805,14 @@ interface GuideEditorProps {
   showTagForm: boolean;
   tagEntityType: EntityType;
   tagEntityId: string;
+  readOnly: boolean;
   onTitleClick: () => void;
   onTitleChange: (v: string) => void;
   onTitleBlur: () => void;
   onTitleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onBlocksChange: (blocks: GuideBlock[]) => void;
   onManualSave: () => void;
+  onToggleShared: () => void;
   onShowTagForm: () => void;
   onHideTagForm: () => void;
   onTagEntityTypeChange: (v: EntityType) => void;
@@ -805,12 +830,14 @@ function GuideEditor({
   showTagForm,
   tagEntityType,
   tagEntityId,
+  readOnly,
   onTitleClick,
   onTitleChange,
   onTitleBlur,
   onTitleKeyDown,
   onBlocksChange,
   onManualSave,
+  onToggleShared,
   onShowTagForm,
   onHideTagForm,
   onTagEntityTypeChange,
@@ -842,7 +869,7 @@ function GuideEditor({
         flexShrink: 0,
         gap: '8px',
       }}>
-        {editingTitle ? (
+        {editingTitle && !readOnly ? (
           <input
             autoFocus
             value={titleValue}
@@ -863,15 +890,15 @@ function GuideEditor({
           />
         ) : (
           <h1
-            onClick={onTitleClick}
-            title="Click to edit title"
+            onClick={readOnly ? undefined : onTitleClick}
+            title={readOnly ? undefined : 'Click to edit title'}
             style={{
               flex: 1,
               fontSize: '20px',
               fontWeight: 700,
               margin: 0,
               color: 'var(--color-text, #d4d9dd)',
-              cursor: 'text',
+              cursor: readOnly ? 'default' : 'text',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -880,18 +907,49 @@ function GuideEditor({
             {guide.title}
           </h1>
         )}
+        {!readOnly && (
+          <button
+            onClick={onToggleShared}
+            title={guide.isShared ? 'Shared across all sites — click to unshare' : 'Click to share across all sites'}
+            style={{
+              padding: '4px 10px',
+              fontSize: '11px',
+              fontWeight: 600,
+              borderRadius: '4px',
+              border: guide.isShared
+                ? '1px solid var(--color-accent, #c47c5a)'
+                : '1px solid var(--color-border, #2e3740)',
+              background: guide.isShared ? 'var(--color-accent-tint, #c47c5a18)' : 'transparent',
+              color: guide.isShared ? 'var(--color-accent, #c47c5a)' : 'var(--color-text-muted, #8a9ba8)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {guide.isShared ? '● shared' : '○ share'}
+          </button>
+        )}
+        {readOnly && (
+          <span style={{
+            fontSize: '11px',
+            color: 'var(--color-text-muted, #8a9ba8)',
+            fontStyle: 'italic',
+          }}>
+            read-only (shared from another site)
+          </span>
+        )}
         <button
           className="guide-save-btn"
           onClick={onManualSave}
+          disabled={readOnly}
           style={{
             padding: '5px 14px',
             fontSize: '12px',
             fontWeight: 500,
             borderRadius: 'var(--radius-sm, 4px)',
             border: 'none',
-            background: 'var(--color-accent, #c47c5a)',
-            color: 'var(--color-accent-text, #fff)',
-            cursor: 'pointer',
+            background: readOnly ? 'var(--color-border, #2e3740)' : 'var(--color-accent, #c47c5a)',
+            color: readOnly ? 'var(--color-text-muted, #8a9ba8)' : 'var(--color-accent-text, #fff)',
+            cursor: readOnly ? 'not-allowed' : 'pointer',
             ...(saveColor[saveState] ? { background: 'transparent', color: saveColor[saveState] } : {}),
           }}
         >
@@ -913,44 +971,46 @@ function GuideEditor({
           Linked:
         </span>
         {guide.links.map(link => (
-          <EntityTagPill key={link.id} link={link} onRemove={() => onRemoveTag(link)} />
+          <EntityTagPill key={link.id} link={link} onRemove={readOnly ? undefined : () => onRemoveTag(link)} />
         ))}
-        {!showTagForm ? (
-          <button
-            onClick={onShowTagForm}
-            style={{
-              padding: '3px 8px',
-              fontSize: '11px',
-              borderRadius: '99px',
-              border: '1px dashed var(--color-border, #2e3740)',
-              background: 'transparent',
-              color: 'var(--color-text-muted, #8a9ba8)',
-              cursor: 'pointer',
-            }}
-          >
-            + Tag
-          </button>
-        ) : (
-          <TagForm
-            entityType={tagEntityType}
-            entityId={tagEntityId}
-            onEntityTypeChange={onTagEntityTypeChange}
-            onEntityIdChange={onTagEntityIdChange}
-            onAdd={onAddTag}
-            onCancel={onHideTagForm}
-          />
+        {!readOnly && (
+          !showTagForm ? (
+            <button
+              onClick={onShowTagForm}
+              style={{
+                padding: '3px 8px',
+                fontSize: '11px',
+                borderRadius: '99px',
+                border: '1px dashed var(--color-border, #2e3740)',
+                background: 'transparent',
+                color: 'var(--color-text-muted, #8a9ba8)',
+                cursor: 'pointer',
+              }}
+            >
+              + Tag
+            </button>
+          ) : (
+            <TagForm
+              entityType={tagEntityType}
+              entityId={tagEntityId}
+              onEntityTypeChange={onTagEntityTypeChange}
+              onEntityIdChange={onTagEntityIdChange}
+              onAdd={onAddTag}
+              onCancel={onHideTagForm}
+            />
+          )
         )}
       </div>
 
       {/* Block editor area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-        <BlockEditor blocks={blocks} onChange={onBlocksChange} />
+        <BlockEditor blocks={blocks} onChange={onBlocksChange} readOnly={readOnly} />
       </div>
     </div>
   );
 }
 
-function EntityTagPill({ link, onRemove }: { link: GuideLink; onRemove: () => void }) {
+function EntityTagPill({ link, onRemove }: { link: GuideLink; onRemove?: () => void }) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -974,7 +1034,7 @@ function EntityTagPill({ link, onRemove }: { link: GuideLink; onRemove: () => vo
       <span style={{ fontFamily: 'monospace', fontSize: '10px', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {link.entityId.slice(0, 8)}…
       </span>
-      {hovered && (
+      {hovered && onRemove && (
         <button
           className="guide-del-btn"
           onClick={onRemove}

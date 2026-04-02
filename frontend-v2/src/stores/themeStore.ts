@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'dark' | 'light' | 'enterprise-dark' | 'terminal';
 
 interface TaxonomyColors {
   vlans: Record<string, string>;

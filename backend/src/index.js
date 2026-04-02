@@ -36,6 +36,7 @@ const todosRoutes            = require('./routes/todos');
 const guidesByEntityRoutes   = require('./routes/guides_entity');
 const platformImportRoutes   = require('./routes/platform_import');
 const rbacRoutes             = require('./routes/rbac');
+const demoSeedRoutes         = require('./routes/demo_seed');
 const startWorkers      = require('./workers');
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -120,6 +121,7 @@ async function start() {
   app.use('/api/sites/:siteId/guides',      guidesByEntityRoutes(db));
   app.use('/api/sites',                     platformImportRoutes(db));
   app.use('/api/sites/:siteId/security-groups', rbacRoutes(db));
+  app.use('/api/sites',                        demoSeedRoutes(db));
 
   startWorkers(db);
 
