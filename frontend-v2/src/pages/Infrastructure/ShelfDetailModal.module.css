@@ -1,0 +1,219 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.panel {
+  background: var(--color-surface, #1a1e22);
+  border: 1px solid var(--color-border, #2a3038);
+  border-radius: 8px;
+  width: calc(100vw - 80px);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--color-border, #2a3038);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-accent, #c47c5a);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #8a9299);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.closeBtn:hover {
+  color: var(--color-text, #d4d9dd);
+}
+
+.body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+
+.sidebar {
+  width: 180px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebarTitle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-text-muted, #5a6068);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sidebarList {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebarEmpty {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--color-text-muted, #5a6068);
+  padding: 8px 0;
+}
+
+.sidebarDevice {
+  background: var(--color-card-bg, #141618);
+  border: 1px solid var(--color-border, #262c30);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: grab;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--color-text, #d4d9dd);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.sidebarDevice:hover {
+  border-color: var(--color-accent, #c47c5a);
+}
+
+.sidebarDeviceName {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.sidebarDeviceBadge {
+  background: #2a3038;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 8px;
+  color: var(--color-text-muted, #8a9299);
+  flex-shrink: 0;
+}
+
+.gridArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gridLabel {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--color-text-muted, #5a6068);
+}
+
+.grid {
+  position: relative;
+  background: var(--color-card-bg, #141618);
+  border: 1px solid var(--color-border, #262c30);
+  border-radius: 6px;
+  overflow: hidden;
+  background-image:
+    linear-gradient(var(--color-border-subtle, #1d2022) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border-subtle, #1d2022) 1px, transparent 1px);
+}
+
+.placedChild {
+  position: absolute;
+  z-index: 2;
+  cursor: pointer;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.placedChild:hover {
+  outline: 1px solid var(--color-accent, #c47c5a);
+  outline-offset: -1px;
+  z-index: 3;
+}
+
+.placedChildName {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--color-text-muted, #888);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+
+.dragGhost {
+  position: absolute;
+  background: rgba(196, 124, 90, 0.13);
+  border: 2px dashed var(--color-accent, #c47c5a);
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.footer {
+  padding: 11px 18px;
+  border-top: 1px solid var(--color-border, #2a3038);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.footerInfo {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--color-text-muted, #5a6068);
+  flex: 1;
+}
+
+.closeFooterBtn {
+  padding: 5px 14px;
+  font-size: 11px;
+  font-family: Inter, system-ui, sans-serif;
+  color: var(--color-text, #d4d9dd);
+  background: none;
+  border: 1px solid var(--color-border, #2a3038);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.closeFooterBtn:hover {
+  background: var(--color-hover, #1e252c);
+  border-color: var(--color-text-muted, #5a6068);
+}

@@ -75,10 +75,13 @@ export function DeployWizard({
   const [quickTypeId, setQuickTypeId] = useState('');
 
   // Step 2
-  const [leaveUnassigned, setLeaveUnassigned] = useState(false);
+  const [placementMode, setPlacementMode] = useState<'rack' | 'shelf' | 'unassigned'>('rack');
   const [selectedRackId, setSelectedRackId] = useState<string>('');
   const [selectedRackU, setSelectedRackU] = useState<number>(1);
   const [face, setFace] = useState<'front' | 'rear'>('front');
+  const [selectedShelfId, setSelectedShelfId] = useState<string>('');
+  const [shelfCol, setShelfCol] = useState(0);
+  const [shelfRow, setShelfRow] = useState(0);
 
   // Step 3
   const [name, setName] = useState('');
@@ -99,10 +102,13 @@ export function DeployWizard({
     setQuickName('');
     setQuickUHeight(1);
     setQuickTypeId(deviceTypes[0]?.id ?? '');
-    setLeaveUnassigned(false);
+    setPlacementMode('rack');
     setSelectedRackId(rackId ?? racks[0]?.id ?? '');
     setSelectedRackU(rackU ?? 1);
     setFace('front');
+    setSelectedShelfId('');
+    setShelfCol(0);
+    setShelfRow(0);
     setName('');
     setIp('');
     setSerial('');
@@ -132,7 +138,7 @@ export function DeployWizard({
   });
 
   const currentUHeight = quickDevice ? quickUHeight : (selectedTemplate?.uHeight ?? 1);
-  const collisions = !leaveUnassigned && selectedRackId
+  const collisions = placementMode === 'rack' && selectedRackId
     ? devices.filter(d => {
         if (d.rackId !== selectedRackId) return false;
         if (d.face && d.face !== face) return false;
@@ -142,6 +148,13 @@ export function DeployWizard({
         return selectedRackU <= dEnd && newEnd >= d.rackU;
       })
     : [];
+
+  // Shelf devices available for placement
+  const shelfDevices = devices.filter(d => {
+    const tmpl = templates.find(t => t.id === d.templateId);
+    return tmpl?.isShelf === true && d.rackId;
+  });
+  const selectedShelf = shelfDevices.find(d => d.id === selectedShelfId);
 
   function goToStep2() {
     const prefill = quickDevice
@@ -158,17 +171,25 @@ export function DeployWizard({
       templateId: (!quickDevice && selectedTemplateId) ? selectedTemplateId : undefined,
       typeId: resolvedTypeId,
       name: name.trim(),
-      rackId: leaveUnassigned ? undefined : (selectedRackId || undefined),
-      zoneId: leaveUnassigned ? undefined : (selectedRack?.zoneId || undefined),
-      rackU: leaveUnassigned ? undefined : (selectedRackU || undefined),
       uHeight: quickDevice ? quickUHeight : (selectedTemplate?.uHeight ?? 1),
-      face: leaveUnassigned ? undefined : face,
       ip: ip.trim() || undefined,
       serial: serial.trim() || undefined,
       assetTag: assetTag.trim() || undefined,
       notes: notes.trim() || undefined,
       isDraft: false,
     };
+
+    if (placementMode === 'rack') {
+      body.rackId = selectedRackId || undefined;
+      body.zoneId = selectedRack?.zoneId || undefined;
+      body.rackU = selectedRackU || undefined;
+      body.face = face;
+    } else if (placementMode === 'shelf' && selectedShelf) {
+      body.shelfDeviceId = selectedShelf.id;
+      body.shelfCol = shelfCol;
+      body.shelfRow = shelfRow;
+      body.rackId = selectedShelf.rackId;
+    }
     createDevice.mutate(body, {
       onSuccess: (created) => {
         onDeployed?.(created.id, selectedRackId || undefined, selectedRack?.zoneId);
@@ -336,17 +357,44 @@ export function DeployWizard({
         {/* ── Step 2: Placement ── */}
         {step === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', ...LABEL_STYLE }}>
-              <input
-                type="checkbox"
-                checked={leaveUnassigned}
-                onChange={e => setLeaveUnassigned(e.target.checked)}
-                style={{ accentColor: '#c47c5a' }}
-              />
-              Leave unassigned (not in any rack)
-            </label>
+            {/* Placement mode selection */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {([
+                { id: 'rack', label: 'Place in rack', desc: 'Assign to a rack U position' },
+                ...(shelfDevices.length > 0
+                  ? [{ id: 'shelf', label: 'Place on shelf', desc: 'Assign to a shelf device' }]
+                  : []),
+                { id: 'unassigned', label: 'Leave unassigned', desc: 'Not in any rack — assign later' },
+              ] as const).map(opt => (
+                <div
+                  key={opt.id}
+                  onClick={() => setPlacementMode(opt.id as typeof placementMode)}
+                  style={{
+                    padding: '8px 12px', borderRadius: 4, cursor: 'pointer',
+                    border: `1px solid ${placementMode === opt.id ? '#c47c5a' : '#2a3038'}`,
+                    background: placementMode === opt.id ? '#c47c5a15' : '#0e1012',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}
+                >
+                  <div style={{
+                    width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+                    border: `2px solid ${placementMode === opt.id ? '#c47c5a' : '#3a4248'}`,
+                    background: placementMode === opt.id ? '#c47c5a' : 'transparent',
+                  }} />
+                  <div>
+                    <div style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 12, fontWeight: 600, color: '#d4d9dd' }}>
+                      {opt.label}
+                    </div>
+                    <div style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 11, color: '#8a9299' }}>
+                      {opt.desc}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
 
-            {!leaveUnassigned && (
+            {/* Rack placement fields */}
+            {placementMode === 'rack' && (
               <>
                 <div>
                   <div style={{ ...LABEL_STYLE, marginBottom: 4 }}>Rack</div>
@@ -411,6 +459,70 @@ export function DeployWizard({
                     ))}
                   </div>
                 )}
+              </>
+            )}
+
+            {/* Shelf placement fields */}
+            {placementMode === 'shelf' && (
+              <>
+                <div>
+                  <div style={{ ...LABEL_STYLE, marginBottom: 4 }}>Shelf</div>
+                  <select
+                    style={INPUT_STYLE}
+                    value={selectedShelfId}
+                    onChange={e => setSelectedShelfId(e.target.value)}
+                  >
+                    <option value="">Select a shelf…</option>
+                    {shelfDevices.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedShelf && (() => {
+                  const shelfTpl = templates.find(t => t.id === selectedShelf.templateId);
+                  const shelfGridCols = shelfTpl?.gridCols ?? 96;
+                  const shelfGridRows = (selectedShelf.uHeight ?? 1) * 12;
+                  const CELL = 6;
+                  const gridW = shelfGridCols * CELL;
+                  const gridH = shelfGridRows * CELL;
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ ...LABEL_STYLE }}>Click to set position (col: {shelfCol}, row: {shelfRow})</div>
+                      <div
+                        style={{
+                          width: gridW, height: gridH, position: 'relative',
+                          background: '#141618', border: '1px solid #262c30', borderRadius: 4,
+                          overflow: 'hidden', cursor: 'crosshair',
+                          backgroundImage: `
+                            linear-gradient(#1d2022 1px, transparent 1px),
+                            linear-gradient(90deg, #1d2022 1px, transparent 1px)
+                          `,
+                          backgroundSize: `${CELL}px ${CELL}px`,
+                        }}
+                        onClick={e => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setShelfCol(Math.max(0, Math.min(Math.floor((e.clientX - rect.left) / CELL), shelfGridCols - 1)));
+                          setShelfRow(Math.max(0, Math.min(Math.floor((e.clientY - rect.top) / CELL), shelfGridRows - 1)));
+                        }}
+                      >
+                        {/* Position indicator */}
+                        <div style={{
+                          position: 'absolute',
+                          left: shelfCol * CELL,
+                          top: shelfRow * CELL,
+                          width: Math.min(currentUHeight * 12, shelfGridCols - shelfCol) * CELL,
+                          height: Math.min(currentUHeight * 12, shelfGridRows - shelfRow) * CELL,
+                          background: 'rgba(196, 124, 90, 0.2)',
+                          border: '2px solid #c47c5a',
+                          borderRadius: 2,
+                          pointerEvents: 'none',
+                        }} />
+                      </div>
+                    </div>
+                  );
+                })()}
               </>
             )}
 

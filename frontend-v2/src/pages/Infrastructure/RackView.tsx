@@ -18,10 +18,13 @@ interface RackViewProps {
   modules?: ModuleInstance[];
   connections?: Connection[];
   face: 'front' | 'rear';
+  templateFace?: 'front' | 'rear';
   selectedDeviceId?: string | null;
   onDeviceClick: (deviceId: string) => void;
   onDevicePositionChange?: (deviceId: string, newRackU: number) => void;
+  onDeviceDrop?: (deviceId: string, rackU: number) => void;
   onEmptySlotDblClick?: (rackU: number) => void;
+  onShelfOpen?: (shelfDeviceId: string) => void;
 }
 
 interface PositionedDevice {
@@ -48,16 +51,21 @@ export function RackView({
   modules = [],
   connections = [],
   face,
+  templateFace: templateFaceProp,
   selectedDeviceId,
   onDeviceClick,
   onDevicePositionChange,
+  onDeviceDrop,
   onEmptySlotDblClick,
+  onShelfOpen,
 }: RackViewProps) {
+  const resolvedTemplateFace = templateFaceProp ?? 'front';
   const totalHeight = rack.uHeight * RACK_UNIT_HEIGHT;
   const rackBodyRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dragOffsetY, setDragOffsetY] = useState(0);
   const dragMoved = useRef(false);
+  const [dropTargetU, setDropTargetU] = useState<{ u: number; height: number; valid: boolean } | null>(null);
 
   const rackDevices = useMemo(() => {
     return devices
@@ -158,7 +166,66 @@ export function RackView({
           <div key={u} className={styles.uLabel}>{u}</div>
         ))}
       </div>
-      <div ref={rackBodyRef} className={styles.rackBody} style={{ width: RACK_WIDTH, height: totalHeight }}>
+      <div
+        ref={rackBodyRef}
+        className={styles.rackBody}
+        style={{ width: RACK_WIDTH, height: totalHeight }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (!rackBodyRef.current) return;
+          const rect = rackBodyRef.current.getBoundingClientRect();
+          const offsetY = e.clientY - rect.top;
+          const uHeight = Number(e.dataTransfer.types.includes('werkstack/device-uheight') ? 1 : 1);
+          // We can't read data during dragover, so use a default of 1; actual check happens on drop
+          const rawU = (totalHeight - offsetY) / RACK_UNIT_HEIGHT - uHeight + 1;
+          const snappedU = Math.max(1, Math.min(rack.uHeight - uHeight + 1, Math.round(rawU)));
+          const hasCollision = rackDevices.some(d => {
+            if (!d.rackU || !d.uHeight) return false;
+            const dTop = d.rackU;
+            const dBottom = d.rackU + (d.uHeight ?? 1) - 1;
+            return snappedU <= dBottom && snappedU + uHeight - 1 >= dTop;
+          });
+          setDropTargetU({ u: snappedU, height: uHeight, valid: !hasCollision });
+        }}
+        onDragLeave={(e) => {
+          // Only clear if we're leaving the rackBody itself
+          if (rackBodyRef.current && !rackBodyRef.current.contains(e.relatedTarget as Node)) {
+            setDropTargetU(null);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDropTargetU(null);
+          const deviceId = e.dataTransfer.getData('werkstack/device-id');
+          if (!deviceId || !onDeviceDrop || !rackBodyRef.current) return;
+          const uHeight = Number(e.dataTransfer.getData('werkstack/device-uheight')) || 1;
+          const rect = rackBodyRef.current.getBoundingClientRect();
+          const offsetY = e.clientY - rect.top;
+          const rawU = (totalHeight - offsetY) / RACK_UNIT_HEIGHT - uHeight + 1;
+          const snappedU = Math.max(1, Math.min(rack.uHeight - uHeight + 1, Math.round(rawU)));
+          const hasCollision = rackDevices.some(d => {
+            if (!d.rackU || !d.uHeight) return false;
+            const dTop = d.rackU;
+            const dBottom = d.rackU + (d.uHeight ?? 1) - 1;
+            return snappedU <= dBottom && snappedU + uHeight - 1 >= dTop;
+          });
+          if (!hasCollision) onDeviceDrop(deviceId, snappedU);
+        }}
+      >
+        {/* Drop indicator */}
+        {dropTargetU && (
+          <div
+            className={styles.dropIndicator}
+            style={{
+              bottom: (dropTargetU.u - 1) * RACK_UNIT_HEIGHT,
+              height: dropTargetU.height * RACK_UNIT_HEIGHT,
+              borderColor: dropTargetU.valid ? '#3a8c4a' : '#8a2020',
+              background: dropTargetU.valid ? 'rgba(58, 140, 74, 0.15)' : 'rgba(138, 32, 32, 0.15)',
+            }}
+          />
+        )}
+
         {/* U-slot grid lines */}
         {uLabels.map(u => (
           <div
@@ -188,6 +255,8 @@ export function RackView({
               return t ? [{ device: d, template: t }] : [];
             });
 
+          const isShelf = template?.isShelf === true;
+
           return (
             <div
               key={device.id}
@@ -195,11 +264,28 @@ export function RackView({
               style={{ top: displayTop, height: heightPx }}
               onClick={() => { if (!dragMoved.current) onDeviceClick(device.id); }}
               onMouseDown={(e) => handleMouseDown(e, device.id, topPx, device.uHeight ?? template?.uHeight ?? 1)}
+              onDoubleClick={isShelf && onShelfOpen ? (e) => { e.stopPropagation(); onShelfOpen(device.id); } : undefined}
+              onContextMenu={isShelf && onShelfOpen ? (e) => { e.preventDefault(); onShelfOpen(device.id); } : undefined}
             >
-              {template ? (
+              {isShelf ? (
+                <ShelfBracket
+                  device={device}
+                  template={template!}
+                  face={resolvedTemplateFace}
+                  heightPx={heightPx}
+                  childDevices={devices.filter(d => d.shelfDeviceId === device.id)}
+                  templates={templates}
+                  modules={modules}
+                  pcieTemplates={pcieTemplates}
+                  deviceConnections={deviceConnections}
+                  shelvedItems={shelvedItems}
+                  onDeviceClick={onDeviceClick}
+                  onShelfOpen={onShelfOpen}
+                />
+              ) : template ? (
                 <TemplatedDevice
                   template={template}
-                  face={face}
+                  face={resolvedTemplateFace}
                   heightPx={heightPx}
                   modules={modules.filter(m => m.deviceId === device.id)}
                   pcieTemplates={pcieTemplates}
@@ -304,6 +390,105 @@ function SimpleDevice({ name, color }: { name: string; color: string }) {
   return (
     <div className={styles.simpleDevice} style={{ background: color, border: `1px solid ${color}` }}>
       <span className={styles.simpleDeviceName}>{name}</span>
+    </div>
+  );
+}
+
+function ShelfBracket({
+  device,
+  template,
+  face,
+  heightPx,
+  childDevices,
+  templates: allTemplates,
+  modules,
+  pcieTemplates,
+  deviceConnections,
+  shelvedItems,
+  onDeviceClick,
+  onShelfOpen,
+}: {
+  device: DeviceInstance;
+  template: DeviceTemplate;
+  face: 'front' | 'rear';
+  heightPx: number;
+  childDevices: DeviceInstance[];
+  templates: DeviceTemplate[];
+  modules: ModuleInstance[];
+  pcieTemplates: PcieTemplate[];
+  deviceConnections: Connection[];
+  shelvedItems: ShelvedItem[];
+  onDeviceClick: (deviceId: string) => void;
+  onShelfOpen?: (shelfDeviceId: string) => void;
+}) {
+  // Shelf grid: 1:1 mapping between shelf grid cells and device grid cells
+  const gridCols = template.gridCols ?? 96;
+  const gridRows = template.uHeight * 12;
+  const cellW = RACK_WIDTH / gridCols;
+  const cellH = heightPx / gridRows;
+
+  // Also render the shelf's own ports via TemplatedDevice (projected through)
+  const { blocks, pcieBlockLabels } = useMemo(
+    () => buildVirtualFaceplateWithMeta(template, face, modules.filter(m => m.deviceId === device.id), pcieTemplates, shelvedItems),
+    [template, face, modules, device.id, pcieTemplates, shelvedItems],
+  );
+
+  const portVisuals = useMemo(
+    () => buildPortVisuals(blocks, deviceConnections),
+    [blocks, deviceConnections],
+  );
+
+  return (
+    <div className={styles.shelfBracket} style={{ height: heightPx }}>
+      {/* Shelf template overlay (background — shows shelf's own ports) */}
+      <TemplateOverlay
+        blocks={blocks}
+        gridCols={gridCols}
+        gridRows={gridRows}
+        width={RACK_WIDTH}
+        height={heightPx}
+        blockOpacity={portVisuals?.opacity}
+        blockBorderStyle={portVisuals?.borderStyle}
+        blockBadge={Object.keys(pcieBlockLabels).length > 0 ? pcieBlockLabels : undefined}
+        interactive
+      />
+
+      {/* Child devices positioned at shelfCol/shelfRow */}
+      {childDevices.map(child => {
+        if (child.shelfCol == null || child.shelfRow == null) return null;
+        const childTpl = child.templateId
+          ? allTemplates.find(t => t.id === child.templateId)
+          : undefined;
+        if (!childTpl) return null;
+
+        const childCols = childTpl.gridCols ?? 96;
+        const childRows = childTpl.uHeight * 12;
+        const childBlocks = face === 'rear' ? childTpl.layout.rear : childTpl.layout.front;
+
+        return (
+          <div
+            key={child.id}
+            className={styles.shelfChild}
+            style={{
+              left: child.shelfCol * cellW,
+              top: child.shelfRow * cellH,
+              width: childCols * cellW,
+              height: childRows * cellH,
+            }}
+            onClick={(e) => { e.stopPropagation(); onDeviceClick(child.id); }}
+            onContextMenu={onShelfOpen ? (e) => { e.preventDefault(); e.stopPropagation(); onShelfOpen(device.id); } : undefined}
+          >
+            <TemplateOverlay
+              blocks={childBlocks}
+              gridCols={childCols}
+              gridRows={childRows}
+              width={childCols * cellW}
+              height={childRows * cellH}
+              interactive
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

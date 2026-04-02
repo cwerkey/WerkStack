@@ -50,6 +50,7 @@ import { ExternalStorageWizard } from '@/wizards/ExternalStorageWizard';
 import { VmWizard } from '@/wizards/VmWizard';
 import { DockerComposeImport } from '@/wizards/DockerComposeImport';
 import { RackPickerModal } from './RackPickerModal';
+import { ShelfDetailModal } from './ShelfDetailModal';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { exportToPNG, exportRackToPDF } from '@/utils/exportUtils';
 import QueryErrorState from '@/components/QueryErrorState';
@@ -122,10 +123,15 @@ export default function RackViewHub() {
 
   // Face toggle
   const [face, setFace] = useState<'front' | 'rear'>('front');
+  const [showDeviceRear, setShowDeviceRear] = useState(false);
+  const templateFace: 'front' | 'rear' = showDeviceRear ? 'rear' : 'front';
 
   // Deploy wizard state
   const [deployWizardOpen, setDeployWizardOpen] = useState(false);
   const [deployTargetU, setDeployTargetU] = useState<number | undefined>();
+
+  // Shelf modal state
+  const [shelfModalDeviceId, setShelfModalDeviceId] = useState<string | null>(null);
 
   // Connection wizard state
   const [connWizardOpen, setConnWizardOpen] = useState(false);
@@ -266,6 +272,11 @@ export default function RackViewHub() {
     updatePosition.mutate({ id: deviceId, rackId: selectedRackId, rackU: newRackU, face });
   }
 
+  function handleDeviceDrop(deviceId: string, rackU: number) {
+    if (!selectedRackId) return;
+    updatePosition.mutate({ id: deviceId, rackId: selectedRackId, rackU, face });
+  }
+
   function handleEmptySlotDblClick(rackU: number) {
     setDeployTargetU(rackU);
     setDeployWizardOpen(true);
@@ -365,16 +376,22 @@ export default function RackViewHub() {
   // Connections passed to RackView
   const rackConnections = selectedDeviceId ? selectedDeviceConnections : [];
 
+  // Unracked devices (site-wide)
+  const unrackedDevices = devices.filter(d => !d.rackId && !d.shelfDeviceId);
+
   return (
     <div className={styles.hub}>
       {devicesQ.error && <QueryErrorState error={devicesQ.error} onRetry={() => devicesQ.refetch()} />}
       <ZoneSidebar
         zones={zones}
         racks={racks}
+        devices={devices}
+        templates={templates}
         selectedZoneId={selectedZoneId}
         selectedRackId={selectedRackId}
         onZoneSelect={handleZoneSelect}
         onRackSelect={handleRackSelect}
+        onDeviceClick={handleDeviceClick}
       />
 
       <div className={styles.main}>
@@ -406,6 +423,31 @@ export default function RackViewHub() {
                 Rear
               </button>
             </div>
+            <label
+              className={styles.deviceRearLabel}
+              onClick={() => setShowDeviceRear(v => !v)}
+            >
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 3,
+                  border: `1px solid ${showDeviceRear ? 'var(--color-accent, #c47c5a)' : 'var(--color-border, #2a3038)'}`,
+                  background: showDeviceRear ? 'var(--color-accent, #c47c5a)' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                {showDeviceRear && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 5L4.5 7.5L8 3" stroke="#0c0d0e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              device rear
+            </label>
             <ExportDropdown
               disabled={!currentRack}
               options={[
@@ -431,7 +473,7 @@ export default function RackViewHub() {
           </div>
         </div>
 
-        {/* Rack View */}
+        {/* Rack View + Unracked Panel */}
         <div className={styles.rackArea} ref={rackAreaRef}>
           {currentRack ? (
             <RackView
@@ -442,11 +484,14 @@ export default function RackViewHub() {
               deviceTypes={deviceTypes}
               modules={selectedDeviceModules}
               face={face}
+              templateFace={templateFace}
               connections={rackConnections}
               selectedDeviceId={selectedDeviceId}
               onDeviceClick={handleDeviceClick}
               onDevicePositionChange={handleDevicePositionChange}
+              onDeviceDrop={handleDeviceDrop}
               onEmptySlotDblClick={handleEmptySlotDblClick}
+              onShelfOpen={setShelfModalDeviceId}
             />
           ) : (
             <div className={styles.noRack}>
@@ -457,6 +502,44 @@ export default function RackViewHub() {
                   : 'Select a rack from the sidebar'}
             </div>
           )}
+
+          {/* Unracked panel */}
+          <div className={styles.unrackedPanel}>
+            <div className={styles.unrackedPanelHeader}>
+              UNRACKED ({unrackedDevices.length})
+            </div>
+            {unrackedDevices.length === 0 ? (
+              <div className={styles.unrackedPanelEmpty}>all devices are racked</div>
+            ) : (
+              <div className={styles.unrackedPanelList}>
+                {unrackedDevices.map(device => {
+                  const tmpl = templates.find(t => t.id === device.templateId);
+                  const uH = device.uHeight ?? tmpl?.uHeight ?? 1;
+                  return (
+                    <div
+                      key={device.id}
+                      className={styles.unrackedPanelDevice}
+                      draggable
+                      onClick={() => handleDeviceClick(device.id)}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('werkstack/device-id', device.id);
+                        e.dataTransfer.setData('werkstack/device-uheight', String(uH));
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                    >
+                      <span className={styles.unrackedPanelDeviceName}>{device.name}</span>
+                      <span style={{
+                        background: '#2a3038', borderRadius: 3, padding: '1px 6px',
+                        fontSize: 9, color: '#8a9299', fontFamily: "'JetBrains Mono', monospace",
+                      }}>
+                        {uH}U
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -540,6 +623,18 @@ export default function RackViewHub() {
       </DetailDrawer>
 
       {/* Deploy Wizard */}
+      {/* Shelf Detail Modal */}
+      {shelfModalDeviceId && (
+        <ShelfDetailModal
+          shelf={devices.find(d => d.id === shelfModalDeviceId)!}
+          siteId={siteId}
+          devices={devices}
+          templates={templates}
+          onClose={() => setShelfModalDeviceId(null)}
+          onDeviceClick={handleDeviceClick}
+        />
+      )}
+
       <DeployWizard
         open={deployWizardOpen}
         siteId={siteId}

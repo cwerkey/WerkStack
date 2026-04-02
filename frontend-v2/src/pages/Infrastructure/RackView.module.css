@@ -90,6 +90,44 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
+.dropIndicator {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  border: 2px dashed;
+  border-radius: 2px;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 5;
+  transition: bottom 0.05s ease-out, border-color 0.1s;
+}
+
+.shelfBracket {
+  position: relative;
+  width: 100%;
+  border-left: 3px solid var(--color-text-muted, #5a6068);
+  border-bottom: 3px solid var(--color-text-muted, #5a6068);
+  border-right: 3px solid var(--color-text-muted, #5a6068);
+  border-top: none;
+  background: rgba(90, 96, 104, 0.08);
+  box-sizing: border-box;
+  border-radius: 0 0 3px 3px;
+  overflow: hidden;
+}
+
+.shelfChild {
+  position: absolute;
+  z-index: 2;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.shelfChild:hover {
+  outline: 1px solid var(--color-accent, #c47c5a);
+  outline-offset: -1px;
+  z-index: 3;
+}
+
 .emptyRack {
   display: flex;
   align-items: center;

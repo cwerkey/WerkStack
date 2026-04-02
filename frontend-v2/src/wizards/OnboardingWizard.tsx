@@ -179,8 +179,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
   const [quickDeviceName, setQuickDeviceName] = useState('');
   const [quickUHeight, setQuickUHeight] = useState(1);
   const [quickTypeId, setQuickTypeId] = useState('');
-  const [deviceRackU, setDeviceRackU] = useState(1);
-  const [deviceFace, setDeviceFace] = useState<'front' | 'rear'>('front');
+  const [deviceQueue, setDeviceQueue] = useState<Array<{ templateId?: string; name: string; uHeight: number; typeId: string }>>([]);
 
   // Submit state
   const [submitting, setSubmitting] = useState(false);
@@ -202,8 +201,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
     setQuickDeviceName('');
     setQuickUHeight(1);
     setQuickTypeId(deviceTypes[0]?.id ?? '');
-    setDeviceRackU(1);
-    setDeviceFace('front');
+    setDeviceQueue([]);
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -262,28 +260,12 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
         createdRacks.push(r);
       }
 
-      if (step5Choice === 'template' && selectedTemplateId) {
-        const tmpl = templates.find(t => t.id === selectedTemplateId);
+      for (const entry of deviceQueue) {
         await api.post<DeviceInstance>(`/api/sites/${site.id}/devices`, {
-          templateId: selectedTemplateId,
-          typeId: quickTypeId || deviceTypes[0]?.id || '',
-          name: tmpl ? `${tmpl.make} ${tmpl.model}` : 'New Device',
-          rackId: createdRacks[0]?.id,
-          zoneId: createdZones[0]?.id,
-          rackU: deviceRackU,
-          uHeight: tmpl?.uHeight ?? 1,
-          face: deviceFace,
-          isDraft: false,
-        });
-      } else if (step5Choice === 'quick' && quickDeviceName.trim()) {
-        await api.post<DeviceInstance>(`/api/sites/${site.id}/devices`, {
-          typeId: quickTypeId || deviceTypes[0]?.id || '',
-          name: quickDeviceName.trim(),
-          rackId: createdRacks[0]?.id,
-          zoneId: createdZones[0]?.id,
-          rackU: deviceRackU,
-          uHeight: quickUHeight || 1,
-          face: deviceFace,
+          templateId: entry.templateId || undefined,
+          typeId: entry.typeId,
+          name: entry.name,
+          uHeight: entry.uHeight,
           isDraft: false,
         });
       }
@@ -634,21 +616,61 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
           </div>
         )}
 
-        {/* ── Step 5: First Device ── */}
+        {/* ── Step 5: Add Devices ── */}
         {step === 5 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
               <h2 style={{ margin: '0 0 6px', fontFamily: 'Inter,system-ui,sans-serif', fontSize: 18, fontWeight: 600, color: '#d4d9dd' }}>
-                Add your first device
+                Add devices
               </h2>
+              <div style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 12, color: '#8a9299' }}>
+                Queue up devices to create. You can assign them to racks from the Infrastructure view.
+              </div>
             </div>
+
+            {/* Queued device list */}
+            {deviceQueue.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ ...LABEL_STYLE, fontWeight: 600 }}>Queued ({deviceQueue.length})</div>
+                {deviceQueue.map((entry, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '8px 12px', borderRadius: 4,
+                      border: '1px solid #2a3038', background: '#0e1012',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 12, fontWeight: 600, color: '#d4d9dd' }}>
+                        {entry.name}
+                      </span>
+                      <span style={{
+                        background: '#2a3038', borderRadius: 3, padding: '1px 6px',
+                        fontSize: 9, color: '#8a9299', fontFamily: 'Inter,system-ui,sans-serif',
+                      }}>
+                        {entry.uHeight}U
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setDeviceQueue(q => q.filter((_, j) => j !== i))}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#5a6068', fontSize: 14, padding: '0 4px', lineHeight: 1,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Option cards */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {([
                 { id: 'template', label: 'From template library', desc: 'Choose from predefined device templates' },
                 { id: 'quick', label: 'Quick device', desc: 'Add a device without a template' },
-                { id: 'skip', label: "I'll do this later", desc: 'Skip for now, add devices from the rack view' },
               ] as const).map(opt => (
                 <div
                   key={opt.id}
@@ -718,6 +740,25 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                     </div>
                   ))}
                 </div>
+                {selectedTemplateId && (
+                  <button
+                    style={BTN_PRIMARY}
+                    onClick={() => {
+                      const tmpl = templates.find(t => t.id === selectedTemplateId);
+                      if (!tmpl) return;
+                      setDeviceQueue(q => [...q, {
+                        templateId: tmpl.id,
+                        name: `${tmpl.make} ${tmpl.model}`,
+                        uHeight: tmpl.uHeight,
+                        typeId: quickTypeId || deviceTypes[0]?.id || '',
+                      }]);
+                      setSelectedTemplateId(null);
+                      setStep5TemplateSearch('');
+                    }}
+                  >
+                    + Add to list
+                  </button>
+                )}
               </div>
             )}
 
@@ -756,41 +797,21 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                     </select>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Rack U + face */}
-            {(step5Choice === 'template' || step5Choice === 'quick') && (
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ ...LABEL_STYLE, marginBottom: 4 }}>Rack U position</div>
-                  <input
-                    type="number" min={1} max={42}
-                    style={INPUT_STYLE}
-                    value={deviceRackU}
-                    onChange={e => setDeviceRackU(Math.max(1, Number(e.target.value)))}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ ...LABEL_STYLE, marginBottom: 6 }}>Face</div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {(['front', 'rear'] as const).map(f => (
-                      <button
-                        key={f}
-                        onClick={() => setDeviceFace(f)}
-                        style={{
-                          ...BTN_SECONDARY,
-                          background: deviceFace === f ? '#c47c5a' : '#1a1e22',
-                          color: deviceFace === f ? '#fff' : '#d4d9dd',
-                          borderColor: deviceFace === f ? '#c47c5a' : '#2a3038',
-                          flex: 1,
-                        }}
-                      >
-                        {f === 'front' ? 'Front' : 'Rear'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <button
+                  style={{ ...BTN_PRIMARY, opacity: quickDeviceName.trim() ? 1 : 0.5 }}
+                  disabled={!quickDeviceName.trim()}
+                  onClick={() => {
+                    setDeviceQueue(q => [...q, {
+                      name: quickDeviceName.trim(),
+                      uHeight: quickUHeight || 1,
+                      typeId: quickTypeId || deviceTypes[0]?.id || '',
+                    }]);
+                    setQuickDeviceName('');
+                    setQuickUHeight(1);
+                  }}
+                >
+                  + Add to list
+                </button>
               </div>
             )}
 
@@ -816,7 +837,7 @@ export function OnboardingWizard({ open, onComplete }: OnboardingWizardProps) {
                 disabled={submitting}
                 onClick={handleFinish}
               >
-                {submitting ? 'Setting up…' : 'Finish'}
+                {submitting ? 'Setting up…' : deviceQueue.length > 0 ? `Finish (${deviceQueue.length} device${deviceQueue.length !== 1 ? 's' : ''})` : 'Finish'}
               </button>
             </div>
           </div>
