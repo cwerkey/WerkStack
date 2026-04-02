@@ -58,7 +58,7 @@ export function buildVirtualFaceplateWithMeta(
     const def = BLOCK_DEF_MAP.get(block.type);
     const isSlot =
       def?.isSlot &&
-      (block.type === 'pcie-fh' || block.type === 'pcie-lp' || block.type === 'pcie-dw');
+      (block.type === 'pcie-fh' || block.type === 'pcie-lp');
 
     if (!isSlot) {
       result.push(block);

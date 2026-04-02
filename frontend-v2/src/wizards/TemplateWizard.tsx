@@ -19,7 +19,7 @@ const PALETTE_GROUPS: { label: string; types: string[] }[] = [
   { label: 'Network', types: ['rj45', 'sfp', 'sfp+', 'sfp28', 'qsfp', 'qsfp28'] },
   { label: 'I/O Ports', types: ['usb-a', 'usb-c', 'serial', 'hdmi', 'displayport', 'vga', 'ipmi', 'misc-port'] },
   { label: 'Storage', types: ['bay-3.5', 'bay-2.5', 'bay-2.5v', 'bay-m2', 'bay-u2', 'bay-flash', 'bay-sd'] },
-  { label: 'Power & PCIe', types: ['power', 'pcie-fh', 'pcie-lp', 'pcie-dw'] },
+  { label: 'Power & PCIe', types: ['power', 'pcie-fh', 'pcie-lp'] },
   { label: 'Misc', types: ['misc-small', 'misc-med', 'misc-large'] },
 ];
 
@@ -1013,9 +1013,10 @@ const PCIE_PALETTE_GROUPS: { label: string; types: string[] }[] = [
 ];
 
 const PCIE_GRID_DIMS: Record<string, { cols: number; rows: number }> = {
-  fh: { cols: 32, rows: 10 },
-  lp: { cols: 32, rows: 6 },
-  dw: { cols: 32, rows: 20 },
+  fh:      { cols: 5,  rows: 33 },
+  lp:      { cols: 5,  rows: 17 },
+  'fh-dw': { cols: 11, rows: 33 },
+  'lp-dw': { cols: 11, rows: 17 },
 };
 
 interface PcieLayoutEditorProps {

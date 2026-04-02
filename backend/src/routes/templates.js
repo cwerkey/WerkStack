@@ -43,8 +43,8 @@ const PcieTemplateSchema = z.object({
   make:       z.string().min(1).max(200),
   model:      z.string().min(1).max(200),
   busSize:    z.enum(['x1', 'x4', 'x8', 'x16']),
-  formFactor: z.enum(['fh', 'lp', 'dw']),
-  laneDepth:  z.number().int().min(1).default(1),
+  formFactor: z.enum(['fh', 'lp', 'fh-dw', 'lp-dw']),
+  laneWidth:  z.number().int().min(1).default(1),
   layout:     z.object({ rear: z.array(PlacedBlockSchema) }),
 });
 
@@ -103,7 +103,7 @@ function toPcieTemplate(row) {
     model:        row.model,
     busSize:      row.bus_size,
     formFactor:   row.form_factor,
-    laneDepth:    row.lane_depth,
+    laneWidth:    row.lane_width,
     layout:       typeof row.layout === 'string' ? JSON.parse(row.layout) : row.layout,
     createdAt:    row.created_at,
   };
@@ -348,15 +348,15 @@ module.exports = function templatesRoutes(db) {
     validate(PcieTemplateSchema),
     async (req, res) => {
       const { orgId } = req.user;
-      const { manufacturer, make, model, busSize, formFactor, laneDepth, layout } = req.body;
+      const { manufacturer, make, model, busSize, formFactor, laneWidth, layout } = req.body;
       try {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `INSERT INTO pcie_card_templates
-             (org_id, manufacturer, make, model, bus_size, form_factor, lane_depth, layout)
+             (org_id, manufacturer, make, model, bus_size, form_factor, lane_width, layout)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
-            [orgId, manufacturer ?? null, make, model, busSize, formFactor, laneDepth ?? 1, JSON.stringify(layout)]
+            [orgId, manufacturer ?? null, make, model, busSize, formFactor, laneWidth ?? 1, JSON.stringify(layout)]
           )
         );
         res.status(201).json(toPcieTemplate(result.rows[0]));
@@ -375,16 +375,16 @@ module.exports = function templatesRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { id } = req.params;
-      const { manufacturer, make, model, busSize, formFactor, laneDepth, layout } = req.body;
+      const { manufacturer, make, model, busSize, formFactor, laneWidth, layout } = req.body;
       try {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `UPDATE pcie_card_templates
              SET manufacturer = $1, make = $2, model = $3, bus_size = $4, form_factor = $5,
-                 lane_depth = $6, layout = $7
+                 lane_width = $6, layout = $7
              WHERE id = $8 AND org_id = $9
              RETURNING *`,
-            [manufacturer ?? null, make, model, busSize, formFactor, laneDepth ?? 1, JSON.stringify(layout), id, orgId]
+            [manufacturer ?? null, make, model, busSize, formFactor, laneWidth ?? 1, JSON.stringify(layout), id, orgId]
           )
         );
         if (result.rows.length === 0) {

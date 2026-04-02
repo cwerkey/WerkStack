@@ -52,7 +52,7 @@ function isDriveBlock(type: string): boolean {
 }
 
 function isPcieSlot(type: string): boolean {
-  return type === 'pcie-fh' || type === 'pcie-lp' || type === 'pcie-dw';
+  return type === 'pcie-fh' || type === 'pcie-lp';
 }
 
 function filterBlocksByPredicate(blocks: PlacedBlock[], pred: (type: string) => boolean): PlacedBlock[] {
@@ -1100,11 +1100,10 @@ function BlockActionMenu({
 
           {/* Fit validation info */}
           {!mod && (() => {
-            const slotW = block.type === 'pcie-dw' ? 2 : 1;
             const slotDepth = block.h;
             return (
               <div style={{ padding: '2px 12px', fontSize: 9, color: 'var(--text3, #4e5560)' }}>
-                slot: {slotW === 2 ? 'double-width' : 'single'}, depth {slotDepth} rows
+                slot: {block.type === 'pcie-fh' ? 'full-height' : 'low-profile'}, depth {slotDepth} rows
               </div>
             );
           })()}
@@ -1130,25 +1129,17 @@ function PcieCardPicker({ slot, device, siteId, pcieTemplates, onInstall, onClos
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
-  const slotFormFactor = slot.type === 'pcie-dw' ? 'dw' : slot.type === 'pcie-lp' ? 'lp' : 'fh';
+  const slotFormFactor = slot.type === 'pcie-lp' ? 'lp' : 'fh';
   const slotDepth = slot.h;
 
-  // Fit validation: card must fit the slot
-  // - fh slot accepts fh and lp cards
-  // - lp slot accepts only lp cards
-  // - dw slot accepts dw cards (double-width)
-  // - card laneDepth must be ≤ slot depth (block.h in grid rows)
+  // Fit validation: card height must match slot, lane width checked
   function cardFits(card: PcieTemplate): { fits: boolean; reason?: string } {
-    if (slotFormFactor === 'dw') {
-      if (card.formFactor !== 'dw') return { fits: false, reason: 'slot requires double-width card' };
-    } else if (slotFormFactor === 'lp') {
-      if (card.formFactor !== 'lp') return { fits: false, reason: 'slot only fits low-profile cards' };
-    } else {
-      // fh slot: accepts fh or lp, not dw
-      if (card.formFactor === 'dw') return { fits: false, reason: 'double-width card needs a dw slot' };
+    const cardHeight = card.formFactor.startsWith('fh') ? 'fh' : 'lp';
+    if (cardHeight !== slotFormFactor) {
+      return { fits: false, reason: `card is ${cardHeight}, slot is ${slotFormFactor}` };
     }
-    if (card.laneDepth > slotDepth) {
-      return { fits: false, reason: `card depth (${card.laneDepth}) exceeds slot depth (${slotDepth})` };
+    if (card.laneWidth > slotDepth) {
+      return { fits: false, reason: `card lane width (${card.laneWidth}) exceeds slot depth (${slotDepth})` };
     }
     return { fits: true };
   }
@@ -1193,7 +1184,7 @@ function PcieCardPicker({ slot, device, siteId, pcieTemplates, onInstall, onClos
           padding: '8px 16px', fontSize: 9, fontFamily: "'JetBrains Mono', monospace",
           color: 'var(--text3, #4e5560)', borderBottom: '1px solid var(--border, #1d2022)',
         }}>
-          slot: {slotFormFactor === 'dw' ? 'double-width' : slotFormFactor === 'lp' ? 'low-profile' : 'full-height'}, depth {slotDepth} rows
+          slot: {slotFormFactor === 'lp' ? 'low-profile' : 'full-height'}, depth {slotDepth} rows
         </div>
         <div style={{ padding: '8px 0', overflowY: 'auto', flex: 1, minHeight: 0 }}>
           {pcieTemplates.length === 0 ? (
@@ -1225,7 +1216,7 @@ function PcieCardPicker({ slot, device, siteId, pcieTemplates, onInstall, onClos
                   <div>
                     <div>{card.make} {card.model}</div>
                     <div style={{ fontSize: 9, color: 'var(--text3, #4e5560)' }}>
-                      {card.formFactor.toUpperCase()} · {card.busSize} · depth {card.laneDepth}
+                      {card.formFactor.toUpperCase()} · {card.busSize} · width {card.laneWidth}
                       {!fit.fits && ` — ${fit.reason}`}
                     </div>
                   </div>

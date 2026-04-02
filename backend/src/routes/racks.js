@@ -39,6 +39,10 @@ const DeviceInstanceSchema = z.object({
   slotOverrides: z.record(z.string(), z.object({
     label:          z.string().max(200).optional(),
     interfaceTypes: z.array(z.enum(['sata', 'sas', 'nvme', 'u2'])).optional(),
+    laneWidth:      z.enum(['x1', 'x4', 'x8', 'x16']).optional(),
+    speed:          z.enum(['Gen3', 'Gen4', 'Gen5']).optional(),
+    doubleWidth:    z.boolean().optional(),
+    linkedSlotId:   z.string().uuid().optional(),
   })).optional(),
 });
 

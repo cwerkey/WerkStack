@@ -65,7 +65,7 @@ function isDriveBlock(type: string): boolean {
 }
 
 function isPcieSlot(type: string): boolean {
-  return type === 'pcie-fh' || type === 'pcie-lp' || type === 'pcie-dw';
+  return type === 'pcie-fh' || type === 'pcie-lp';
 }
 
 // ── Component ────────────────────────────────────────────────────────────────

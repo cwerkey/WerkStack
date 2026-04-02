@@ -1,6 +1,7 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { DrawerTab, DeviceInstance, Connection, PlacedBlock, OsVm, Container } from '@werkstack/shared';
+import type { DrawerTab, DeviceInstance, DeviceTemplate, Connection, PlacedBlock, OsVm, Container } from '@werkstack/shared';
+import { BLOCK_DEF_MAP } from '@werkstack/shared';
 import { useNavStore } from '@/stores/navStore';
 import { useTypesStore } from '@/stores/typesStore';
 import { useSiteStore } from '@/stores/siteStore';
@@ -42,6 +43,7 @@ import { OsStackTab } from './DetailDrawer/OsStackTab';
 import { NetworkTab } from './DetailDrawer/NetworkTab';
 import { IpAssignmentModal } from './DetailDrawer/IpAssignmentModal';
 import { StubTab } from './DetailDrawer/StubTab';
+import { PcieTab } from './DetailDrawer/PcieTab';
 import { DeployWizard } from '@/wizards/DeployWizard';
 import { ConnectionWizard } from '@/wizards/ConnectionWizard';
 import { ConnectionEditModal } from '@/wizards/ConnectionEditModal';
@@ -370,6 +372,33 @@ export default function RackViewHub() {
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
   const selectedTemplate = templates.find(t => t.id === selectedDevice?.templateId);
 
+  // Compute visible drawer tabs based on template block types
+  const visibleTabs = useMemo<DrawerTab[]>(() => {
+    const allBlocks: PlacedBlock[] = [
+      ...(selectedTemplate?.layout?.front ?? []),
+      ...(selectedTemplate?.layout?.rear ?? []),
+    ];
+    const tabs: DrawerTab[] = ['info'];
+    if (allBlocks.some(b => { const d = BLOCK_DEF_MAP.get(b.type); return d?.isPort || d?.isNet; })) {
+      tabs.push('ports');
+    }
+    if (allBlocks.some(b => b.type.startsWith('bay-'))) {
+      tabs.push('storage');
+    }
+    if (allBlocks.some(b => b.type === 'pcie-fh' || b.type === 'pcie-lp')) {
+      tabs.push('pcie');
+    }
+    tabs.push('os', 'network', 'guides');
+    return tabs;
+  }, [selectedTemplate]);
+
+  // Fall back to 'info' tab when current tab is not visible for this device
+  useEffect(() => {
+    if (drawerOpen && !visibleTabs.includes(drawerTab)) {
+      useNavStore.getState().setDrawerTab('info');
+    }
+  }, [drawerOpen, drawerTab, visibleTabs]);
+
   // Rack tabs for current zone
   const zoneRacks = racks.filter(r => r.zoneId === selectedZoneId);
 
@@ -547,6 +576,7 @@ export default function RackViewHub() {
       <DetailDrawer
         open={drawerOpen}
         activeTab={drawerTab}
+        visibleTabs={visibleTabs}
         onTabChange={handleTabChange}
         onClose={handleCloseDrawer}
       >
@@ -588,6 +618,16 @@ export default function RackViewHub() {
             shares={siteShares}
             onCreatePool={() => setPoolWizardOpen(true)}
             onConnectExternal={() => setExtStorageWizardOpen(true)}
+            onUpdateDevice={handleDeviceSave}
+            siteId={siteId}
+          />
+        )}
+        {selectedDevice && drawerTab === 'pcie' && (
+          <PcieTab
+            device={selectedDevice}
+            template={selectedTemplate}
+            modules={selectedDeviceModules}
+            pcieTemplates={pcieTemplates}
             onUpdateDevice={handleDeviceSave}
             siteId={siteId}
           />

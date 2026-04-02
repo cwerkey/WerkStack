@@ -4,34 +4,36 @@ import styles from './DetailDrawer.module.css';
 interface DetailDrawerProps {
   open: boolean;
   activeTab: DrawerTab;
+  visibleTabs: DrawerTab[];
   onTabChange: (tab: DrawerTab) => void;
   onClose: () => void;
   children: React.ReactNode;
 }
 
-const TABS: { id: DrawerTab; label: string }[] = [
-  { id: 'info',    label: 'Info' },
-  { id: 'ports',   label: 'Ports' },
-  { id: 'storage', label: 'Storage' },
-  { id: 'os',      label: 'OS' },
-  { id: 'network', label: 'Network' },
-  { id: 'guides',  label: 'Guides' },
-];
+const TAB_LABELS: Record<DrawerTab, string> = {
+  info:    'Info',
+  ports:   'Ports',
+  storage: 'Storage',
+  pcie:    'PCIe',
+  os:      'OS',
+  network: 'Network',
+  guides:  'Guides',
+};
 
-export function DetailDrawer({ open, activeTab, onTabChange, onClose, children }: DetailDrawerProps) {
+export function DetailDrawer({ open, activeTab, visibleTabs, onTabChange, onClose, children }: DetailDrawerProps) {
   if (!open) return null;
 
   return (
     <aside className={styles.drawer}>
       <div className={styles.header}>
         <div className={styles.tabs}>
-          {TABS.map(tab => (
+          {visibleTabs.map(tabId => (
             <button
-              key={tab.id}
-              className={`${styles.tab}${activeTab === tab.id ? ` ${styles.tabActive}` : ''}`}
-              onClick={() => onTabChange(tab.id)}
+              key={tabId}
+              className={`${styles.tab}${activeTab === tabId ? ` ${styles.tabActive}` : ''}`}
+              onClick={() => onTabChange(tabId)}
             >
-              {tab.label}
+              {TAB_LABELS[tabId]}
             </button>
           ))}
         </div>

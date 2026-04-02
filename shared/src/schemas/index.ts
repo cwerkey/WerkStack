@@ -38,7 +38,8 @@ export const PcieTemplateSchema = z.object({
   make:         z.string().min(1),
   model:        z.string().min(1),
   busSize:      z.enum(['x1', 'x4', 'x8', 'x16']),
-  formFactor:   z.enum(['fh', 'lp', 'dw']),
+  formFactor:   z.enum(['fh', 'lp', 'fh-dw', 'lp-dw']),
+  laneWidth:    z.number().int().min(1).default(1),
   layout:       z.object({ rear: z.array(PlacedBlockSchema) }),
 });
 

@@ -9,8 +9,8 @@ export type BlockType =
   | 'bay-3.5' | 'bay-2.5' | 'bay-2.5v' | 'bay-m2' | 'bay-u2' | 'bay-flash' | 'bay-sd'
   // Power
   | 'power'
-  // PCIe brackets
-  | 'pcie-fh' | 'pcie-lp' | 'pcie-dw'
+  // PCIe slots
+  | 'pcie-fh' | 'pcie-lp'
   // Misc / Filler
   | 'misc-small' | 'misc-med' | 'misc-large';
 
@@ -82,8 +82,9 @@ export interface DeviceTemplate {
 
 // ─── PCIe Card Templates ──────────────────────────────────────────────────────
 
-export type PcieFormFactor = 'fh' | 'lp' | 'dw';
+export type PcieFormFactor = 'fh' | 'lp' | 'fh-dw' | 'lp-dw';
 export type PcieBusSize = 'x1' | 'x4' | 'x8' | 'x16';
+export type PcieSpeed = 'Gen3' | 'Gen4' | 'Gen5';
 
 export interface PcieTemplate {
   id:            string;
@@ -93,7 +94,7 @@ export interface PcieTemplate {
   model:         string;
   busSize:       PcieBusSize;
   formFactor:    PcieFormFactor;
-  laneDepth:     number;
+  laneWidth:     number;
   layout:        { rear: PlacedBlock[] };
   createdAt:     string;
 }
@@ -193,6 +194,10 @@ export interface PortOverride {
 export interface SlotOverride {
   label?:          string;
   interfaceTypes?: InterfaceType[];
+  laneWidth?:      PcieBusSize;
+  speed?:          PcieSpeed;
+  doubleWidth?:    boolean;
+  linkedSlotId?:   string;
 }
 
 export type InterfaceType = 'sata' | 'sas' | 'nvme' | 'u2';
@@ -783,7 +788,7 @@ export interface ApiError {
 
 // ─── Rev 2 Navigation ─────────────────────────────────────────────────────────
 
-export type DrawerTab = 'info' | 'ports' | 'storage' | 'os' | 'network' | 'guides';
+export type DrawerTab = 'info' | 'ports' | 'storage' | 'pcie' | 'os' | 'network' | 'guides';
 
 export interface NavState {
   selectedZoneId:  string | null;

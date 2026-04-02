@@ -17,9 +17,10 @@ interface PcieWizardProps {
 type Step = 'info' | 'editor';
 
 const FORM_FACTORS: { value: PcieFormFactor; label: string; cols: number; rows: number }[] = [
-  { value: 'fh', label: 'Full-Height',  cols: 4,  rows: 33 },
-  { value: 'lp', label: 'Low-Profile',  cols: 4,  rows: 17 },
-  { value: 'dw', label: 'Double-Width', cols: 8,  rows: 33 },
+  { value: 'fh',    label: 'Full Height',     cols: 5,  rows: 33 },
+  { value: 'lp',    label: 'Low Profile',     cols: 5,  rows: 17 },
+  { value: 'fh-dw', label: 'Full Height DW',  cols: 11, rows: 33 },
+  { value: 'lp-dw', label: 'Low Profile DW',  cols: 11, rows: 17 },
 ];
 
 const BUS_SIZES: PcieBusSize[] = ['x1', 'x4', 'x8', 'x16'];
@@ -30,12 +31,12 @@ interface InfoForm {
   model:      string;
   busSize:    PcieBusSize;
   formFactor: PcieFormFactor;
-  laneDepth:  number;
+  laneWidth:  number;
   doubleSlot: boolean;
 }
 
 function blankInfo(): InfoForm {
-  return { manufacturer: '', make: '', model: '', busSize: 'x16', formFactor: 'fh', laneDepth: 1, doubleSlot: false };
+  return { manufacturer: '', make: '', model: '', busSize: 'x16', formFactor: 'fh', laneWidth: 1, doubleSlot: false };
 }
 
 function getGrid(ff: PcieFormFactor, doubleSlot: boolean): { cols: number; rows: number } {
@@ -69,7 +70,7 @@ export function PcieWizard({ open, onClose, initial, accent }: PcieWizardProps) 
         model: initial.model,
         busSize: initial.busSize,
         formFactor: initial.formFactor,
-        laneDepth: initial.laneDepth,
+        laneWidth: initial.laneWidth,
         doubleSlot: (initial as any).doubleSlot ?? false,
       });
       setBlocks(initial.layout.rear);
@@ -101,7 +102,7 @@ export function PcieWizard({ open, onClose, initial, accent }: PcieWizardProps) 
         model: info.model.trim(),
         busSize: info.busSize,
         formFactor: info.formFactor,
-        laneDepth: info.laneDepth,
+        laneWidth: info.laneWidth,
         doubleSlot: info.doubleSlot,
         layout: { rear: blocks },
       };
@@ -211,7 +212,7 @@ export function PcieWizard({ open, onClose, initial, accent }: PcieWizardProps) 
                 </div>
                 <div className="wiz-field">
                   <label className="wiz-label">Lane Depth</label>
-                  <input className="wiz-input" type="number" min={1} max={4} value={info.laneDepth} onChange={e => setField('laneDepth', Math.max(1, parseInt(e.target.value) || 1))} />
+                  <input className="wiz-input" type="number" min={1} max={4} value={info.laneWidth} onChange={e => setField('laneWidth', Math.max(1, parseInt(e.target.value) || 1))} />
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

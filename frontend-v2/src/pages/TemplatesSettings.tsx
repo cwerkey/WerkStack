@@ -582,13 +582,17 @@ function DeviceTemplatesTab() {
 
 // ── PCIe Templates Tab ────────────────────────────────────────────────────────
 
+const PCIE_FF_LABELS: Record<string, string> = {
+  fh: 'Full Height', lp: 'Low Profile', 'fh-dw': 'Full Height DW', 'lp-dw': 'Low Profile DW',
+};
+
 interface PcieTemplateFormState {
   manufacturer: string;
   make: string;
   model: string;
   busSize: PcieBusSize;
   formFactor: PcieFormFactor;
-  laneDepth: number;
+  laneWidth: number;
 }
 
 const blankPcieForm = (): PcieTemplateFormState => ({
@@ -597,7 +601,7 @@ const blankPcieForm = (): PcieTemplateFormState => ({
   model: '',
   busSize: 'x8',
   formFactor: 'fh',
-  laneDepth: 8,
+  laneWidth: 8,
 });
 
 function PcieTemplatesTab() {
@@ -637,7 +641,7 @@ function PcieTemplatesTab() {
         model: form.model.trim(),
         busSize: form.busSize,
         formFactor: form.formFactor,
-        laneDepth: form.laneDepth,
+        laneWidth: form.laneWidth,
       } as Omit<PcieTemplate, 'id' | 'orgId' | 'layout' | 'createdAt'>,
       {
         onSuccess: () => {
@@ -658,7 +662,7 @@ function PcieTemplatesTab() {
       model: t.model,
       busSize: t.busSize,
       formFactor: t.formFactor,
-      laneDepth: t.laneDepth,
+      laneWidth: t.laneWidth,
     });
     setConfirmDeleteId(null);
   };
@@ -672,7 +676,7 @@ function PcieTemplatesTab() {
         model: editForm.model.trim(),
         busSize: editForm.busSize,
         formFactor: editForm.formFactor,
-        laneDepth: editForm.laneDepth,
+        laneWidth: editForm.laneWidth,
       },
       {
         onSuccess: () => setEditingId(null),
@@ -703,7 +707,7 @@ function PcieTemplatesTab() {
         model: pcieEditorTarget.model,
         busSize: pcieEditorTarget.busSize,
         formFactor: pcieEditorTarget.formFactor,
-        laneDepth: pcieEditorTarget.laneDepth,
+        laneWidth: pcieEditorTarget.laneWidth,
         layout: { rear: blocks },
       },
       {
@@ -802,19 +806,20 @@ function PcieTemplatesTab() {
                 value={form.formFactor}
                 onChange={(e) => setF('formFactor', e.target.value as PcieFormFactor)}
               >
-                <option value="fh">Full Height (FH)</option>
-                <option value="lp">Low Profile (LP)</option>
-                <option value="dw">Double Width (DW)</option>
+                <option value="fh">Full Height</option>
+                <option value="lp">Low Profile</option>
+                <option value="fh-dw">Full Height DW</option>
+                <option value="lp-dw">Low Profile DW</option>
               </select>
             </div>
             <div className={styles.formField} style={{ maxWidth: '120px' }}>
-              <label className={styles.label}>Lane Depth</label>
+              <label className={styles.label}>Lane Width</label>
               <input
                 className={styles.input}
                 type="number"
                 min="1"
-                value={form.laneDepth}
-                onChange={(e) => setF('laneDepth', parseInt(e.target.value, 10) || 1)}
+                value={form.laneWidth}
+                onChange={(e) => setF('laneWidth', parseInt(e.target.value, 10) || 1)}
               />
             </div>
           </div>
@@ -852,7 +857,7 @@ function PcieTemplatesTab() {
                 <th className={styles.th}>Make / Model</th>
                 <th className={styles.th}>Bus Size</th>
                 <th className={styles.th}>Form Factor</th>
-                <th className={styles.th}>Lane Depth</th>
+                <th className={styles.th}>Lane Width</th>
                 <th className={styles.th} style={{ width: '160px' }}>Actions</th>
               </tr>
             </thead>
@@ -900,9 +905,10 @@ function PcieTemplatesTab() {
                         value={editForm.formFactor}
                         onChange={(e) => setEF('formFactor', e.target.value as PcieFormFactor)}
                       >
-                        <option value="fh">FH</option>
-                        <option value="lp">LP</option>
-                        <option value="dw">DW</option>
+                        <option value="fh">Full Height</option>
+                        <option value="lp">Low Profile</option>
+                        <option value="fh-dw">Full Height DW</option>
+                        <option value="lp-dw">Low Profile DW</option>
                       </select>
                     </td>
                     <td className={styles.td}>
@@ -910,8 +916,8 @@ function PcieTemplatesTab() {
                         className={styles.input}
                         type="number"
                         min="1"
-                        value={editForm.laneDepth}
-                        onChange={(e) => setEF('laneDepth', parseInt(e.target.value, 10) || 1)}
+                        value={editForm.laneWidth}
+                        onChange={(e) => setEF('laneWidth', parseInt(e.target.value, 10) || 1)}
                         style={{ width: '60px' }}
                       />
                     </td>
@@ -980,9 +986,9 @@ function PcieTemplatesTab() {
                       <span className={styles.pill}>{t.busSize}</span>
                     </td>
                     <td className={styles.td}>
-                      <span className={styles.pill}>{t.formFactor.toUpperCase()}</span>
+                      <span className={styles.pill}>{PCIE_FF_LABELS[t.formFactor] ?? t.formFactor}</span>
                     </td>
-                    <td className={styles.tdMuted}>{t.laneDepth}</td>
+                    <td className={styles.tdMuted}>{t.laneWidth}</td>
                     <td className={styles.td} onClick={(e) => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: '4px' }}>
                         <button

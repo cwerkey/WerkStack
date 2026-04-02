@@ -56,7 +56,7 @@ function bayRow25(startCol, row, count) {
 
 function pcieSlots(startCol, row, count, type = 'pcie-fh') {
   const blocks = [];
-  const w = type === 'pcie-dw' ? 8 : 4;
+  const w = 5;
   const h = type === 'pcie-lp' ? 17 : 33;
   for (let i = 0; i < count; i++) {
     blocks.push({ id: id(), type, col: startCol + i * (w + 1), row, w, h, label: `PCIe ${i + 1}` });

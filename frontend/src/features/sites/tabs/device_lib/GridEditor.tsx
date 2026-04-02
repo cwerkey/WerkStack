@@ -44,7 +44,7 @@ const PCIE_LANE_SPEEDS = ['Gen 1', 'Gen 2', 'Gen 3', 'Gen 4', 'Gen 5'];
 const PCIE_LANE_DEPTHS = ['x1', 'x4', 'x8', 'x16'];
 
 function isPcieBlock(type: string): boolean {
-  return type === 'pcie-fh' || type === 'pcie-lp' || type === 'pcie-dw';
+  return type === 'pcie-fh' || type === 'pcie-lp';
 }
 
 function isDriveBlock(type: string): boolean {

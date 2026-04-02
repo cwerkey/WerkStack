@@ -100,21 +100,16 @@ export const BLOCK_DEFS: BlockDef[] = [
     color: '#2a1a1a', borderColor: '#8a3a3a',
   },
 
-  // ── PCIe Brackets ──────────────────────────────────────────────────────────
-  // Full-height: 4.75" × 0.75" → 4 cols × 33 rows on 96×12 grid
+  // ── PCIe Slots ─────────────────────────────────────────────────────────────
+  // Full-height: 5 cols × 33 rows on 96×12 grid
   {
-    type: 'pcie-fh',    label: 'PCIe FH',      w: 4,  h: 33, panel: 'rear',  isPort: false, isNet: false, isSlot: true,  canRotate: false,
+    type: 'pcie-fh',    label: 'PCIe Full Height', w: 5,  h: 33, panel: 'rear',  isPort: false, isNet: false, isSlot: true,  canRotate: false,
     color: '#1a1a2a', borderColor: '#4a4a8a',
   },
-  // Low-profile single slot: 4 cols × 17 rows
+  // Low-profile: 5 cols × 17 rows
   {
-    type: 'pcie-lp',    label: 'PCIe LP',      w: 4,  h: 17, panel: 'rear',  isPort: false, isNet: false, isSlot: true,  canRotate: false,
+    type: 'pcie-lp',    label: 'PCIe Low Profile', w: 5,  h: 17, panel: 'rear',  isPort: false, isNet: false, isSlot: true,  canRotate: false,
     color: '#1a1a2a', borderColor: '#3a3a7a',
-  },
-  // Double-width (GPU/HBA): 8 cols × 33 rows
-  {
-    type: 'pcie-dw',    label: 'PCIe DW',      w: 8,  h: 33, panel: 'rear',  isPort: false, isNet: false, isSlot: true,  canRotate: false,
-    color: '#1a1a2a', borderColor: '#5a4a9a',
   },
 
   // ── Misc / Filler ──────────────────────────────────────────────────────────

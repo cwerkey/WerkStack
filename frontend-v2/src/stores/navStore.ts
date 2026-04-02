@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type DrawerTab = 'info' | 'ports' | 'storage' | 'os' | 'network' | 'guides';
+export type DrawerTab = 'info' | 'ports' | 'storage' | 'pcie' | 'os' | 'network' | 'guides';
 
 interface NavState {
   selectedZoneId: string | null;

@@ -2,7 +2,7 @@ import type { PlacedBlock, DeviceTemplate, PcieTemplate, ModuleInstance } from '
 import { BLOCK_DEF_MAP } from '@werkstack/shared';
 
 // buildVirtualFaceplate — merges PCIe card ports onto a device's rear panel.
-// For each pcie-fh / pcie-lp / pcie-dw slot that has a ModuleInstance installed,
+// For each pcie-fh / pcie-lp slot that has a ModuleInstance installed,
 // replace the slot block with the card template's rear ports, offset to the slot's position.
 
 export function buildVirtualFaceplate(
@@ -20,7 +20,7 @@ export function buildVirtualFaceplate(
 
   for (const block of baseBlocks) {
     const def = BLOCK_DEF_MAP.get(block.type);
-    const isSlot = def?.isSlot && (block.type === 'pcie-fh' || block.type === 'pcie-lp' || block.type === 'pcie-dw');
+    const isSlot = def?.isSlot && (block.type === 'pcie-fh' || block.type === 'pcie-lp');
 
     if (!isSlot) {
       result.push(block);
