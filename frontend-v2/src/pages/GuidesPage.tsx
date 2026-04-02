@@ -247,9 +247,12 @@ export default function GuidesPage() {
     return filteredGuides.filter(g => g.manualId === selectedManualId);
   }, [filteredGuides, selectedManualId]);
 
+  const manualIds = useMemo(() => new Set(manuals.map(m => m.id)), [manuals]);
+
   const unfiledGuides = useMemo(() => {
-    return filteredGuides.filter(g => !g.manualId);
-  }, [filteredGuides]);
+    // Include guides with no manual, AND shared guides whose manual isn't visible in this site
+    return filteredGuides.filter(g => !g.manualId || !manualIds.has(g.manualId));
+  }, [filteredGuides, manualIds]);
 
   // ── Autosave on block changes ───────────────────────────────────────────────
   const scheduleAutoSave = useCallback((newBlocks: GuideBlock[]) => {
