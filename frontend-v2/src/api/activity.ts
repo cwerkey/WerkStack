@@ -14,6 +14,7 @@ export interface DeviceStatusEntry {
   monitorEnabled: boolean;
   monitorIp: string | null;
   monitorIntervalS: number;
+  maintenanceMode: boolean;
   lastHeartbeat?: string;
   lastLatency?: number;
 }

@@ -136,7 +136,7 @@ module.exports = function monitorRoutes(db) {
       const result = await withOrg(db, orgId, async (c) => {
         const devicesRes = await c.query(
           `SELECT di.id, di.name, di.type_id, di.current_status, di.monitor_enabled,
-                  di.monitor_ip, di.ip, di.monitor_interval_s,
+                  di.monitor_ip, di.ip, di.monitor_interval_s, di.maintenance_mode,
                   h.received_at AS last_heartbeat, h.latency_ms AS last_latency
            FROM device_instances di
            LEFT JOIN LATERAL (
@@ -157,6 +157,7 @@ module.exports = function monitorRoutes(db) {
           monitorEnabled:   r.monitor_enabled ?? false,
           monitorIp:        r.monitor_ip ?? r.ip ?? null,
           monitorIntervalS: r.monitor_interval_s ?? 60,
+          maintenanceMode:  r.maintenance_mode ?? false,
           lastHeartbeat:    r.last_heartbeat ?? undefined,
           lastLatency:      r.last_latency   ?? undefined,
         }));

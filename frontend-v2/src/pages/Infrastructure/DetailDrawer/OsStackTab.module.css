@@ -333,6 +333,43 @@
   margin-left: 4px;
 }
 
+/* -- Monitor toggle buttons ------------------------------------------------- */
+
+.monitorBtnOn {
+  appearance: none;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: #14532d;
+  color: #22c55e;
+  border: 1px solid #22c55e44;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.monitorBtnOff {
+  appearance: none;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: var(--color-surface-2);
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.monitorBtnOn:hover { filter: brightness(1.2); }
+.monitorBtnOff:hover { border-color: var(--color-text-muted); color: var(--color-text-muted); }
+
 /* -- Empty state ------------------------------------------------------------ */
 
 .empty {

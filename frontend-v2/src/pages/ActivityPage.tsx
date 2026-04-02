@@ -1,9 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSiteStore } from '@/stores/siteStore';
+import { useNavStore } from '@/stores/navStore';
 import {
   useGetActivityStatus,
   useGetActivityEvents,
+  useUpdateDeviceMonitor,
   type DeviceStatus,
   type EventType,
   type DeviceEvent,
@@ -67,12 +69,119 @@ const ALL_EVENT_TYPES: EventType[] = ['status_change', 'missed_ping', 'recovery'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function DeviceCard({ entry, onClick }: { entry: DeviceStatusEntry; onClick: () => void }) {
-  const dotColor = STATUS_DOT_COLOR[entry.currentStatus];
-  const textColor = STATUS_TEXT_COLOR[entry.currentStatus];
+interface DeviceCardProps {
+  entry: DeviceStatusEntry;
+  siteId: string;
+  onClick: () => void;
+  onNavigate: () => void;
+}
+
+function DeviceCard({ entry, siteId, onClick, onNavigate }: DeviceCardProps) {
+  const dotColor = entry.maintenanceMode ? '#f59e0b' : STATUS_DOT_COLOR[entry.currentStatus];
+  const textColor = entry.maintenanceMode ? '#f59e0b' : STATUS_TEXT_COLOR[entry.currentStatus];
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configIp, setConfigIp] = useState(entry.monitorIp ?? '');
+  const [configInterval, setConfigInterval] = useState(String(entry.monitorIntervalS ?? 60));
+  const editorRef = useRef<HTMLDivElement>(null);
+  const updateMonitor = useUpdateDeviceMonitor(siteId);
+
+  // Close editor on outside click
+  useEffect(() => {
+    if (!editorOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (editorRef.current && !editorRef.current.contains(e.target as Node)) {
+        setEditorOpen(false);
+        setConfigOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [editorOpen]);
+
+  function handleToggleMonitor() {
+    updateMonitor.mutate({ deviceId: entry.deviceId, monitorEnabled: !entry.monitorEnabled });
+    setEditorOpen(false);
+  }
+
+  function handleToggleMaintenance() {
+    updateMonitor.mutate({ deviceId: entry.deviceId, monitorEnabled: entry.monitorEnabled, maintenanceMode: !entry.maintenanceMode });
+    setEditorOpen(false);
+  }
+
+  function handleSaveConfig() {
+    updateMonitor.mutate({
+      deviceId: entry.deviceId,
+      monitorEnabled: entry.monitorEnabled,
+      monitorIp: configIp || null,
+      monitorIntervalS: parseInt(configInterval, 10) || 60,
+    });
+    setConfigOpen(false);
+    setEditorOpen(false);
+  }
 
   return (
     <div className={styles.deviceCard} onClick={onClick}>
+      {/* Hover overlay controls */}
+      <div className={styles.cardOverlay} onClick={e => e.stopPropagation()}>
+        <button
+          className={styles.cardNavBtn}
+          title="Open in rack view"
+          onClick={e => { e.stopPropagation(); onNavigate(); }}
+        >
+          ↗
+        </button>
+        <div className={styles.cardEditorWrap} ref={editorRef}>
+          <button
+            className={styles.cardEditorBtn}
+            title="Quick settings"
+            onClick={e => { e.stopPropagation(); setEditorOpen(v => !v); setConfigOpen(false); }}
+          >
+            ⋯
+          </button>
+          {editorOpen && (
+            <div className={styles.editorDropdown}>
+              <button className={styles.editorItem} onClick={handleToggleMonitor}>
+                {entry.monitorEnabled ? 'Disable monitoring' : 'Enable monitoring'}
+              </button>
+              {entry.monitorEnabled && (
+                <button className={styles.editorItem} onClick={handleToggleMaintenance}>
+                  {entry.maintenanceMode ? 'Exit maintenance' : 'Enter maintenance'}
+                </button>
+              )}
+              <button className={styles.editorItem} onClick={() => { setConfigOpen(v => !v); }}>
+                Configure...
+              </button>
+              {configOpen && (
+                <div className={styles.configPopup}>
+                  <label className={styles.configLabel}>
+                    Ping IP
+                    <input
+                      className={styles.configInput}
+                      value={configIp}
+                      onChange={e => setConfigIp(e.target.value)}
+                      placeholder={entry.monitorIp ?? 'device IP'}
+                    />
+                  </label>
+                  <label className={styles.configLabel}>
+                    Interval (s)
+                    <input
+                      className={styles.configInput}
+                      type="number"
+                      min={10}
+                      value={configInterval}
+                      onChange={e => setConfigInterval(e.target.value)}
+                    />
+                  </label>
+                  <button className={styles.configSaveBtn} onClick={handleSaveConfig}>
+                    Save
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
       <div className={styles.cardTop}>
         <span
           className={styles.statusDot}
@@ -82,7 +191,7 @@ function DeviceCard({ entry, onClick }: { entry: DeviceStatusEntry; onClick: () 
       </div>
       <div className={styles.cardMeta}>
         <span className={styles.statusText} style={{ color: textColor }}>
-          {entry.currentStatus}
+          {entry.maintenanceMode ? 'maintenance' : entry.currentStatus}
         </span>
         <span className={styles.cardDetail}>
           {entry.lastHeartbeat
@@ -108,6 +217,7 @@ function EventBadge({ type }: { type: EventType }) {
 export default function ActivityPage() {
   const navigate = useNavigate();
   const siteId = useSiteStore(s => s.currentSite?.id ?? '');
+  const navSelectDevice = useNavStore(s => s.selectDevice);
 
   const statusQ = useGetActivityStatus(siteId);
   const {
@@ -217,7 +327,12 @@ export default function ActivityPage() {
                 <DeviceCard
                   key={entry.deviceId}
                   entry={entry}
-                  onClick={() => navigate('/infrastructure/rack')}
+                  siteId={siteId}
+                  onClick={() => setDeviceFilter(prev => prev === entry.deviceId ? '' : entry.deviceId)}
+                  onNavigate={() => {
+                    navSelectDevice(entry.deviceId);
+                    navigate('/infrastructure/rack');
+                  }}
                 />
               ))}
             </div>

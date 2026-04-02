@@ -90,3 +90,14 @@ export function useCommitDockerCompose(siteId: string) {
     },
   });
 }
+
+export function useToggleContainerMonitor(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ containerId, monitorEnabled }: { containerId: string; monitorEnabled: boolean }) =>
+      api.patch<Container>(`/api/sites/${siteId}/containers/${containerId}/monitor`, { monitorEnabled }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['containers', siteId] });
+    },
+  });
+}

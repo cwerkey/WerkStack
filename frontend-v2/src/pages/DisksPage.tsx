@@ -77,11 +77,15 @@ export default function DisksPage() {
   const [filterRack, setFilterRack] = useState<string | null>(null);
   const [filterAssigned, setFilterAssigned] = useState<string | null>(null);
   const [addDiskOpen, setAddDiskOpen] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
   const [newDisk, setNewDisk] = useState({
     label: '', model: '', capacity: '', serial: '',
     driveType: 'ssd' as DriveType,
     interfaceType: '' as DriveInterfaceType | '',
   });
+  const [bulkRows, setBulkRows] = useState<Array<{ name: string; serial: string }>>([
+    { name: '', serial: '' },
+  ]);
 
   const poolMap = useMemo(() => new Map(pools.map(p => [p.id, p])), [pools]);
   const deviceMap = useMemo(() => new Map(devices.map(d => [d.id, d])), [devices]);
@@ -232,6 +236,8 @@ export default function DisksPage() {
             className="action-btn"
             onClick={() => {
               setNewDisk({ label: '', model: '', capacity: '', serial: '', driveType: 'ssd', interfaceType: '' });
+              setBulkMode(false);
+              setBulkRows([{ name: '', serial: '' }]);
               setAddDiskOpen(true);
             }}
             style={{
@@ -390,35 +396,87 @@ export default function DisksPage() {
             onSubmit={(e) => {
               e.preventDefault();
               if (!newDisk.capacity.trim()) return;
-              createDrive.mutate(
-                {
-                  label: newDisk.label || undefined,
-                  model: newDisk.model || undefined,
-                  driveType: newDisk.driveType,
-                  capacity: newDisk.capacity,
-                  serial: newDisk.serial || undefined,
-                  interfaceType: newDisk.interfaceType || undefined,
-                  isBoot: false,
-                },
-                { onSuccess: () => setAddDiskOpen(false) },
-              );
+              if (bulkMode) {
+                const validRows = bulkRows.filter(r => r.name.trim() || r.serial.trim());
+                const toCreate = (validRows.length ? validRows : [{ name: '', serial: '' }]);
+                let remaining = toCreate.length;
+                for (const row of toCreate) {
+                  createDrive.mutate(
+                    {
+                      label: row.name || undefined,
+                      model: newDisk.model || undefined,
+                      driveType: newDisk.driveType,
+                      capacity: newDisk.capacity,
+                      serial: row.serial || undefined,
+                      interfaceType: newDisk.interfaceType || undefined,
+                      isBoot: false,
+                    },
+                    {
+                      onSuccess: () => {
+                        remaining--;
+                        if (remaining === 0) setAddDiskOpen(false);
+                      },
+                    },
+                  );
+                }
+              } else {
+                createDrive.mutate(
+                  {
+                    label: newDisk.label || undefined,
+                    model: newDisk.model || undefined,
+                    driveType: newDisk.driveType,
+                    capacity: newDisk.capacity,
+                    serial: newDisk.serial || undefined,
+                    interfaceType: newDisk.interfaceType || undefined,
+                    isBoot: false,
+                  },
+                  { onSuccess: () => setAddDiskOpen(false) },
+                );
+              }
             }}
             style={{
               background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-              borderRadius: 8, padding: 16, minWidth: 380, display: 'flex', flexDirection: 'column', gap: 12,
+              borderRadius: 8, padding: 16, minWidth: 420, maxWidth: 520,
+              display: 'flex', flexDirection: 'column', gap: 12,
               boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+              maxHeight: '90vh', overflowY: 'auto',
             }}
           >
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>Add Disk to Inventory</div>
-
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1 }}>
-                <label style={formLabelStyle}>Name</label>
-                <input type="text" value={newDisk.label} onChange={e => setNewDisk(p => ({ ...p, label: e.target.value }))} placeholder="Optional" style={formInputStyle} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>Add Disk to Inventory</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button
+                  type="button"
+                  onClick={() => setBulkMode(false)}
+                  style={{
+                    padding: '3px 10px', fontSize: 11, border: '1px solid var(--color-border)',
+                    borderRadius: 4, cursor: 'pointer',
+                    background: !bulkMode ? 'var(--color-accent)' : 'none',
+                    color: !bulkMode ? '#fff' : 'var(--color-text-muted)',
+                  }}
+                >Single</button>
+                <button
+                  type="button"
+                  onClick={() => setBulkMode(true)}
+                  style={{
+                    padding: '3px 10px', fontSize: 11, border: '1px solid var(--color-border)',
+                    borderRadius: 4, cursor: 'pointer',
+                    background: bulkMode ? 'var(--color-accent)' : 'none',
+                    color: bulkMode ? '#fff' : 'var(--color-text-muted)',
+                  }}
+                >Bulk</button>
               </div>
+            </div>
+
+            {/* Shared fields (always shown) */}
+            <div style={{ display: 'flex', gap: 8 }}>
               <div style={{ flex: 1 }}>
                 <label style={formLabelStyle}>Model</label>
                 <input type="text" value={newDisk.model} onChange={e => setNewDisk(p => ({ ...p, model: e.target.value }))} placeholder="Optional" style={formInputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={formLabelStyle}>Capacity *</label>
+                <input type="text" value={newDisk.capacity} onChange={e => setNewDisk(p => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 4T, 960G" style={formInputStyle} required />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -433,12 +491,6 @@ export default function DisksPage() {
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <label style={formLabelStyle}>Capacity *</label>
-                <input type="text" value={newDisk.capacity} onChange={e => setNewDisk(p => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 4T, 960G" style={formInputStyle} required />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ flex: 1 }}>
                 <label style={formLabelStyle}>Interface</label>
                 <select value={newDisk.interfaceType} onChange={e => setNewDisk(p => ({ ...p, interfaceType: e.target.value as DriveInterfaceType | '' }))} style={{ ...formInputStyle, cursor: 'pointer' }}>
                   <option value="">—</option>
@@ -448,11 +500,69 @@ export default function DisksPage() {
                   <option value="u2">U.2</option>
                 </select>
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={formLabelStyle}>Serial</label>
-                <input type="text" value={newDisk.serial} onChange={e => setNewDisk(p => ({ ...p, serial: e.target.value }))} placeholder="Optional" style={formInputStyle} />
-              </div>
             </div>
+
+            {/* Single mode extra fields */}
+            {!bulkMode && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={formLabelStyle}>Name</label>
+                  <input type="text" value={newDisk.label} onChange={e => setNewDisk(p => ({ ...p, label: e.target.value }))} placeholder="Optional" style={formInputStyle} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={formLabelStyle}>Serial</label>
+                  <input type="text" value={newDisk.serial} onChange={e => setNewDisk(p => ({ ...p, serial: e.target.value }))} placeholder="Optional" style={formInputStyle} />
+                </div>
+              </div>
+            )}
+
+            {/* Bulk mode disk list */}
+            {bulkMode && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 2 }}>
+                  <span style={{ ...formLabelStyle, flex: 1 }}>Name</span>
+                  <span style={{ ...formLabelStyle, flex: 1 }}>Serial</span>
+                  <span style={{ width: 24 }} />
+                </div>
+                {bulkRows.map((row, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      value={row.name}
+                      onChange={e => setBulkRows(prev => prev.map((r, j) => j === i ? { ...r, name: e.target.value } : r))}
+                      placeholder={`Disk ${i + 1}`}
+                      style={{ ...formInputStyle, flex: 1 }}
+                    />
+                    <input
+                      type="text"
+                      value={row.serial}
+                      onChange={e => setBulkRows(prev => prev.map((r, j) => j === i ? { ...r, serial: e.target.value } : r))}
+                      placeholder="Serial (optional)"
+                      style={{ ...formInputStyle, flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setBulkRows(prev => prev.filter((_, j) => j !== i))}
+                      disabled={bulkRows.length === 1}
+                      style={{
+                        width: 24, height: 24, padding: 0, border: '1px solid var(--color-border)',
+                        borderRadius: 4, background: 'none', color: 'var(--color-text-dim)',
+                        cursor: bulkRows.length === 1 ? 'default' : 'pointer', fontSize: 14, flexShrink: 0,
+                      }}
+                    >×</button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setBulkRows(prev => [...prev, { name: '', serial: '' }])}
+                  style={{
+                    padding: '4px 10px', fontSize: 11, border: '1px dashed var(--color-border)',
+                    borderRadius: 4, background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer',
+                    alignSelf: 'flex-start',
+                  }}
+                >+ Add Row</button>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
               <button type="button" onClick={() => setAddDiskOpen(false)} style={{
@@ -463,7 +573,7 @@ export default function DisksPage() {
                 padding: '5px 14px', fontSize: 12, fontWeight: 600, border: 'none',
                 borderRadius: 4, background: 'var(--color-accent)', color: '#fff', cursor: 'pointer',
                 opacity: newDisk.capacity.trim() ? 1 : 0.5,
-              }}>Add Disk</button>
+              }}>{bulkMode ? `Add ${bulkRows.length} Disk${bulkRows.length !== 1 ? 's' : ''}` : 'Add Disk'}</button>
             </div>
           </form>
         </div>

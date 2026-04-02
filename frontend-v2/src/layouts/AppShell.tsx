@@ -31,9 +31,9 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Storage', icon: '⬢',
     children: [
+      { label: 'Disks', path: '/storage/disks' },
       { label: 'Pools', path: '/storage/pools' },
       { label: 'Shares', path: '/storage/shares' },
-      { label: 'Disks', path: '/storage/disks' },
     ],
   },
   { label: 'OS Overview', icon: '⬡', path: '/os' },

@@ -11,16 +11,18 @@ import styles from './OsStackTab.module.css';
 // -- Types --------------------------------------------------------------------
 
 interface OsStackTabProps {
-  device:           DeviceInstance;
-  hosts:            OsHost[];
-  vms:              OsVm[];
-  apps:             OsApp[];
-  containers:       Container[];
-  onAddVm:          (hostId: string) => void;
-  onAddContainer:   () => void;
-  onImportCompose:  () => void;
-  onConfigureOs:    (host: OsHost | null) => void;
-  onAddApp:         () => void;
+  device:                DeviceInstance;
+  hosts:                 OsHost[];
+  vms:                   OsVm[];
+  apps:                  OsApp[];
+  containers:            Container[];
+  onAddVm:               (hostId: string) => void;
+  onAddContainer:        () => void;
+  onImportCompose:       () => void;
+  onConfigureOs:         (host: OsHost | null) => void;
+  onAddApp:              () => void;
+  onToggleContainerMonitor?: (containerId: string, enabled: boolean) => void;
+  onToggleAppMonitor?:       (appId: string, enabled: boolean) => void;
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -70,6 +72,8 @@ export function OsStackTab({
   onImportCompose,
   onConfigureOs,
   onAddApp,
+  onToggleContainerMonitor,
+  onToggleAppMonitor,
 }: OsStackTabProps) {
   const [expandedVmId, setExpandedVmId] = useState<string | null>(null);
   const [expandedContainerId, setExpandedContainerId] = useState<string | null>(null);
@@ -220,14 +224,16 @@ export function OsStackTab({
           <span className={styles.sectionTitle}>
             Containers ({hostContainers.length})
           </span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button className={styles.addBtn} onClick={onImportCompose}>
-              Import Compose
-            </button>
-            <button className={styles.addBtn} onClick={onAddContainer}>
-              + Add Container
-            </button>
-          </div>
+          {host && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className={styles.addBtn} onClick={onImportCompose}>
+                Import Compose
+              </button>
+              <button className={styles.addBtn} onClick={onAddContainer}>
+                + Add Container
+              </button>
+            </div>
+          )}
         </div>
 
         {hostContainers.length === 0 && (
@@ -257,6 +263,7 @@ export function OsStackTab({
                     container={c}
                     expanded={expandedContainerId === c.id}
                     onClick={() => toggleContainer(c.id)}
+                    onToggleMonitor={onToggleContainerMonitor ? (en) => onToggleContainerMonitor(c.id, en) : undefined}
                   />
                   {expandedContainerId === c.id && (
                     <ContainerDetail container={c} />
@@ -274,6 +281,7 @@ export function OsStackTab({
               container={c}
               expanded={expandedContainerId === c.id}
               onClick={() => toggleContainer(c.id)}
+              onToggleMonitor={onToggleContainerMonitor ? (en) => onToggleContainerMonitor(c.id, en) : undefined}
             />
             {expandedContainerId === c.id && (
               <ContainerDetail container={c} />
@@ -300,7 +308,11 @@ export function OsStackTab({
         )}
 
         {hostApps.map(app => (
-          <AppRow key={app.id} app={app} />
+          <AppRow
+            key={app.id}
+            app={app}
+            onToggleMonitor={onToggleAppMonitor ? (en) => onToggleAppMonitor(app.id, en) : undefined}
+          />
         ))}
       </div>
 
@@ -438,9 +450,10 @@ interface ContainerRowProps {
   container: Container;
   expanded: boolean;
   onClick: () => void;
+  onToggleMonitor?: (enabled: boolean) => void;
 }
 
-function ContainerRow({ container, expanded, onClick }: ContainerRowProps) {
+function ContainerRow({ container, expanded, onClick, onToggleMonitor }: ContainerRowProps) {
   const summary = portsSummary(container.ports);
 
   return (
@@ -453,6 +466,15 @@ function ContainerRow({ container, expanded, onClick }: ContainerRowProps) {
         {container.status}
       </span>
       {summary && <span className={styles.portsSummary}>{summary}</span>}
+      {onToggleMonitor && (
+        <button
+          className={container.monitorEnabled ? styles.monitorBtnOn : styles.monitorBtnOff}
+          title={container.monitorEnabled ? 'Monitoring on — click to disable' : 'Monitoring off — click to enable'}
+          onClick={e => { e.stopPropagation(); onToggleMonitor(!container.monitorEnabled); }}
+        >
+          {container.monitorEnabled ? 'mon' : 'mon'}
+        </button>
+      )}
       <span className={styles.expandArrow}>{expanded ? '\u25BE' : '\u25B8'}</span>
     </div>
   );
@@ -521,7 +543,7 @@ function ContainerDetail({ container }: { container: Container }) {
 
 // -- App Row ------------------------------------------------------------------
 
-function AppRow({ app }: { app: OsApp }) {
+function AppRow({ app, onToggleMonitor }: { app: OsApp; onToggleMonitor?: (enabled: boolean) => void }) {
   const href = safeHref(app.url);
 
   return (
@@ -541,6 +563,15 @@ function AppRow({ app }: { app: OsApp }) {
         >
           {app.url}
         </a>
+      )}
+      {onToggleMonitor && (
+        <button
+          className={app.monitorEnabled ? styles.monitorBtnOn : styles.monitorBtnOff}
+          title={app.monitorEnabled ? 'Monitoring on — click to disable' : 'Monitoring off — click to enable'}
+          onClick={e => { e.stopPropagation(); onToggleMonitor(!app.monitorEnabled); }}
+        >
+          mon
+        </button>
       )}
     </div>
   );

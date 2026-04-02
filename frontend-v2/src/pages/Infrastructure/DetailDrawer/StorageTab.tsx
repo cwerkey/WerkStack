@@ -815,8 +815,7 @@ export function StorageTab({
   }, []);
 
   const ctxItems: ContextMenuItem[] = ctxMenu ? [
-    { label: 'Rename Slot', onClick: () => setEditingSlot(ctxMenu.block) },
-    { label: 'Set Interface', onClick: () => setEditingSlot(ctxMenu.block) },
+    { label: 'Edit Slot', onClick: () => setEditingSlot(ctxMenu.block) },
     { label: 'Assign Drive', onClick: () => setAssigningBay(ctxMenu.block) },
   ] : [];
 

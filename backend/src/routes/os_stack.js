@@ -114,9 +114,10 @@ function toApp(row) {
     version:   row.version ?? undefined,
     url:       row.url ?? undefined,
     ip:        row.ip ?? undefined,
-    extraIps:  parseJson(row.extra_ips, []),
-    notes:     row.notes ?? undefined,
-    createdAt: row.created_at,
+    extraIps:       parseJson(row.extra_ips, []),
+    notes:          row.notes ?? undefined,
+    monitorEnabled: row.monitor_enabled ?? false,
+    createdAt:      row.created_at,
   };
 }
 
@@ -403,6 +404,35 @@ module.exports = function osStackRoutes(db) {
         res.status(204).end();
       } catch (err) {
         console.error(`[DELETE /api/sites/${siteId}/os-apps/${appId}]`, err);
+        res.status(500).json({ error: 'server error' });
+      }
+    }
+  );
+
+  // PATCH /:siteId/os-apps/:appId/monitor — toggle monitoring on/off
+  router.patch(
+    '/:siteId/os-apps/:appId/monitor',
+    requireAuth, requireSiteAccess(db), requireRole('member'),
+    async (req, res) => {
+      const { orgId } = req.user;
+      const { siteId, appId } = req.params;
+      const { monitorEnabled } = req.body;
+      if (typeof monitorEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'monitorEnabled must be boolean' });
+      }
+      try {
+        const result = await withOrg(db, orgId, c =>
+          c.query(
+            `UPDATE os_apps SET monitor_enabled = $1
+             WHERE id = $2 AND site_id = $3 AND org_id = $4
+             RETURNING *`,
+            [monitorEnabled, appId, siteId, orgId]
+          )
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'app not found' });
+        res.json(toApp(result.rows[0]));
+      } catch (err) {
+        console.error(`[PATCH /api/sites/${siteId}/os-apps/${appId}/monitor]`, err);
         res.status(500).json({ error: 'server error' });
       }
     }

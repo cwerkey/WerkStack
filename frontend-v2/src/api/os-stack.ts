@@ -130,3 +130,14 @@ export function useDeleteOsApp(siteId: string) {
     },
   });
 }
+
+export function useToggleAppMonitor(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ appId, monitorEnabled }: { appId: string; monitorEnabled: boolean }) =>
+      api.patch<OsApp>(`/api/sites/${siteId}/os-apps/${appId}/monitor`, { monitorEnabled }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['os-apps', siteId] });
+    },
+  });
+}

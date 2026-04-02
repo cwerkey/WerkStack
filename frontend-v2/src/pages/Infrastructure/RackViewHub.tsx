@@ -34,8 +34,9 @@ import {
   useCreateOsVm,
   useGetOsApps,
   useCreateOsApp,
+  useToggleAppMonitor,
 } from '@/api/os-stack';
-import { useGetDeviceContainers, useCreateContainer } from '@/api/containers';
+import { useGetDeviceContainers, useCreateContainer, useToggleContainerMonitor } from '@/api/containers';
 import { useGetSubnets, useGetSiteIps } from '@/api/network';
 import { ZoneSidebar } from './ZoneSidebar';
 import { RackView } from './RackView';
@@ -134,6 +135,8 @@ export default function RackViewHub() {
   const updateOsHost = useUpdateOsHost(siteId);
   const createOsApp = useCreateOsApp(siteId);
   const createContainer = useCreateContainer(siteId);
+  const toggleContainerMonitor = useToggleContainerMonitor(siteId);
+  const toggleAppMonitor = useToggleAppMonitor(siteId);
   const updateMonitor = useUpdateDeviceMonitor(siteId);
 
   // Face toggle
@@ -679,6 +682,12 @@ export default function RackViewHub() {
               setOsHostModalOpen(true);
             }}
             onAddApp={() => setAppModalOpen(true)}
+            onToggleContainerMonitor={(containerId, enabled) =>
+              toggleContainerMonitor.mutate({ containerId, monitorEnabled: enabled })
+            }
+            onToggleAppMonitor={(appId, enabled) =>
+              toggleAppMonitor.mutate({ appId, monitorEnabled: enabled })
+            }
           />
         )}
         {selectedDevice && drawerTab === 'network' && (

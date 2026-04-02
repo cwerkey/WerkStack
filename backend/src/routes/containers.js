@@ -86,6 +86,7 @@ function toContainer(row) {
     restartPolicy:        row.restart_policy ?? 'no',
     upstreamDependencyId: row.upstream_dependency_id ?? undefined,
     notes:                row.notes ?? undefined,
+    monitorEnabled:       row.monitor_enabled ?? false,
     createdAt:            row.created_at,
   };
 }
@@ -407,6 +408,35 @@ module.exports = function containersRoutes(db) {
         res.status(201).json(created.map(toContainer));
       } catch (err) {
         console.error(`[POST /api/sites/${siteId}/import/docker-compose/commit]`, err);
+        res.status(500).json({ error: 'server error' });
+      }
+    }
+  );
+
+  // PATCH /:siteId/containers/:containerId/monitor — toggle monitoring on/off
+  router.patch(
+    '/:siteId/containers/:containerId/monitor',
+    requireAuth, requireSiteAccess(db), requireRole('member'),
+    async (req, res) => {
+      const { orgId } = req.user;
+      const { siteId, containerId } = req.params;
+      const { monitorEnabled } = req.body;
+      if (typeof monitorEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'monitorEnabled must be boolean' });
+      }
+      try {
+        const result = await withOrg(db, orgId, c =>
+          c.query(
+            `UPDATE containers SET monitor_enabled = $1
+             WHERE id = $2 AND site_id = $3 AND org_id = $4
+             RETURNING *`,
+            [monitorEnabled, containerId, siteId, orgId]
+          )
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'container not found' });
+        res.json(toContainer(result.rows[0]));
+      } catch (err) {
+        console.error(`[PATCH /api/sites/${siteId}/containers/${containerId}/monitor]`, err);
         res.status(500).json({ error: 'server error' });
       }
     }

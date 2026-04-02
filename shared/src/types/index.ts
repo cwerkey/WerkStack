@@ -407,19 +407,20 @@ export interface OsVm {
 }
 
 export interface OsApp {
-  id:        string;
-  orgId:     string;
-  siteId:    string;
-  vmId?:     string;
-  hostId?:   string;
-  name:      string;
-  typeId:    string;
-  version?:  string;
-  url?:      string;
-  ip?:       string;
-  extraIps:  OsExtraIp[];
-  notes?:    string;
-  createdAt: string;
+  id:             string;
+  orgId:          string;
+  siteId:         string;
+  vmId?:          string;
+  hostId?:        string;
+  name:           string;
+  typeId:         string;
+  version?:       string;
+  url?:           string;
+  ip?:            string;
+  extraIps:        OsExtraIp[];
+  notes?:          string;
+  monitorEnabled?: boolean;
+  createdAt:       string;
 }
 
 // ─── Cable Map / Connections ──────────────────────────────────────────────────
@@ -849,24 +850,25 @@ export interface ContainerVolume {
 }
 
 export interface Container {
-  id:                   string;
-  orgId:                string;
-  siteId:               string;
-  hostId?:              string;
-  vmId?:                string;
-  name:                 string;
-  image:                string;
-  tag:                  string;
-  status:               'running' | 'stopped' | 'paused' | 'unknown';
-  ports:                ContainerPort[];
-  volumes:              ContainerVolume[];
-  networks:             string[];
-  composeFile?:         string;
-  composeService?:      string;
-  restartPolicy:        'no' | 'always' | 'on-failure' | 'unless-stopped';
+  id:                    string;
+  orgId:                 string;
+  siteId:                string;
+  hostId?:               string;
+  vmId?:                 string;
+  name:                  string;
+  image:                 string;
+  tag:                   string;
+  status:                'running' | 'stopped' | 'paused' | 'unknown';
+  ports:                 ContainerPort[];
+  volumes:               ContainerVolume[];
+  networks:              string[];
+  composeFile?:          string;
+  composeService?:       string;
+  restartPolicy:         'no' | 'always' | 'on-failure' | 'unless-stopped';
   upstreamDependencyId?: string;
-  notes?:               string;
-  createdAt:            string;
+  notes?:                string;
+  monitorEnabled?:       boolean;
+  createdAt:             string;
 }
 
 // ─── Rev 2 To-Do ─────────────────────────────────────────────────────────────
