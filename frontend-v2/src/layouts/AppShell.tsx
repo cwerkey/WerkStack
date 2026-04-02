@@ -40,7 +40,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Network', icon: '⬡',
     children: [
-      { label: 'Subnets', path: '/network/subnets' },
+      { label: 'Subnet View', path: '/network/subnets' },
       { label: 'Leases', path: '/network/leases' },
       { label: 'VLANs', path: '/network/vlans' },
     ],

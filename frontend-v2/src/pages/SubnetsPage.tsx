@@ -8,7 +8,7 @@ import {
   useDeleteSubnet,
   useGetSiteIps,
 } from '@/api/network';
-import { useGetVlans } from '@/api/vlans';
+import { useGetVlans, useCreateVlan } from '@/api/vlans';
 import { useGetDevices } from '@/api/devices';
 import { useGetRacks } from '@/api/racks';
 import { useSiteStore } from '@/stores/siteStore';
@@ -51,11 +51,12 @@ function subnetToForm(s: Subnet): SubnetFormState {
 interface SubnetFormPanelProps {
   initial?: Subnet;
   onSave: (data: SubnetFormState) => void;
+  onSaveWithVlan?: (data: SubnetFormState) => void;
   onCancel: () => void;
   saving: boolean;
 }
 
-function SubnetFormPanel({ initial, onSave, onCancel, saving }: SubnetFormPanelProps) {
+function SubnetFormPanel({ initial, onSave, onSaveWithVlan, onCancel, saving }: SubnetFormPanelProps) {
   const [f, setF] = useState<SubnetFormState>(() =>
     initial ? subnetToForm(initial) : blankForm()
   );
@@ -91,6 +92,7 @@ function SubnetFormPanel({ initial, onSave, onCancel, saving }: SubnetFormPanelP
   };
 
   const canSave = f.cidr.trim() !== '' && f.name.trim() !== '' && !saving;
+  const canSaveWithVlan = canSave && f.vlan.trim() !== '';
 
   return (
     <div style={{
@@ -164,7 +166,7 @@ function SubnetFormPanel({ initial, onSave, onCancel, saving }: SubnetFormPanelP
           />
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <button
           className="form-cancel-btn"
           onClick={onCancel}
@@ -180,6 +182,27 @@ function SubnetFormPanel({ initial, onSave, onCancel, saving }: SubnetFormPanelP
         >
           Cancel
         </button>
+        {!initial && onSaveWithVlan && (
+          <button
+            className="form-save-btn"
+            onClick={() => canSaveWithVlan && onSaveWithVlan(f)}
+            disabled={!canSaveWithVlan}
+            title={!f.vlan.trim() ? 'Enter a VLAN ID to enable this option' : undefined}
+            style={{
+              padding: '6px 16px',
+              fontSize: 12,
+              fontWeight: 600,
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--color-surface-2)',
+              color: canSaveWithVlan ? 'var(--color-text)' : 'var(--color-text-dim)',
+              cursor: canSaveWithVlan ? 'pointer' : 'not-allowed',
+              opacity: canSaveWithVlan ? 1 : 0.5,
+            }}
+          >
+            {saving ? 'Saving…' : 'Create Subnet + VLAN'}
+          </button>
+        )}
         <button
           className="form-save-btn"
           onClick={() => canSave && onSave(f)}
@@ -450,6 +473,7 @@ export default function SubnetsPage() {
   const createSubnet = useCreateSubnet(siteId);
   const updateSubnet = useUpdateSubnet(siteId);
   const deleteSubnet = useDeleteSubnet(siteId);
+  const createVlan = useCreateVlan(siteId);
 
   const [showForm, setShowForm] = useState(false);
   const [editingSubnet, setEditingSubnet] = useState<Subnet | undefined>(undefined);
@@ -479,6 +503,32 @@ export default function SubnetsPage() {
         onSuccess: () => setShowForm(false),
       });
     }
+  }
+
+  function handleSaveWithVlan(f: SubnetFormState) {
+    const vlanNum = Number(f.vlan);
+    const payload = {
+      cidr: f.cidr.trim(),
+      name: f.name.trim(),
+      vlan: vlanNum,
+      ...(f.vlanName.trim() !== '' ? { vlanName: f.vlanName.trim() } : {}),
+      ...(f.gateway.trim() !== '' ? { gateway: f.gateway.trim() } : {}),
+      ...(f.notes.trim() !== '' ? { notes: f.notes.trim() } : {}),
+    };
+    createSubnet.mutate(payload, {
+      onSuccess: () => {
+        setShowForm(false);
+        // Also create the VLAN entry if the ID doesn't already exist
+        const alreadyExists = vlans.some(v => v.vlanId === vlanNum);
+        if (!alreadyExists) {
+          createVlan.mutate({
+            vlanId: vlanNum,
+            name: f.vlanName.trim() || f.name.trim(),
+            color: '#6366f1',
+          });
+        }
+      },
+    });
   }
 
   function handleDelete(subnet: Subnet) {
@@ -523,7 +573,7 @@ export default function SubnetsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-text)' }}>Subnets</h1>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--color-text)' }}>Subnet View</h1>
           <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--color-text-muted)' }}>
             {subnets.length} subnet{subnets.length !== 1 ? 's' : ''} · {allIps.length} IP assignment{allIps.length !== 1 ? 's' : ''}
           </p>
@@ -565,6 +615,7 @@ export default function SubnetsPage() {
         <SubnetFormPanel
           initial={editingSubnet}
           onSave={handleSave}
+          onSaveWithVlan={!editingSubnet ? handleSaveWithVlan : undefined}
           onCancel={() => { setShowForm(false); setEditingSubnet(undefined); }}
           saving={saving}
         />
