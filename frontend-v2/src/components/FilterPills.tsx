@@ -24,7 +24,7 @@ export default function FilterPills({ groups, style }: FilterPillsProps) {
             </span>
           )}
           <button
-            onClick={() => group.onChange(null)}
+            onClick={() => group.onChange(group.selected === null ? '\x00' : null)}
             style={{
               padding: '3px 10px',
               borderRadius: 12,

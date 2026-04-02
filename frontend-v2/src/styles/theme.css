@@ -9,6 +9,7 @@
   --color-sidebar-bg:  #131920;
   --color-hover:       #1e252c;
   --color-input-bg:    #0f1317;
+  --color-device-bg:   #1e2022;
 
   /* Borders */
   --color-border:      #2a3038;
@@ -87,6 +88,7 @@
   --color-sidebar-bg:  #e8eaed;
   --color-hover:       #e0e4ea;
   --color-input-bg:    #ffffff;
+  --color-device-bg:   #d8dce0;
 
   --color-border:      #d0d6e0;
   --color-border-2:    #b8c0cc;

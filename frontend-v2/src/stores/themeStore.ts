@@ -9,6 +9,25 @@ interface TaxonomyColors {
   types: Record<string, string>;
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+}
+
+function darkenHex(hex: string, factor = 0.85): string {
+  const [r, g, b] = hexToRgb(hex);
+  return '#' + [r, g, b]
+    .map(c => Math.round(c * factor).toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function injectAccentCSSVars(hex: string) {
+  const root = document.documentElement;
+  root.style.setProperty('--color-accent', hex);
+  root.style.setProperty('--color-accent-dark', darkenHex(hex));
+  root.style.setProperty('--color-accent-tint', hex + '18');
+}
+
 function injectTaxonomyCSSVars(taxonomy: TaxonomyColors) {
   const root = document.documentElement;
   // Clear old taxonomy vars
@@ -34,9 +53,11 @@ function injectTaxonomyCSSVars(taxonomy: TaxonomyColors) {
 interface ThemeState {
   theme: ThemeMode;
   accentColor: string;
+  deviceBg: string;
   taxonomy: TaxonomyColors;
   setTheme: (t: ThemeMode) => void;
   setAccent: (c: string) => void;
+  setDeviceBg: (c: string) => void;
   loadTaxonomy: (t: TaxonomyColors) => void;
   injectTaxonomyCSSVars: () => void;
   setVlanColor: (id: string, color: string) => void;
@@ -49,9 +70,17 @@ export const useThemeStore = create<ThemeState>()(
     (set, get) => ({
       theme: 'dark',
       accentColor: '#c47c5a',
+      deviceBg: '#1e2022',
       taxonomy: { vlans: {}, roles: {}, types: {} },
       setTheme: (theme) => set({ theme }),
-      setAccent: (accentColor) => set({ accentColor }),
+      setAccent: (accentColor) => {
+        set({ accentColor });
+        injectAccentCSSVars(accentColor);
+      },
+      setDeviceBg: (deviceBg) => {
+        set({ deviceBg });
+        document.documentElement.style.setProperty('--color-device-bg', deviceBg);
+      },
       loadTaxonomy: (taxonomy) => {
         set({ taxonomy });
         injectTaxonomyCSSVars(taxonomy);
@@ -78,6 +107,14 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: 'werkstack-theme',
+      onRehydrateStorage: () => (state) => {
+        if (state?.accentColor) {
+          injectAccentCSSVars(state.accentColor);
+        }
+        if (state?.deviceBg) {
+          document.documentElement.style.setProperty('--color-device-bg', state.deviceBg);
+        }
+      },
     }
   )
 );

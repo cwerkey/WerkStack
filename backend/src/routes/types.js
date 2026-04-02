@@ -85,13 +85,13 @@ function makeCrud(table, schema) {
         const result = await withOrg(req.db, orgId, (c) =>
           c.query(
             `DELETE FROM ${table}
-             WHERE id = $1 AND org_id = $2 AND is_builtin = FALSE
+             WHERE id = $1 AND org_id = $2
              RETURNING id`,
             [id, orgId]
           )
         );
         if (result.rows.length === 0) {
-          return res.status(404).json({ error: 'type not found or is built-in' });
+          return res.status(404).json({ error: 'type not found' });
         }
         res.status(204).end();
       } catch (err) {

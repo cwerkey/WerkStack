@@ -1142,35 +1142,33 @@ function DeviceTypeRow({ dt }: { dt: DeviceType }) {
           >
             Cancel
           </button>
-          {!dt.isBuiltin && (
-            confirmDelete ? (
-              <>
-                <span style={{ color: '#ef4444', fontSize: '10px', lineHeight: '22px' }}>Sure?</span>
-                <button
-                  className={settingsStyles.dangerBtn}
-                  style={{ padding: '2px 8px', fontSize: '10px' }}
-                  onClick={handleDelete}
-                  disabled={deleteMut.isPending}
-                >
-                  Yes
-                </button>
-                <button
-                  className={settingsStyles.ghostBtn}
-                  style={{ padding: '2px 8px', fontSize: '10px' }}
-                  onClick={() => setConfirmDelete(false)}
-                >
-                  No
-                </button>
-              </>
-            ) : (
+          {confirmDelete ? (
+            <>
+              <span style={{ color: '#ef4444', fontSize: '10px', lineHeight: '22px' }}>Sure?</span>
               <button
                 className={settingsStyles.dangerBtn}
                 style={{ padding: '2px 8px', fontSize: '10px' }}
-                onClick={() => setConfirmDelete(true)}
+                onClick={handleDelete}
+                disabled={deleteMut.isPending}
               >
-                Delete
+                Yes
               </button>
-            )
+              <button
+                className={settingsStyles.ghostBtn}
+                style={{ padding: '2px 8px', fontSize: '10px' }}
+                onClick={() => setConfirmDelete(false)}
+              >
+                No
+              </button>
+            </>
+          ) : (
+            <button
+              className={settingsStyles.dangerBtn}
+              style={{ padding: '2px 8px', fontSize: '10px' }}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete
+            </button>
           )}
         </div>
       </td>

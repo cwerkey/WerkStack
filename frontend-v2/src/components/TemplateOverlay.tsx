@@ -48,7 +48,7 @@ export function TemplateOverlay({
       const y = block.row * cellH;
       const w = bw * cellW;
       const h = bh * cellH;
-      const color       = blockColors?.[block.id] ?? def?.color ?? '#1e2022';
+      const color       = blockColors?.[block.id] ?? def?.color ?? 'var(--color-device-bg, #1e2022)';
       const borderColor = blockBorderColors?.[block.id] ?? def?.borderColor ?? '#3a4248';
       const opacity     = blockOpacity?.[block.id] ?? 1;
       const isSelected  = selectedId === block.id;

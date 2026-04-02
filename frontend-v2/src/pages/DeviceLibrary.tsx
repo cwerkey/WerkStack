@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGetDevices } from '@/api/devices';
+import { useGetDevices, useUpdateDevice } from '@/api/devices';
 import { useGetZones } from '@/api/zones';
 import { useGetRacks } from '@/api/racks';
 import { useGetDeviceTemplates } from '@/api/templates';
@@ -100,6 +100,164 @@ function Th({ label, sortKey, currentKey, dir, onSort, width, align = 'left' }: 
   );
 }
 
+// ─── Device Info Panel ────────────────────────────────────────────────────────
+
+function DeviceInfoPanel({
+  device,
+  deviceTypes,
+  templates,
+  racks,
+  zones,
+  onSave,
+}: {
+  device: DeviceInstance;
+  deviceTypes: { id: string; name: string; color: string }[];
+  templates: DeviceTemplate[];
+  racks: Rack[];
+  zones: Zone[];
+  onSave: (updated: Partial<DeviceInstance> & { id: string }) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [name, setName] = React.useState(device.name);
+  const [ip, setIp] = React.useState(device.ip ?? '');
+  const [serial, setSerial] = React.useState(device.serial ?? '');
+  const [assetTag, setAssetTag] = React.useState(device.assetTag ?? '');
+  const [notes, setNotes] = React.useState(device.notes ?? '');
+
+  React.useEffect(() => {
+    setEditing(false);
+    setName(device.name);
+    setIp(device.ip ?? '');
+    setSerial(device.serial ?? '');
+    setAssetTag(device.assetTag ?? '');
+    setNotes(device.notes ?? '');
+  }, [device.id]);
+
+  const devType = deviceTypes.find(t => t.id === device.typeId);
+  const tpl = templates.find(t => t.id === device.templateId);
+  const rack = racks.find(r => r.id === device.rackId);
+  const zoneId = device.zoneId ?? rack?.zoneId;
+  const zone = zones.find(z => z.id === zoneId);
+
+  const row = (label: string, value: React.ReactNode) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 16px', borderBottom: '1px solid #1e2328' }}>
+      <span style={{ fontSize: 10, color: '#8a9299', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
+      <span style={{ fontSize: 13, color: '#d4d9dd' }}>{value}</span>
+    </div>
+  );
+
+  const inputStyle: React.CSSProperties = {
+    background: '#0e1012',
+    border: '1px solid #2a3038',
+    borderRadius: 4,
+    padding: '4px 8px',
+    fontSize: 12,
+    color: '#d4d9dd',
+    outline: 'none',
+    width: '100%',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    boxSizing: 'border-box',
+  };
+
+  if (editing) {
+    return (
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#8a9299', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Name</div>
+            <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#8a9299', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>IP Address</div>
+            <input style={inputStyle} value={ip} onChange={e => setIp(e.target.value)} placeholder="e.g. 192.168.1.1" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#8a9299', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Serial</div>
+            <input style={inputStyle} value={serial} onChange={e => setSerial(e.target.value)} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#8a9299', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Asset Tag</div>
+            <input style={inputStyle} value={assetTag} onChange={e => setAssetTag(e.target.value)} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#8a9299', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Notes</div>
+            <textarea
+              style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => {
+                onSave({
+                  id: device.id,
+                  name,
+                  ip: ip || undefined,
+                  serial: serial || undefined,
+                  assetTag: assetTag || undefined,
+                  notes: notes || undefined,
+                });
+                setEditing(false);
+              }}
+              style={{ background: '#c47c5a', border: 'none', borderRadius: 4, padding: '5px 14px', fontSize: 12, color: '#fff', fontWeight: 500, cursor: 'pointer' }}
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              style={{ background: 'transparent', border: '1px solid #2a3038', borderRadius: 4, padding: '5px 12px', fontSize: 12, color: '#8a9299', cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto' }}>
+      {row('Type', devType ? (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: devType.color, flexShrink: 0 }} />
+          {devType.name}
+        </span>
+      ) : <span style={{ color: '#5a6068' }}>—</span>)}
+      {row('Template', tpl
+        ? `${tpl.manufacturer ?? ''} ${tpl.make} ${tpl.model}`.trim()
+        : <span style={{ color: '#5a6068' }}>—</span>)}
+      {row('Zone', zone?.name ?? <span style={{ color: '#5a6068' }}>—</span>)}
+      {row('Rack', rack
+        ? `${rack.name}${device.rackU != null ? ` · U${device.rackU}` : ''}`
+        : <span style={{ color: '#5a6068' }}>Unassigned</span>)}
+      {row('IP Address', device.ip ?? <span style={{ color: '#5a6068' }}>—</span>)}
+      {row('Serial', device.serial ?? <span style={{ color: '#5a6068' }}>—</span>)}
+      {row('Asset Tag', device.assetTag ?? <span style={{ color: '#5a6068' }}>—</span>)}
+      {row('Notes', device.notes ?? <span style={{ color: '#5a6068' }}>—</span>)}
+      {row('Status', (
+        <span style={{
+          padding: '2px 7px', borderRadius: 10, fontSize: 11,
+          background: device.isDraft ? '#2a2018' : '#0e1f16',
+          color: device.isDraft ? '#c4885a' : '#4caf7d',
+          border: `1px solid ${device.isDraft ? '#4a3028' : '#1e4a30'}`,
+          fontWeight: 500,
+        }}>
+          {device.isDraft ? 'Draft' : 'Active'}
+        </span>
+      ))}
+      <div style={{ padding: '12px 16px' }}>
+        <button
+          onClick={() => setEditing(true)}
+          style={{ background: '#c47c5a', border: 'none', borderRadius: 4, padding: '5px 14px', fontSize: 12, color: '#fff', fontWeight: 500, cursor: 'pointer' }}
+        >
+          Edit
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DeviceLibrary() {
@@ -121,6 +279,8 @@ export default function DeviceLibrary() {
   const [typeFilter, setTypeFilter] = useState<Set<string> | null>(null);
   const [assignedFilter, setAssignedFilter] = useState<'all' | 'assigned' | 'unassigned'>('all');
   const [deployOpen, setDeployOpen] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState<DeviceInstance | null>(null);
+  const updateDevice = useUpdateDevice(siteId);
 
   // ── Lookup maps ─────────────────────────────────────────────────────────────
   const zoneMap = useMemo(() => new Map<string, Zone>(zones.map(z => [z.id, z])), [zones]);
@@ -257,10 +417,7 @@ export default function DeviceLibrary() {
 
   // ── Row click ────────────────────────────────────────────────────────────────
   function handleRowClick(d: DeviceInstance) {
-    if (!d.rackId) return;
-    const rack = rackMap.get(d.rackId);
-    const zoneId = rack?.zoneId ?? d.zoneId ?? '';
-    navigate(`/infrastructure/rack/${zoneId}/${d.rackId}/${d.id}`);
+    setSelectedDevice(d);
   }
 
   // ── Export CSV ───────────────────────────────────────────────────────────────
@@ -472,13 +629,12 @@ export default function DeviceLibrary() {
                 const zone = zoneMap.get(zoneId ?? '');
                 const tpl = templateMap.get(d.templateId ?? '');
                 const devType = typeMap.get(d.typeId);
-                const clickable = !!d.rackId;
                 const rowBg = i % 2 === 0 ? 'transparent' : '#0e1012';
 
                 return (
                   <tr
                     key={d.id}
-                    className={`dl-row ${clickable ? 'clickable' : 'unclickable'}`}
+                    className="dl-row clickable"
                     onClick={() => handleRowClick(d)}
                   >
                     <td
@@ -486,7 +642,7 @@ export default function DeviceLibrary() {
                         padding: '7px 12px',
                         borderBottom: '1px solid #1e2328',
                         background: rowBg,
-                        color: clickable ? '#d4d9dd' : '#8a9299',
+                        color: '#d4d9dd',
                         fontWeight: 500,
                       }}
                     >
@@ -609,6 +765,46 @@ export default function DeviceLibrary() {
           </table>
         )}
       </div>
+
+      {/* Device Detail Panel */}
+      {selectedDevice && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: 400,
+            background: '#1a1e22',
+            borderLeft: '1px solid #2a3038',
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 200,
+            boxShadow: '-4px 0 16px rgba(0,0,0,0.4)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #2a3038', flexShrink: 0 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#d4d9dd', fontFamily: 'Inter, system-ui, sans-serif' }}>{selectedDevice.name}</span>
+            <button
+              onClick={() => setSelectedDevice(null)}
+              style={{ background: 'none', border: 'none', color: '#8a9299', fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: 0 }}
+              title="Close"
+            >&times;</button>
+          </div>
+          <DeviceInfoPanel
+            device={selectedDevice}
+            deviceTypes={deviceTypes}
+            templates={templates}
+            racks={racks}
+            zones={zones}
+            onSave={(updated) => {
+              updateDevice.mutate(updated, {
+                onSuccess: () => setSelectedDevice(s => s ? { ...s, ...updated } : s),
+              });
+            }}
+          />
+        </div>
+      )}
 
       {/* Deploy Wizard */}
       <DeployWizard
