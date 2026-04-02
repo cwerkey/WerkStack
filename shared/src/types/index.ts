@@ -855,6 +855,7 @@ export interface Container {
   networks:             string[];
   composeFile?:         string;
   composeService?:      string;
+  restartPolicy:        'no' | 'always' | 'on-failure' | 'unless-stopped';
   upstreamDependencyId?: string;
   notes?:               string;
   createdAt:            string;

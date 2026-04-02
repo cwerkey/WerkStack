@@ -32,6 +32,7 @@ const ContainerSchema = z.object({
   networks:             z.array(z.string()).default([]),
   composeFile:          z.string().max(500).optional().nullable(),
   composeService:       z.string().max(200).optional().nullable(),
+  restartPolicy:        z.enum(['no', 'always', 'on-failure', 'unless-stopped']).default('no'),
   upstreamDependencyId: z.string().uuid().optional().nullable(),
   notes:                z.string().max(2000).optional(),
 }).refine(d => d.hostId || d.vmId, { message: 'hostId or vmId required' });
@@ -82,6 +83,7 @@ function toContainer(row) {
     networks:             parseJson(row.networks, []),
     composeFile:          row.compose_file ?? undefined,
     composeService:       row.compose_service ?? undefined,
+    restartPolicy:        row.restart_policy ?? 'no',
     upstreamDependencyId: row.upstream_dependency_id ?? undefined,
     notes:                row.notes ?? undefined,
     createdAt:            row.created_at,
@@ -178,6 +180,10 @@ function parseDockerCompose(yamlStr, hostId, vmId) {
       networks.push(...Object.keys(svc.networks));
     }
 
+    // Parse restart policy
+    const validPolicies = ['no', 'always', 'on-failure', 'unless-stopped'];
+    const restartPolicy = validPolicies.includes(svc.restart) ? svc.restart : 'no';
+
     containers.push({
       hostId:         hostId ?? undefined,
       vmId:           vmId ?? undefined,
@@ -188,7 +194,9 @@ function parseDockerCompose(yamlStr, hostId, vmId) {
       ports,
       volumes,
       networks,
+      composeFile:    'docker-compose.yml',
       composeService: serviceName,
+      restartPolicy,
       notes:          undefined,
     });
   }
@@ -251,7 +259,8 @@ module.exports = function containersRoutes(db) {
       const {
         hostId, vmId, name, image, tag, status,
         ports, volumes, networks,
-        composeFile, composeService, upstreamDependencyId, notes,
+        composeFile, composeService, restartPolicy,
+        upstreamDependencyId, notes,
       } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
@@ -259,14 +268,15 @@ module.exports = function containersRoutes(db) {
             `INSERT INTO containers
                (org_id, site_id, host_id, vm_id, name, image, tag, status,
                 ports, volumes, networks, compose_file, compose_service,
-                upstream_dependency_id, notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                restart_policy, upstream_dependency_id, notes)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
              RETURNING *`,
             [orgId, siteId, hostId ?? null, vmId ?? null,
              name, image, tag ?? 'latest', status ?? 'unknown',
              JSON.stringify(ports ?? []), JSON.stringify(volumes ?? []),
              JSON.stringify(networks ?? []),
              composeFile ?? null, composeService ?? null,
+             restartPolicy ?? 'no',
              upstreamDependencyId ?? null, notes ?? null]
           )
         );
@@ -288,7 +298,8 @@ module.exports = function containersRoutes(db) {
       const {
         hostId, vmId, name, image, tag, status,
         ports, volumes, networks,
-        composeFile, composeService, upstreamDependencyId, notes,
+        composeFile, composeService, restartPolicy,
+        upstreamDependencyId, notes,
       } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
@@ -297,14 +308,16 @@ module.exports = function containersRoutes(db) {
              SET host_id=$1, vm_id=$2, name=$3, image=$4, tag=$5, status=$6,
                  ports=$7, volumes=$8, networks=$9,
                  compose_file=$10, compose_service=$11,
-                 upstream_dependency_id=$12, notes=$13
-             WHERE id=$14 AND site_id=$15 AND org_id=$16
+                 restart_policy=$12,
+                 upstream_dependency_id=$13, notes=$14
+             WHERE id=$15 AND site_id=$16 AND org_id=$17
              RETURNING *`,
             [hostId ?? null, vmId ?? null,
              name, image, tag ?? 'latest', status ?? 'unknown',
              JSON.stringify(ports ?? []), JSON.stringify(volumes ?? []),
              JSON.stringify(networks ?? []),
              composeFile ?? null, composeService ?? null,
+             restartPolicy ?? 'no',
              upstreamDependencyId ?? null, notes ?? null,
              containerId, siteId, orgId]
           )
@@ -376,14 +389,15 @@ module.exports = function containersRoutes(db) {
               `INSERT INTO containers
                  (org_id, site_id, host_id, vm_id, name, image, tag, status,
                   ports, volumes, networks, compose_file, compose_service,
-                  upstream_dependency_id, notes)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                  restart_policy, upstream_dependency_id, notes)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
                RETURNING *`,
               [orgId, siteId, finalHostId, finalVmId,
                ctr.name, ctr.image, ctr.tag ?? 'latest', ctr.status ?? 'unknown',
                JSON.stringify(ctr.ports ?? []), JSON.stringify(ctr.volumes ?? []),
                JSON.stringify(ctr.networks ?? []),
                ctr.composeFile ?? null, ctr.composeService ?? null,
+               ctr.restartPolicy ?? 'no',
                ctr.upstreamDependencyId ?? null, ctr.notes ?? null]
             );
             results.push(r.rows[0]);

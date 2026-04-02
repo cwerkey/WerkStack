@@ -19,6 +19,8 @@ interface OsStackTabProps {
   onAddVm:          (hostId: string) => void;
   onAddContainer:   () => void;
   onImportCompose:  () => void;
+  onConfigureOs:    (host: OsHost | null) => void;
+  onAddApp:         () => void;
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -66,6 +68,8 @@ export function OsStackTab({
   onAddVm,
   onAddContainer,
   onImportCompose,
+  onConfigureOs,
+  onAddApp,
 }: OsStackTabProps) {
   const [expandedVmId, setExpandedVmId] = useState<string | null>(null);
   const [expandedContainerId, setExpandedContainerId] = useState<string | null>(null);
@@ -141,6 +145,12 @@ export function OsStackTab({
       <div>
         <div className={styles.sectionHeader}>
           <span className={styles.sectionTitle}>Host OS</span>
+          <button
+            className={styles.addBtn}
+            onClick={() => onConfigureOs(host)}
+          >
+            {host ? 'Edit OS' : '+ Configure OS'}
+          </button>
         </div>
         {host ? (
           <div className={styles.hostRow}>
@@ -278,6 +288,11 @@ export function OsStackTab({
           <span className={styles.sectionTitle}>
             Apps ({hostApps.length})
           </span>
+          {host && (
+            <button className={styles.addBtn} onClick={onAddApp}>
+              + Add App
+            </button>
+          )}
         </div>
 
         {hostApps.length === 0 && (

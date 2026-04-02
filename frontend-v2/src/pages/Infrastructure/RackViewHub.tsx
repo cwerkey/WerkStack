@@ -27,11 +27,14 @@ import {
 } from '@/api/storage';
 import {
   useGetOsHosts,
+  useCreateOsHost,
+  useUpdateOsHost,
   useGetOsVms,
   useCreateOsVm,
   useGetOsApps,
+  useCreateOsApp,
 } from '@/api/os-stack';
-import { useGetDeviceContainers } from '@/api/containers';
+import { useGetDeviceContainers, useCreateContainer } from '@/api/containers';
 import { useGetSubnets, useGetSiteIps } from '@/api/network';
 import { ZoneSidebar } from './ZoneSidebar';
 import { RackView } from './RackView';
@@ -51,6 +54,9 @@ import { PoolWizard } from '@/wizards/PoolWizard';
 import { ExternalStorageWizard } from '@/wizards/ExternalStorageWizard';
 import { VmWizard } from '@/wizards/VmWizard';
 import { DockerComposeImport } from '@/wizards/DockerComposeImport';
+import { ContainerModal } from './DetailDrawer/ContainerModal';
+import { OsHostModal } from './DetailDrawer/OsHostModal';
+import { AppModal } from './DetailDrawer/AppModal';
 import { RackPickerModal } from './RackPickerModal';
 import { ShelfDetailModal } from './ShelfDetailModal';
 import { ExportDropdown } from '@/components/ExportDropdown';
@@ -122,6 +128,10 @@ export default function RackViewHub() {
   const createPool = useCreatePool(siteId);
   const installModule = useInstallModule(siteId, selectedDeviceId ?? '');
   const createOsVm = useCreateOsVm(siteId);
+  const createOsHost = useCreateOsHost(siteId);
+  const updateOsHost = useUpdateOsHost(siteId);
+  const createOsApp = useCreateOsApp(siteId);
+  const createContainer = useCreateContainer(siteId);
 
   // Face toggle
   const [face, setFace] = useState<'front' | 'rear'>('front');
@@ -157,6 +167,19 @@ export default function RackViewHub() {
 
   // Docker Compose import state
   const [composeImportOpen, setComposeImportOpen] = useState(false);
+
+  // Container modal state
+  const [containerModalOpen, setContainerModalOpen] = useState(false);
+
+  // OS host modal state
+  const [osHostModalOpen, setOsHostModalOpen] = useState(false);
+  const [osHostModalInitial, setOsHostModalInitial] = useState<import('@werkstack/shared').OsHost | null>(null);
+
+  // App modal state
+  const [appModalOpen, setAppModalOpen] = useState(false);
+
+  // Toast state
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // IP assignment modal state
   const [ipAssignOpen, setIpAssignOpen] = useState(false);
@@ -643,8 +666,13 @@ export default function RackViewHub() {
               setVmWizardHostId(hostId);
               setVmWizardOpen(true);
             }}
-            onAddContainer={() => {/* TODO: container editor */}}
+            onAddContainer={() => setContainerModalOpen(true)}
             onImportCompose={() => setComposeImportOpen(true)}
+            onConfigureOs={(host) => {
+              setOsHostModalInitial(host);
+              setOsHostModalOpen(true);
+            }}
+            onAddApp={() => setAppModalOpen(true)}
           />
         )}
         {selectedDevice && drawerTab === 'network' && (
@@ -811,10 +839,95 @@ export default function RackViewHub() {
             siteId={siteId}
             hostId={host?.id}
             onClose={() => setComposeImportOpen(false)}
-            onImported={() => setComposeImportOpen(false)}
+            onImported={(count) => {
+              setComposeImportOpen(false);
+              setToastMsg(`${count} container${count !== 1 ? 's' : ''} imported`);
+              setTimeout(() => setToastMsg(null), 3000);
+            }}
           />
         );
       })()}
+
+      {/* Container Modal */}
+      {containerModalOpen && selectedDevice && (() => {
+        const host = osHosts.find(h => h.deviceId === selectedDevice.id);
+        if (!host) return null;
+        return (
+          <ContainerModal
+            open={containerModalOpen}
+            hostId={host.id}
+            onSubmit={(payload) => {
+              createContainer.mutate(payload, {
+                onSuccess: () => setContainerModalOpen(false),
+              });
+            }}
+            onClose={() => setContainerModalOpen(false)}
+          />
+        );
+      })()}
+
+      {/* OS Host Modal */}
+      {osHostModalOpen && selectedDevice && (
+        <OsHostModal
+          open={osHostModalOpen}
+          deviceId={selectedDevice.id}
+          deviceName={selectedDevice.name}
+          initial={osHostModalInitial}
+          onSubmit={(payload) => {
+            if (osHostModalInitial) {
+              updateOsHost.mutate({ id: osHostModalInitial.id, ...payload }, {
+                onSuccess: () => {
+                  setOsHostModalOpen(false);
+                  setOsHostModalInitial(null);
+                },
+              });
+            } else {
+              createOsHost.mutate(payload, {
+                onSuccess: () => {
+                  setOsHostModalOpen(false);
+                  setOsHostModalInitial(null);
+                },
+              });
+            }
+          }}
+          onClose={() => {
+            setOsHostModalOpen(false);
+            setOsHostModalInitial(null);
+          }}
+        />
+      )}
+
+      {/* App Modal */}
+      {appModalOpen && selectedDevice && (() => {
+        const host = osHosts.find(h => h.deviceId === selectedDevice.id) ?? null;
+        const deviceVms = host ? osVms.filter(v => v.hostId === host.id) : [];
+        return (
+          <AppModal
+            open={appModalOpen}
+            host={host}
+            vms={deviceVms}
+            onSubmit={(payload) => {
+              createOsApp.mutate(payload, {
+                onSuccess: () => setAppModalOpen(false),
+              });
+            }}
+            onClose={() => setAppModalOpen(false)}
+          />
+        );
+      })()}
+
+      {/* Toast */}
+      {toastMsg && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#1a2a1a', border: '1px solid #3a8c4a', borderRadius: 6,
+          padding: '8px 18px', fontSize: 12, fontWeight: 500, color: '#3a8c4a',
+          fontFamily: 'Inter,system-ui,sans-serif', zIndex: 1200,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+        }}>
+          {toastMsg}
+        </div>
+      )}
 
       {/* IP Assignment Modal */}
       {ipAssignOpen && selectedDevice && (

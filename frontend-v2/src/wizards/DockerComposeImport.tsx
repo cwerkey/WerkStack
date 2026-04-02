@@ -11,7 +11,7 @@ interface DockerComposeImportProps {
   hostId?:    string;
   vmId?:      string;
   onClose:    () => void;
-  onImported: () => void;
+  onImported: (count: number) => void;
 }
 
 type ParsedContainer = Omit<Container, 'id' | 'orgId' | 'siteId' | 'createdAt'>;
@@ -179,12 +179,12 @@ export function DockerComposeImport({
     const selected = parsed.filter((_, i) => included.has(i));
     if (selected.length === 0) return;
     try {
-      await commitMutation.mutateAsync({
+      const result = await commitMutation.mutateAsync({
         containers: selected,
         hostId,
         vmId,
       });
-      onImported();
+      onImported(result.length);
       onClose();
     } catch {
       // error displayed via mutation state
