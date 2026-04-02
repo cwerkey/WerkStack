@@ -15,6 +15,7 @@ const BLOCK_TYPES: { value: GuideBlockType; label: string }[] = [
   { value: 'ordered',   label: 'num' },
   { value: 'divider',   label: '---' },
   { value: 'callout',   label: 'note' },
+  { value: 'table',     label: 'table' },
 ];
 
 const TYPE_LABEL: Record<GuideBlockType, string> = {
@@ -27,6 +28,7 @@ const TYPE_LABEL: Record<GuideBlockType, string> = {
   ordered:   'num',
   divider:   '---',
   callout:   'note',
+  table:     'table',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
