@@ -220,6 +220,27 @@ module.exports = function templatesRoutes(db) {
     }
   );
 
+  router.get(
+    '/devices/:id/usage',
+    requireAuth,
+    async (req, res) => {
+      const { orgId } = req.user;
+      const { id } = req.params;
+      try {
+        const result = await withOrg(db, orgId, (c) =>
+          c.query(
+            `SELECT COUNT(*)::int AS count FROM device_instances WHERE template_id = $1 AND org_id = $2`,
+            [id, orgId]
+          )
+        );
+        res.json({ count: result.rows[0]?.count ?? 0 });
+      } catch (err) {
+        console.error(`[GET /api/templates/devices/${id}/usage]`, err);
+        res.status(500).json({ error: 'server error' });
+      }
+    }
+  );
+
   router.post(
     '/devices/import',
     requireAuth,

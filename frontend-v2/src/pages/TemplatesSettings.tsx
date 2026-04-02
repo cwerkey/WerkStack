@@ -4,7 +4,8 @@ import { api } from '@/utils/api';
 import { useGetDeviceTemplates, useGetPcieTemplates } from '@/api/templates';
 import { useGetTypes } from '@/api/types';
 import { useThemeStore } from '@/stores/themeStore';
-import type { DeviceTemplate, PcieTemplate, DeviceType, FormFactor, PcieFormFactor, PcieBusSize } from '@werkstack/shared';
+import type { DeviceTemplate, PcieTemplate, DeviceType, FormFactor, PcieFormFactor, PcieBusSize, PlacedBlock } from '@werkstack/shared';
+import { TemplateWizard, LayoutEditor, PcieLayoutEditor } from '@/wizards/TemplateWizard';
 import styles from './TemplatesSettings.module.css';
 import settingsStyles from './SettingsPage.module.css';
 
@@ -153,6 +154,14 @@ function DeviceTemplatesTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<DeviceTemplateFormState>(blankDeviceForm());
 
+  // Wizard state
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardTemplate, setWizardTemplate] = useState<DeviceTemplate | undefined>(undefined);
+
+  // Layout editor state
+  const [layoutEditorOpen, setLayoutEditorOpen] = useState(false);
+  const [layoutEditorTemplate, setLayoutEditorTemplate] = useState<DeviceTemplate | null>(null);
+
   const sorted = sortByManufacturer(templates ?? []);
 
   const setF = <K extends keyof DeviceTemplateFormState>(k: K, v: DeviceTemplateFormState[K]) =>
@@ -196,6 +205,7 @@ function DeviceTemplatesTab() {
       formFactor: t.formFactor,
       uHeight: t.uHeight,
     });
+    setConfirmDeleteId(null);
   };
 
   const handleSaveEdit = (id: string) => {
@@ -218,9 +228,34 @@ function DeviceTemplatesTab() {
 
   const handleDelete = (id: string) => {
     deleteMut.mutate(id, {
-      onSuccess: () => setConfirmDeleteId(null),
+      onSuccess: () => { setConfirmDeleteId(null); setEditingId(null); },
       onError: (err) => setError(err instanceof Error ? err.message : 'Failed to delete'),
     });
+  };
+
+  const handleOpenLayoutEditor = (t: DeviceTemplate) => {
+    setLayoutEditorTemplate(t);
+    setLayoutEditorOpen(true);
+  };
+
+  const handleSaveLayout = (layout: { front: PlacedBlock[]; rear: PlacedBlock[] }) => {
+    if (!layoutEditorTemplate) return;
+    updateMut.mutate(
+      {
+        id: layoutEditorTemplate.id,
+        manufacturer: layoutEditorTemplate.manufacturer || undefined,
+        make: layoutEditorTemplate.make,
+        model: layoutEditorTemplate.model,
+        category: layoutEditorTemplate.category,
+        formFactor: layoutEditorTemplate.formFactor,
+        uHeight: layoutEditorTemplate.uHeight,
+        layout,
+      },
+      {
+        onSuccess: () => { setLayoutEditorOpen(false); setLayoutEditorTemplate(null); },
+        onError: (err) => setError(err instanceof Error ? err.message : 'Failed to save layout'),
+      }
+    );
   };
 
   if (isLoading) {
@@ -244,21 +279,32 @@ function DeviceTemplatesTab() {
         <span className={styles.sectionTitle}>
           {sorted.length} template{sorted.length !== 1 ? 's' : ''}
         </span>
-        <button
-          className={settingsStyles.primaryBtn}
-          onClick={() => {
-            setShowCreate(!showCreate);
-            setForm(blankDeviceForm());
-            setError('');
-          }}
-        >
-          {showCreate ? 'Cancel' : '+ Create'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            className={settingsStyles.primaryBtn}
+            onClick={() => {
+              setWizardTemplate(undefined);
+              setWizardOpen(true);
+            }}
+          >
+            + New Template
+          </button>
+          <button
+            className={settingsStyles.primaryBtn}
+            onClick={() => {
+              setShowCreate(!showCreate);
+              setForm(blankDeviceForm());
+              setError('');
+            }}
+          >
+            {showCreate ? 'Cancel' : '+ Quick Create'}
+          </button>
+        </div>
       </div>
 
       {showCreate && (
         <div className={styles.inlineForm}>
-          <p className={styles.inlineFormTitle}>New Device Template</p>
+          <p className={styles.inlineFormTitle}>New Device Template (metadata only)</p>
           <div className={styles.formRow}>
             <div className={styles.formField}>
               <label className={styles.label}>Manufacturer</label>
@@ -341,15 +387,13 @@ function DeviceTemplatesTab() {
         <div className={styles.emptyState}>
           <div className={styles.emptyIcon}>&#9707;</div>
           <div>No device templates yet.</div>
-          {!showCreate && (
-            <button
-              className={settingsStyles.primaryBtn}
-              style={{ marginTop: '12px' }}
-              onClick={() => setShowCreate(true)}
-            >
-              + Create Template
-            </button>
-          )}
+          <button
+            className={settingsStyles.primaryBtn}
+            style={{ marginTop: '12px' }}
+            onClick={() => { setWizardTemplate(undefined); setWizardOpen(true); }}
+          >
+            + New Template
+          </button>
         </div>
       ) : (
         <div className={styles.tableWrap}>
@@ -361,7 +405,7 @@ function DeviceTemplatesTab() {
                 <th className={styles.th}>Category</th>
                 <th className={styles.th}>Form Factor</th>
                 <th className={styles.th}>U Height</th>
-                <th className={styles.th} style={{ width: '100px' }}>Actions</th>
+                <th className={styles.th} style={{ width: '160px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -424,7 +468,7 @@ function DeviceTemplatesTab() {
                       />
                     </td>
                     <td className={styles.td}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                         <button
                           className={settingsStyles.primaryBtn}
                           style={{ padding: '3px 8px', fontSize: '10px' }}
@@ -436,35 +480,45 @@ function DeviceTemplatesTab() {
                         <button
                           className={settingsStyles.ghostBtn}
                           style={{ padding: '3px 8px', fontSize: '10px' }}
-                          onClick={() => setEditingId(null)}
+                          onClick={() => handleOpenLayoutEditor(t)}
                         >
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : confirmDeleteId === t.id ? (
-                  <tr key={t.id} className={styles.tableRow} style={{ background: '#1e1416' }}>
-                    <td className={styles.td} colSpan={5} style={{ color: '#ef4444', fontSize: '12px' }}>
-                      Delete &quot;{t.make} {t.model}&quot;? This cannot be undone.
-                    </td>
-                    <td className={styles.td}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button
-                          className={settingsStyles.dangerBtn}
-                          style={{ padding: '3px 8px', fontSize: '10px' }}
-                          onClick={() => handleDelete(t.id)}
-                          disabled={deleteMut.isPending}
-                        >
-                          Delete
+                          Layout
                         </button>
                         <button
                           className={settingsStyles.ghostBtn}
                           style={{ padding: '3px 8px', fontSize: '10px' }}
-                          onClick={() => setConfirmDeleteId(null)}
+                          onClick={() => setEditingId(null)}
                         >
                           Cancel
                         </button>
+                        {confirmDeleteId === t.id ? (
+                          <>
+                            <span style={{ color: '#ef4444', fontSize: '10px', lineHeight: '22px' }}>Sure?</span>
+                            <button
+                              className={settingsStyles.dangerBtn}
+                              style={{ padding: '3px 8px', fontSize: '10px' }}
+                              onClick={() => handleDelete(t.id)}
+                              disabled={deleteMut.isPending}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              className={settingsStyles.ghostBtn}
+                              style={{ padding: '3px 8px', fontSize: '10px' }}
+                              onClick={() => setConfirmDeleteId(null)}
+                            >
+                              No
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className={settingsStyles.dangerBtn}
+                            style={{ padding: '3px 8px', fontSize: '10px' }}
+                            onClick={() => setConfirmDeleteId(t.id)}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -480,13 +534,22 @@ function DeviceTemplatesTab() {
                     </td>
                     <td className={styles.tdMuted}>{t.uHeight}U</td>
                     <td className={styles.td} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className={settingsStyles.dangerBtn}
-                        style={{ padding: '2px 8px', fontSize: '10px' }}
-                        onClick={() => setConfirmDeleteId(t.id)}
-                      >
-                        Delete
-                      </button>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          className={settingsStyles.primaryBtn}
+                          style={{ padding: '2px 8px', fontSize: '10px' }}
+                          onClick={() => handleStartEdit(t)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className={settingsStyles.ghostBtn}
+                          style={{ padding: '2px 8px', fontSize: '10px' }}
+                          onClick={() => handleOpenLayoutEditor(t)}
+                        >
+                          Layout
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -494,6 +557,24 @@ function DeviceTemplatesTab() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Template Wizard overlay */}
+      <TemplateWizard
+        open={wizardOpen}
+        initialTemplate={wizardTemplate}
+        onComplete={() => { setWizardOpen(false); setWizardTemplate(undefined); }}
+        onClose={() => { setWizardOpen(false); setWizardTemplate(undefined); }}
+      />
+
+      {/* Layout Editor overlay */}
+      {layoutEditorTemplate && (
+        <LayoutEditor
+          open={layoutEditorOpen}
+          template={layoutEditorTemplate}
+          onSave={handleSaveLayout}
+          onClose={() => { setLayoutEditorOpen(false); setLayoutEditorTemplate(null); }}
+        />
       )}
     </div>
   );
@@ -531,6 +612,10 @@ function PcieTemplatesTab() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PcieTemplateFormState>(blankPcieForm());
+
+  // PCIe layout editor state
+  const [pcieEditorOpen, setPcieEditorOpen] = useState(false);
+  const [pcieEditorTarget, setPcieEditorTarget] = useState<PcieTemplate | null>(null);
 
   const sorted = sortByManufacturer(templates ?? []);
 
@@ -575,6 +660,7 @@ function PcieTemplatesTab() {
       formFactor: t.formFactor,
       laneDepth: t.laneDepth,
     });
+    setConfirmDeleteId(null);
   };
 
   const handleSaveEdit = (id: string) => {
@@ -597,9 +683,34 @@ function PcieTemplatesTab() {
 
   const handleDelete = (id: string) => {
     deleteMut.mutate(id, {
-      onSuccess: () => setConfirmDeleteId(null),
+      onSuccess: () => { setConfirmDeleteId(null); setEditingId(null); },
       onError: (err) => setError(err instanceof Error ? err.message : 'Failed to delete'),
     });
+  };
+
+  const handleOpenPcieEditor = (t: PcieTemplate) => {
+    setPcieEditorTarget(t);
+    setPcieEditorOpen(true);
+  };
+
+  const handleSavePcieLayout = (blocks: PlacedBlock[]) => {
+    if (!pcieEditorTarget) return;
+    updateMut.mutate(
+      {
+        id: pcieEditorTarget.id,
+        manufacturer: pcieEditorTarget.manufacturer || undefined,
+        make: pcieEditorTarget.make,
+        model: pcieEditorTarget.model,
+        busSize: pcieEditorTarget.busSize,
+        formFactor: pcieEditorTarget.formFactor,
+        laneDepth: pcieEditorTarget.laneDepth,
+        layout: { rear: blocks },
+      },
+      {
+        onSuccess: () => { setPcieEditorOpen(false); setPcieEditorTarget(null); },
+        onError: (err) => setError(err instanceof Error ? err.message : 'Failed to save layout'),
+      }
+    );
   };
 
   if (isLoading) {
@@ -742,7 +853,7 @@ function PcieTemplatesTab() {
                 <th className={styles.th}>Bus Size</th>
                 <th className={styles.th}>Form Factor</th>
                 <th className={styles.th}>Lane Depth</th>
-                <th className={styles.th} style={{ width: '100px' }}>Actions</th>
+                <th className={styles.th} style={{ width: '160px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -805,7 +916,7 @@ function PcieTemplatesTab() {
                       />
                     </td>
                     <td className={styles.td}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                         <button
                           className={settingsStyles.primaryBtn}
                           style={{ padding: '3px 8px', fontSize: '10px' }}
@@ -817,35 +928,45 @@ function PcieTemplatesTab() {
                         <button
                           className={settingsStyles.ghostBtn}
                           style={{ padding: '3px 8px', fontSize: '10px' }}
-                          onClick={() => setEditingId(null)}
+                          onClick={() => handleOpenPcieEditor(t)}
                         >
-                          Cancel
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : confirmDeleteId === t.id ? (
-                  <tr key={t.id} className={styles.tableRow} style={{ background: '#1e1416' }}>
-                    <td className={styles.td} colSpan={5} style={{ color: '#ef4444', fontSize: '12px' }}>
-                      Delete &quot;{t.make} {t.model}&quot;? This cannot be undone.
-                    </td>
-                    <td className={styles.td}>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button
-                          className={settingsStyles.dangerBtn}
-                          style={{ padding: '3px 8px', fontSize: '10px' }}
-                          onClick={() => handleDelete(t.id)}
-                          disabled={deleteMut.isPending}
-                        >
-                          Delete
+                          Layout
                         </button>
                         <button
                           className={settingsStyles.ghostBtn}
                           style={{ padding: '3px 8px', fontSize: '10px' }}
-                          onClick={() => setConfirmDeleteId(null)}
+                          onClick={() => setEditingId(null)}
                         >
                           Cancel
                         </button>
+                        {confirmDeleteId === t.id ? (
+                          <>
+                            <span style={{ color: '#ef4444', fontSize: '10px', lineHeight: '22px' }}>Sure?</span>
+                            <button
+                              className={settingsStyles.dangerBtn}
+                              style={{ padding: '3px 8px', fontSize: '10px' }}
+                              onClick={() => handleDelete(t.id)}
+                              disabled={deleteMut.isPending}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              className={settingsStyles.ghostBtn}
+                              style={{ padding: '3px 8px', fontSize: '10px' }}
+                              onClick={() => setConfirmDeleteId(null)}
+                            >
+                              No
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className={settingsStyles.dangerBtn}
+                            style={{ padding: '3px 8px', fontSize: '10px' }}
+                            onClick={() => setConfirmDeleteId(t.id)}
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -863,13 +984,22 @@ function PcieTemplatesTab() {
                     </td>
                     <td className={styles.tdMuted}>{t.laneDepth}</td>
                     <td className={styles.td} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className={settingsStyles.dangerBtn}
-                        style={{ padding: '2px 8px', fontSize: '10px' }}
-                        onClick={() => setConfirmDeleteId(t.id)}
-                      >
-                        Delete
-                      </button>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          className={settingsStyles.primaryBtn}
+                          style={{ padding: '2px 8px', fontSize: '10px' }}
+                          onClick={() => handleStartEdit(t)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className={settingsStyles.ghostBtn}
+                          style={{ padding: '2px 8px', fontSize: '10px' }}
+                          onClick={() => handleOpenPcieEditor(t)}
+                        >
+                          Layout
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -877,6 +1007,18 @@ function PcieTemplatesTab() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* PCIe Layout Editor overlay */}
+      {pcieEditorTarget && (
+        <PcieLayoutEditor
+          open={pcieEditorOpen}
+          formFactor={pcieEditorTarget.formFactor}
+          initialBlocks={pcieEditorTarget.layout?.rear ?? []}
+          title={`Edit Layout — ${pcieEditorTarget.make} ${pcieEditorTarget.model}`}
+          onSave={handleSavePcieLayout}
+          onClose={() => { setPcieEditorOpen(false); setPcieEditorTarget(null); }}
+        />
       )}
     </div>
   );
@@ -889,6 +1031,7 @@ function DeviceTypeRow({ dt }: { dt: DeviceType }) {
   const deleteMut = useDeleteDeviceType();
   const setTypeColor = useThemeStore((s) => s.setTypeColor);
 
+  const [editing, setEditing] = useState(false);
   const [color, setColor] = useState(dt.color);
   const [dirty, setDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -902,7 +1045,7 @@ function DeviceTypeRow({ dt }: { dt: DeviceType }) {
   const handleSave = () => {
     updateMut.mutate(
       { id: dt.id, color },
-      { onSuccess: () => setDirty(false) }
+      { onSuccess: () => { setDirty(false); setEditing(false); } }
     );
   };
 
@@ -912,37 +1055,34 @@ function DeviceTypeRow({ dt }: { dt: DeviceType }) {
     });
   };
 
-  if (confirmDelete) {
+  if (!editing) {
     return (
-      <tr className={styles.tableRow} style={{ background: '#1e1416' }}>
-        <td className={styles.td} colSpan={3} style={{ color: '#ef4444', fontSize: '12px' }}>
-          Delete &quot;{dt.name}&quot;? This cannot be undone.
+      <tr className={styles.tableRow}>
+        <td className={styles.td}>{dt.name}</td>
+        <td className={styles.td}>
+          <div className={styles.colorRow}>
+            <span className={styles.colorSwatch} style={{ background: color }} />
+            <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: 'var(--color-text-muted)' }}>{color}</span>
+          </div>
+        </td>
+        <td className={styles.tdMuted}>
+          {dt.isBuiltin ? <span className={styles.pill}>built-in</span> : null}
         </td>
         <td className={styles.td}>
-          <div style={{ display: 'flex', gap: '4px' }}>
-            <button
-              className={settingsStyles.dangerBtn}
-              style={{ padding: '3px 8px', fontSize: '10px' }}
-              onClick={handleDelete}
-              disabled={deleteMut.isPending}
-            >
-              Delete
-            </button>
-            <button
-              className={settingsStyles.ghostBtn}
-              style={{ padding: '3px 8px', fontSize: '10px' }}
-              onClick={() => setConfirmDelete(false)}
-            >
-              Cancel
-            </button>
-          </div>
+          <button
+            className={settingsStyles.primaryBtn}
+            style={{ padding: '2px 8px', fontSize: '10px' }}
+            onClick={() => setEditing(true)}
+          >
+            Edit
+          </button>
         </td>
       </tr>
     );
   }
 
   return (
-    <tr className={styles.tableRow}>
+    <tr className={styles.tableRowActive}>
       <td className={styles.td}>{dt.name}</td>
       <td className={styles.td}>
         <div className={styles.colorRow}>
@@ -978,7 +1118,7 @@ function DeviceTypeRow({ dt }: { dt: DeviceType }) {
         {dt.isBuiltin ? <span className={styles.pill}>built-in</span> : null}
       </td>
       <td className={styles.td}>
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           {dirty && (
             <button
               className={settingsStyles.primaryBtn}
@@ -989,14 +1129,42 @@ function DeviceTypeRow({ dt }: { dt: DeviceType }) {
               {updateMut.isPending ? '...' : 'Save'}
             </button>
           )}
+          <button
+            className={settingsStyles.ghostBtn}
+            style={{ padding: '2px 8px', fontSize: '10px' }}
+            onClick={() => { setEditing(false); setColor(dt.color); setDirty(false); setConfirmDelete(false); }}
+          >
+            Cancel
+          </button>
           {!dt.isBuiltin && (
-            <button
-              className={settingsStyles.dangerBtn}
-              style={{ padding: '2px 8px', fontSize: '10px' }}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete
-            </button>
+            confirmDelete ? (
+              <>
+                <span style={{ color: '#ef4444', fontSize: '10px', lineHeight: '22px' }}>Sure?</span>
+                <button
+                  className={settingsStyles.dangerBtn}
+                  style={{ padding: '2px 8px', fontSize: '10px' }}
+                  onClick={handleDelete}
+                  disabled={deleteMut.isPending}
+                >
+                  Yes
+                </button>
+                <button
+                  className={settingsStyles.ghostBtn}
+                  style={{ padding: '2px 8px', fontSize: '10px' }}
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  No
+                </button>
+              </>
+            ) : (
+              <button
+                className={settingsStyles.dangerBtn}
+                style={{ padding: '2px 8px', fontSize: '10px' }}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete
+              </button>
+            )
           )}
         </div>
       </td>
@@ -1118,7 +1286,7 @@ function DeviceTypesTab() {
                 <th className={styles.th}>Name</th>
                 <th className={styles.th}>Color</th>
                 <th className={styles.th}>Flags</th>
-                <th className={styles.th} style={{ width: '120px' }}>Actions</th>
+                <th className={styles.th} style={{ width: '160px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>

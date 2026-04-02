@@ -5,12 +5,6 @@ import { BLOCK_DEFS, BLOCK_DEF_MAP } from '@werkstack/shared';
 import { api } from '@/utils/api';
 import { uid } from '@/utils/uid';
 
-interface TemplateWizardProps {
-  open: boolean;
-  onComplete: (template: DeviceTemplate) => void;
-  onClose: () => void;
-}
-
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const EDITOR_W = 700;
@@ -69,7 +63,7 @@ function PaletteItem({ def, active, onClick }: { def: BlockDef; active: boolean;
   return (
     <button
       onClick={onClick}
-      title={`${def.label} (${def.w}×${def.h})`}
+      title={`${def.label} (${def.w}×${def.h})${def.canRotate ? ' — R to rotate' : ''}`}
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
         width: '100%', padding: '4px 8px', textAlign: 'left',
@@ -82,9 +76,12 @@ function PaletteItem({ def, active, onClick }: { def: BlockDef; active: boolean;
         width: 12, height: 12, flexShrink: 0, borderRadius: 2,
         background: def.color, border: `1px solid ${def.borderColor}`,
       }} />
-      <span style={{ fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif', color: '#d4d9dd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <span style={{ fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif', color: '#d4d9dd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
         {def.label}
       </span>
+      {def.canRotate && active && (
+        <span style={{ fontSize: 8, color: '#5a6068', fontFamily: 'Inter,system-ui,sans-serif', flexShrink: 0 }}>R</span>
+      )}
     </button>
   );
 }
@@ -93,22 +90,20 @@ function PaletteItem({ def, active, onClick }: { def: BlockDef; active: boolean;
 // NOTE: GridEditor intentionally duplicates some rendering math from
 // TemplateOverlay. TemplateOverlay is read-only (presentation); GridEditor adds
 // click-to-place, hover preview, collision detection, and block deletion.
-// Shared positioning math (block dims from PlacedBlock + cellW) could be
-// extracted into a utility if the two diverge further — tracked as a future
-// cleanup task.
 
-interface GridEditorProps {
+export interface GridEditorProps {
   blocks: PlacedBlock[];
   gridCols: number;
   gridRows: number;
   pendingType: string | null;
+  pendingRotated: boolean;
   selectedId: string | null;
   onPlace: (col: number, row: number) => void;
   onSelect: (id: string | null) => void;
   onDelete: (id: string) => void;
 }
 
-function GridEditor({ blocks, gridCols, gridRows, pendingType, selectedId, onPlace, onSelect, onDelete }: GridEditorProps) {
+export function GridEditor({ blocks, gridCols, gridRows, pendingType, pendingRotated, selectedId, onPlace, onSelect, onDelete }: GridEditorProps) {
   const cellW = EDITOR_W / gridCols;
   const cellH = cellW; // square cells
   const gridH = Math.min(gridRows * cellH, MAX_EDITOR_H);
@@ -116,16 +111,41 @@ function GridEditor({ blocks, gridCols, gridRows, pendingType, selectedId, onPla
   const [hover, setHover] = useState<{ col: number; row: number } | null>(null);
 
   const pendingDef = pendingType ? BLOCK_DEF_MAP.get(pendingType) : null;
+  // Effective dimensions of pending block (account for rotation)
+  const pendW = pendingDef ? (pendingRotated && pendingDef.canRotate ? pendingDef.h : pendingDef.w) : 1;
+  const pendH = pendingDef ? (pendingRotated && pendingDef.canRotate ? pendingDef.w : pendingDef.h) : 1;
 
   const toCell = useCallback((e: React.MouseEvent): { col: number; row: number } => {
     const rect = e.currentTarget.getBoundingClientRect();
     const scrollTop = (e.currentTarget as HTMLDivElement).scrollTop;
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top + scrollTop;
-    const col = Math.max(0, Math.min(gridCols - (pendingDef?.w ?? 1), Math.floor(x / cellW)));
-    const row = Math.max(0, Math.min(gridRows - (pendingDef?.h ?? 1), Math.floor(y / cellH)));
+    const col = Math.max(0, Math.min(gridCols - pendW, Math.floor(x / cellW)));
+    const row = Math.max(0, Math.min(gridRows - pendH, Math.floor(y / cellH)));
     return { col, row };
-  }, [cellW, cellH, gridCols, gridRows, pendingDef]);
+  }, [cellW, cellH, gridCols, gridRows, pendW, pendH]);
+
+  // For Ctrl+Click — find block at pixel position (no pending-size clamping)
+  const blockAtPixel = useCallback((e: React.MouseEvent): PlacedBlock | null => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scrollTop = (e.currentTarget as HTMLDivElement).scrollTop;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top + scrollTop;
+    const col = Math.floor(x / cellW);
+    const row = Math.floor(y / cellH);
+    // Find block that contains this cell (check in reverse for z-order)
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i];
+      const def = BLOCK_DEF_MAP.get(b.type);
+      if (!def) continue;
+      const bw = b.rotated ? def.h : def.w;
+      const bh = b.rotated ? def.w : def.h;
+      if (col >= b.col && col < b.col + bw && row >= b.row && row < b.row + bh) {
+        return b;
+      }
+    }
+    return null;
+  }, [cellW, cellH, blocks]);
 
   function handleMouseMove(e: React.MouseEvent) {
     if (!pendingDef) { setHover(null); return; }
@@ -135,21 +155,35 @@ function GridEditor({ blocks, gridCols, gridRows, pendingType, selectedId, onPla
   function handleMouseLeave() { setHover(null); }
 
   function handleClick(e: React.MouseEvent) {
+    // Ctrl+Click (or Cmd+Click on Mac) = instant delete
+    if (e.ctrlKey || e.metaKey) {
+      const hit = blockAtPixel(e);
+      if (hit) { onDelete(hit.id); }
+      return;
+    }
     if (!pendingDef) return;
     const { col, row } = toCell(e);
     onPlace(col, row);
   }
 
-  // 1U boundary markers (every 12 rows)
-  const uBoundaries: number[] = [];
-  for (let u = 1; u * 12 < gridRows; u++) uBoundaries.push(u * 12 * cellH);
+  // Grid line arrays
+  const minorLines: number[] = [];
+  for (let c = 1; c < gridCols; c++) minorLines.push(c * cellW);
+  const minorHLines: number[] = [];
+  for (let r = 1; r < gridRows; r++) minorHLines.push(r * cellH);
+
+  // Major lines every 12 rows (U boundaries) and every 12 cols
+  const majorHLines: number[] = [];
+  for (let u = 1; u * 12 < gridRows; u++) majorHLines.push(u * 12 * cellH);
+  const majorVLines: number[] = [];
+  for (let c = 12; c < gridCols; c += 12) majorVLines.push(c * cellW);
 
   return (
     <div
       ref={scrollRef}
       style={{
         width: EDITOR_W, height: gridH, overflowY: 'auto',
-        background: '#080a0c', border: '1px solid #2a3038', borderRadius: 4,
+        background: '#0c0e12', border: '1px solid #2a3038', borderRadius: 4,
         position: 'relative', cursor: pendingDef ? 'crosshair' : 'default',
         flexShrink: 0,
       }}
@@ -160,13 +194,32 @@ function GridEditor({ blocks, gridCols, gridRows, pendingType, selectedId, onPla
       {/* Full-height inner container */}
       <div style={{ width: EDITOR_W, height: gridRows * cellH, position: 'relative' }}>
 
-        {/* U-boundary lines */}
-        {uBoundaries.map((y, i) => (
-          <div key={i} style={{
-            position: 'absolute', left: 0, top: y, width: '100%',
-            height: 1, background: '#1a2028', pointerEvents: 'none',
-          }} />
-        ))}
+        {/* SVG gridlines */}
+        <svg
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {/* Minor vertical gridlines */}
+          {minorLines.map((x, i) => (
+            <line key={`v${i}`} x1={x} y1={0} x2={x} y2={gridRows * cellH}
+              stroke="#1a1e24" strokeWidth={0.5} />
+          ))}
+          {/* Minor horizontal gridlines */}
+          {minorHLines.map((y, i) => (
+            <line key={`h${i}`} x1={0} y1={y} x2={EDITOR_W} y2={y}
+              stroke="#1a1e24" strokeWidth={0.5} />
+          ))}
+          {/* Major vertical gridlines (every 12 cols) */}
+          {majorVLines.map((x, i) => (
+            <line key={`mv${i}`} x1={x} y1={0} x2={x} y2={gridRows * cellH}
+              stroke="#2a3038" strokeWidth={1} />
+          ))}
+          {/* Major horizontal gridlines (U boundaries every 12 rows) */}
+          {majorHLines.map((y, i) => (
+            <line key={`mh${i}`} x1={0} y1={y} x2={EDITOR_W} y2={y}
+              stroke="#2a3038" strokeWidth={1} />
+          ))}
+        </svg>
 
         {/* Placed blocks */}
         {blocks.map(b => {
@@ -178,7 +231,7 @@ function GridEditor({ blocks, gridCols, gridRows, pendingType, selectedId, onPla
           return (
             <div
               key={b.id}
-              onClick={(e) => { e.stopPropagation(); onSelect(isSelected ? null : b.id); }}
+              onClick={(e) => { e.stopPropagation(); if (e.ctrlKey || e.metaKey) { onDelete(b.id); return; } onSelect(isSelected ? null : b.id); }}
               style={{
                 position: 'absolute',
                 left: b.col * cellW, top: b.row * cellH,
@@ -195,9 +248,10 @@ function GridEditor({ blocks, gridCols, gridRows, pendingType, selectedId, onPla
                 zIndex: isSelected ? 3 : 1,
                 outline: isSelected ? '2px solid #c47c5a' : 'none',
                 outlineOffset: -1,
+                borderRadius: 1,
               }}
             >
-              <span style={{ opacity: 0.7, fontSize: Math.max(6, cellW * 0.9), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 2px' }}>
+              <span style={{ opacity: 0.8, fontSize: Math.max(6, cellW * 0.9), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '0 2px' }}>
                 {b.label ?? def.label}
               </span>
               {isSelected && (
@@ -225,13 +279,14 @@ function GridEditor({ blocks, gridCols, gridRows, pendingType, selectedId, onPla
           <div style={{
             position: 'absolute',
             left: hover.col * cellW, top: hover.row * cellH,
-            width: pendingDef.w * cellW, height: pendingDef.h * cellH,
+            width: pendW * cellW, height: pendH * cellH,
             background: pendingDef.color,
-            border: `1px solid ${pendingDef.borderColor}`,
+            border: `1px dashed ${pendingDef.borderColor}`,
             boxSizing: 'border-box',
             opacity: 0.55,
             pointerEvents: 'none',
             zIndex: 5,
+            borderRadius: 1,
           }} />
         )}
       </div>
@@ -241,8 +296,16 @@ function GridEditor({ blocks, gridCols, gridRows, pendingType, selectedId, onPla
 
 // ── TemplateWizard ─────────────────────────────────────────────────────────────
 
-export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProps) {
+interface TemplateWizardProps {
+  open: boolean;
+  initialTemplate?: DeviceTemplate;
+  onComplete: (template: DeviceTemplate) => void;
+  onClose: () => void;
+}
+
+export function TemplateWizard({ open, initialTemplate, onComplete, onClose }: TemplateWizardProps) {
   const qc = useQueryClient();
+  const isEdit = !!initialTemplate;
 
   // Step 1 — Info
   const [make, setMake] = useState('');
@@ -258,6 +321,7 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
 
   // Editor state
   const [pendingType, setPendingType] = useState<string | null>(null);
+  const [pendingRotated, setPendingRotated] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Wizard
@@ -265,21 +329,48 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset on open
+  // Usage warning
+  const [usageCount, setUsageCount] = useState<number | null>(null);
+
+  // Reset on open / populate for edit
   useEffect(() => {
     if (!open) return;
-    setMake(''); setModel(''); setManufacturer('');
-    setCategory('switch'); setUHeight(1); setFormFactor('rack');
-    setFrontBlocks([]); setRearBlocks([]);
-    setPendingType(null); setSelectedId(null);
+    if (initialTemplate) {
+      setMake(initialTemplate.make);
+      setModel(initialTemplate.model);
+      setManufacturer(initialTemplate.manufacturer ?? '');
+      setCategory(initialTemplate.category);
+      setUHeight(initialTemplate.uHeight);
+      setFormFactor(initialTemplate.formFactor);
+      setFrontBlocks(initialTemplate.layout?.front ?? []);
+      setRearBlocks(initialTemplate.layout?.rear ?? []);
+      // Fetch usage count
+      api.get<{ count: number }>(`/api/templates/devices/${initialTemplate.id}/usage`)
+        .then(r => setUsageCount(r.count))
+        .catch(() => setUsageCount(null));
+    } else {
+      setMake(''); setModel(''); setManufacturer('');
+      setCategory('switch'); setUHeight(1); setFormFactor('rack');
+      setFrontBlocks([]); setRearBlocks([]);
+      setUsageCount(null);
+    }
+    setPendingType(null); setPendingRotated(false); setSelectedId(null);
     setStep(1); setError(null);
-  }, [open]);
+  }, [open, initialTemplate]);
 
-  // Cancel pending placement on Escape
+  // Keyboard shortcuts
   useEffect(() => {
     if (!open) return;
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && pendingType) { setPendingType(null); return; }
+      if (e.key === 'Escape' && pendingType) { setPendingType(null); setPendingRotated(false); return; }
+      // R key toggles rotation for pending block
+      if (e.key === 'r' || e.key === 'R') {
+        if (pendingType) {
+          const def = BLOCK_DEF_MAP.get(pendingType);
+          if (def?.canRotate) setPendingRotated(prev => !prev);
+        }
+        return;
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !pendingType) {
         const face = step === 2 ? 'front' : 'rear';
         if (face === 'front') setFrontBlocks(prev => prev.filter(b => b.id !== selectedId));
@@ -305,17 +396,23 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
   })).filter(g => g.defs.length > 0);
 
   function handlePaletteClick(type: string) {
-    setPendingType(prev => prev === type ? null : type);
+    if (pendingType === type) {
+      setPendingType(null);
+      setPendingRotated(false);
+    } else {
+      setPendingType(type);
+      setPendingRotated(false);
+    }
     setSelectedId(null);
   }
 
-  function hasCollision(blocks: PlacedBlock[], col: number, row: number, def: BlockDef): boolean {
+  function hasCollision(blocks: PlacedBlock[], col: number, row: number, w: number, h: number): boolean {
     return blocks.some(b => {
       const bd = BLOCK_DEF_MAP.get(b.type);
       if (!bd) return false;
       const bw = b.rotated ? bd.h : bd.w;
       const bh = b.rotated ? bd.w : bd.h;
-      return !(col + def.w <= b.col || col >= b.col + bw || row + def.h <= b.row || row >= b.row + bh);
+      return !(col + w <= b.col || col >= b.col + bw || row + h <= b.row || row >= b.row + bh);
     });
   }
 
@@ -323,10 +420,13 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
     if (!pendingType) return;
     const def = BLOCK_DEF_MAP.get(pendingType);
     if (!def) return;
+    const rotated = pendingRotated && def.canRotate;
+    const w = rotated ? def.h : def.w;
+    const h = rotated ? def.w : def.h;
     const setter = step === 2 ? setFrontBlocks : setRearBlocks;
     const current = step === 2 ? frontBlocks : rearBlocks;
-    if (hasCollision(current, col, row, def)) return;
-    const block: PlacedBlock = { id: uid(), type: pendingType as PlacedBlock['type'], col, row, w: def.w, h: def.h };
+    if (hasCollision(current, col, row, w, h)) return;
+    const block: PlacedBlock = { id: uid(), type: pendingType as PlacedBlock['type'], col, row, w: def.w, h: def.h, rotated: rotated || undefined };
     setter(prev => [...prev, block]);
   }
 
@@ -339,21 +439,27 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
   async function handleFinish() {
     setSubmitting(true);
     setError(null);
+    const payload = {
+      make: make.trim(),
+      model: model.trim(),
+      manufacturer: manufacturer.trim() || undefined,
+      category: category.trim(),
+      formFactor,
+      uHeight,
+      gridCols: GRID_COLS,
+      layout: { front: frontBlocks, rear: rearBlocks },
+    };
     try {
-      const template = await api.post<DeviceTemplate>('/api/templates/devices', {
-        make: make.trim(),
-        model: model.trim(),
-        manufacturer: manufacturer.trim() || undefined,
-        category: category.trim(),
-        formFactor,
-        uHeight,
-        gridCols: GRID_COLS,
-        layout: { front: frontBlocks, rear: rearBlocks },
-      });
+      let template: DeviceTemplate;
+      if (isEdit) {
+        template = await api.patch<DeviceTemplate>(`/api/templates/devices/${initialTemplate!.id}`, payload);
+      } else {
+        template = await api.post<DeviceTemplate>('/api/templates/devices', payload);
+      }
       await qc.invalidateQueries({ queryKey: ['templates', 'devices'] });
       onComplete(template);
     } catch (e) {
-      setError((e as Error).message ?? 'Failed to create template');
+      setError((e as Error).message ?? `Failed to ${isEdit ? 'update' : 'create'} template`);
     } finally {
       setSubmitting(false);
     }
@@ -363,6 +469,7 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
     n < step ? 'done' : n === step ? 'active' : 'pending';
 
   const isEditor = step === 2 || step === 3;
+  const currentBlocks = step === 2 ? frontBlocks : rearBlocks;
 
   return (
     <div style={{
@@ -381,10 +488,20 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 13, fontWeight: 600, color: '#d4d9dd' }}>
-            New Device Template
+            {isEdit ? 'Edit' : 'New'} Device Template
           </span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#5a6068', cursor: 'pointer', fontSize: 18, padding: '0 4px' }}>×</button>
         </div>
+
+        {/* Usage warning */}
+        {isEdit && usageCount !== null && usageCount > 0 && (
+          <div style={{
+            background: '#2a1e0e', border: '1px solid #8a6a20', borderRadius: 4,
+            padding: '8px 12px', fontSize: 12, fontFamily: 'Inter,system-ui,sans-serif', color: '#e8b840',
+          }}>
+            This template is used by {usageCount} device{usageCount !== 1 ? 's' : ''}. Changing the layout may affect existing port mappings and visual layouts.
+          </div>
+        )}
 
         {/* Step dots */}
         <div style={{ display: 'flex', alignItems: 'flex-start' }}>
@@ -469,7 +586,10 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
                 {step === 2 ? 'Front' : 'Rear'} faceplate layout
               </h3>
               <p style={{ margin: 0, fontSize: 12, fontFamily: 'Inter,system-ui,sans-serif', color: '#8a9299' }}>
-                Click a block type in the palette, then click the grid to place it. Click a placed block to select → × to delete. <kbd style={{ fontSize: 10, background: '#2a3038', padding: '1px 5px', borderRadius: 3, color: '#d4d9dd' }}>Esc</kbd> cancels placement.
+                Click a block type then click the grid to place.{' '}
+                <kbd style={{ fontSize: 10, background: '#2a3038', padding: '1px 5px', borderRadius: 3, color: '#d4d9dd' }}>Ctrl+Click</kbd> to delete.{' '}
+                <kbd style={{ fontSize: 10, background: '#2a3038', padding: '1px 5px', borderRadius: 3, color: '#d4d9dd' }}>R</kbd> to rotate.{' '}
+                <kbd style={{ fontSize: 10, background: '#2a3038', padding: '1px 5px', borderRadius: 3, color: '#d4d9dd' }}>Esc</kbd> cancels.
               </p>
             </div>
 
@@ -498,32 +618,56 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
                 ))}
               </div>
 
-              {/* Grid */}
+              {/* Grid + toolbar */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Toolbar row */}
+                {pendingType && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontFamily: 'Inter,system-ui,sans-serif', color: '#8a9299' }}>
+                    <span>Placing: <strong style={{ color: '#d4d9dd' }}>{BLOCK_DEF_MAP.get(pendingType)?.label}</strong></span>
+                    {pendingRotated && <span style={{ color: '#c47c5a' }}>(rotated)</span>}
+                    {BLOCK_DEF_MAP.get(pendingType)?.canRotate && (
+                      <button
+                        onClick={() => setPendingRotated(prev => !prev)}
+                        style={{
+                          background: pendingRotated ? '#c47c5a20' : '#1a1e22',
+                          border: `1px solid ${pendingRotated ? '#c47c5a' : '#2a3038'}`,
+                          borderRadius: 3, padding: '2px 8px', cursor: 'pointer',
+                          fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif',
+                          color: pendingRotated ? '#c47c5a' : '#8a9299',
+                        }}
+                        title="Toggle rotation (R)"
+                      >
+                        ↻ Rotate
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 <GridEditor
-                  blocks={step === 2 ? frontBlocks : rearBlocks}
+                  blocks={currentBlocks}
                   gridCols={gridCols}
                   gridRows={gridRows}
                   pendingType={pendingType}
+                  pendingRotated={pendingRotated}
                   selectedId={selectedId}
                   onPlace={handlePlace}
                   onSelect={setSelectedId}
                   onDelete={handleDelete}
                 />
                 <div style={{ fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif', color: '#3a4248', textAlign: 'right' }}>
-                  {gridCols}×{gridRows} grid · {uHeight}U · {(step === 2 ? frontBlocks : rearBlocks).length} block{(step === 2 ? frontBlocks : rearBlocks).length !== 1 ? 's' : ''} placed
+                  {gridCols}×{gridRows} grid · {uHeight}U · {currentBlocks.length} block{currentBlocks.length !== 1 ? 's' : ''} placed
                 </div>
               </div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <button style={{ fontSize: 11, fontFamily: 'Inter,system-ui,sans-serif', background: 'none', border: 'none', color: '#5a6068', cursor: 'pointer', textDecoration: 'underline' }}
-                onClick={() => { setStep(step === 2 ? 3 : 4); setPendingType(null); setSelectedId(null); }}>
+                onClick={() => { setStep(step === 2 ? 3 : 4); setPendingType(null); setPendingRotated(false); setSelectedId(null); }}>
                 Skip →
               </button>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button style={BTN_SEC} onClick={() => { setStep(step === 2 ? 1 : 2); setPendingType(null); setSelectedId(null); }}>← Back</button>
-                <button style={BTN_PRI} onClick={() => { setStep(step === 2 ? 3 : 4); setPendingType(null); setSelectedId(null); }}>Next →</button>
+                <button style={BTN_SEC} onClick={() => { setStep(step === 2 ? 1 : 2); setPendingType(null); setPendingRotated(false); setSelectedId(null); }}>← Back</button>
+                <button style={BTN_PRI} onClick={() => { setStep(step === 2 ? 3 : 4); setPendingType(null); setPendingRotated(false); setSelectedId(null); }}>Next →</button>
               </div>
             </div>
           </div>
@@ -534,7 +678,7 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
               <h3 style={{ margin: '0 0 4px', fontFamily: 'Inter,system-ui,sans-serif', fontSize: 16, fontWeight: 600, color: '#d4d9dd' }}>
-                Review & create
+                Review & {isEdit ? 'save' : 'create'}
               </h3>
             </div>
 
@@ -570,7 +714,7 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
                 return (
                   <div key={label}>
                     <div style={{ fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif', color: '#5a6068', marginBottom: 6 }}>{label}</div>
-                    <div style={{ width: previewW, height: previewH, background: '#080a0c', border: '1px solid #2a3038', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                    <div style={{ width: previewW, height: previewH, background: '#0c0e12', border: '1px solid #2a3038', borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
                       {blocks.length === 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#3a4248', fontSize: 11, fontFamily: 'Inter,system-ui,sans-serif' }}>
                           empty
@@ -587,7 +731,7 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
                             left: b.col * cellSz, top: b.row * cellSz,
                             width: bw * cellSz, height: bh * cellSz,
                             background: def.color, border: `1px solid ${def.borderColor}`,
-                            boxSizing: 'border-box',
+                            boxSizing: 'border-box', borderRadius: 1,
                           }} />
                         );
                       })}
@@ -613,11 +757,454 @@ export function TemplateWizard({ open, onComplete, onClose }: TemplateWizardProp
                 disabled={submitting}
                 onClick={handleFinish}
               >
-                {submitting ? 'Creating…' : 'Create Template'}
+                {submitting ? (isEdit ? 'Saving…' : 'Creating…') : (isEdit ? 'Save Template' : 'Create Template')}
               </button>
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Standalone Layout Editor ──────────────────────────────────────────────────
+// A lighter overlay that just opens the grid editor for an existing template
+// without going through the full 4-step wizard.
+
+interface LayoutEditorProps {
+  open: boolean;
+  template: DeviceTemplate;
+  onSave: (layout: { front: PlacedBlock[]; rear: PlacedBlock[] }) => void;
+  onClose: () => void;
+}
+
+export function LayoutEditor({ open, template, onSave, onClose }: LayoutEditorProps) {
+  const [face, setFace] = useState<'front' | 'rear'>('front');
+  const [frontBlocks, setFrontBlocks] = useState<PlacedBlock[]>([]);
+  const [rearBlocks, setRearBlocks] = useState<PlacedBlock[]>([]);
+  const [pendingType, setPendingType] = useState<string | null>(null);
+  const [pendingRotated, setPendingRotated] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [usageCount, setUsageCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setFrontBlocks(template.layout?.front ?? []);
+    setRearBlocks(template.layout?.rear ?? []);
+    setFace('front');
+    setPendingType(null); setPendingRotated(false); setSelectedId(null);
+    api.get<{ count: number }>(`/api/templates/devices/${template.id}/usage`)
+      .then(r => setUsageCount(r.count))
+      .catch(() => setUsageCount(null));
+  }, [open, template]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && pendingType) { setPendingType(null); setPendingRotated(false); return; }
+      if (e.key === 'r' || e.key === 'R') {
+        if (pendingType) {
+          const def = BLOCK_DEF_MAP.get(pendingType);
+          if (def?.canRotate) setPendingRotated(prev => !prev);
+        }
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !pendingType) {
+        if (face === 'front') setFrontBlocks(prev => prev.filter(b => b.id !== selectedId));
+        else setRearBlocks(prev => prev.filter(b => b.id !== selectedId));
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [open, pendingType, selectedId, face]);
+
+  if (!open) return null;
+
+  const gridCols = GRID_COLS;
+  const gridRows = template.uHeight * 12;
+  const currentBlocks = face === 'front' ? frontBlocks : rearBlocks;
+
+  const paletteGroups = PALETTE_GROUPS.map(group => ({
+    ...group,
+    defs: group.types
+      .map(t => BLOCK_DEF_MAP.get(t))
+      .filter((d): d is BlockDef => !!d && (face === 'front' ? d.panel !== 'rear' : true)),
+  })).filter(g => g.defs.length > 0);
+
+  function handlePaletteClick(type: string) {
+    if (pendingType === type) { setPendingType(null); setPendingRotated(false); }
+    else { setPendingType(type); setPendingRotated(false); }
+    setSelectedId(null);
+  }
+
+  function hasCollision(blocks: PlacedBlock[], col: number, row: number, w: number, h: number): boolean {
+    return blocks.some(b => {
+      const bd = BLOCK_DEF_MAP.get(b.type);
+      if (!bd) return false;
+      const bw = b.rotated ? bd.h : bd.w;
+      const bh = b.rotated ? bd.w : bd.h;
+      return !(col + w <= b.col || col >= b.col + bw || row + h <= b.row || row >= b.row + bh);
+    });
+  }
+
+  function handlePlace(col: number, row: number) {
+    if (!pendingType) return;
+    const def = BLOCK_DEF_MAP.get(pendingType);
+    if (!def) return;
+    const rotated = pendingRotated && def.canRotate;
+    const w = rotated ? def.h : def.w;
+    const h = rotated ? def.w : def.h;
+    const setter = face === 'front' ? setFrontBlocks : setRearBlocks;
+    const current = face === 'front' ? frontBlocks : rearBlocks;
+    if (hasCollision(current, col, row, w, h)) return;
+    const block: PlacedBlock = { id: uid(), type: pendingType as PlacedBlock['type'], col, row, w: def.w, h: def.h, rotated: rotated || undefined };
+    setter(prev => [...prev, block]);
+  }
+
+  function handleDelete(id: string) {
+    if (face === 'front') setFrontBlocks(prev => prev.filter(b => b.id !== id));
+    else setRearBlocks(prev => prev.filter(b => b.id !== id));
+    setSelectedId(null);
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1010,
+    }}>
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#1a1e22', border: '1px solid #2a3038', borderRadius: 8,
+          width: 960, maxWidth: '96vw',
+          maxHeight: '92vh', overflowY: 'auto',
+          padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 16,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 13, fontWeight: 600, color: '#d4d9dd' }}>
+            Edit Layout — {template.make} {template.model}
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#5a6068', cursor: 'pointer', fontSize: 18, padding: '0 4px' }}>×</button>
+        </div>
+
+        {/* Usage warning */}
+        {usageCount !== null && usageCount > 0 && (
+          <div style={{
+            background: '#2a1e0e', border: '1px solid #8a6a20', borderRadius: 4,
+            padding: '8px 12px', fontSize: 12, fontFamily: 'Inter,system-ui,sans-serif', color: '#e8b840',
+          }}>
+            This template is used by {usageCount} device{usageCount !== 1 ? 's' : ''}. Changing the layout may affect existing port mappings and visual layouts.
+          </div>
+        )}
+
+        {/* Face toggle + instructions */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['front', 'rear'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => { setFace(f); setPendingType(null); setPendingRotated(false); setSelectedId(null); }}
+                style={{
+                  background: face === f ? '#c47c5a20' : '#1a1e22',
+                  border: `1px solid ${face === f ? '#c47c5a' : '#2a3038'}`,
+                  borderRadius: 4, padding: '4px 12px', cursor: 'pointer',
+                  fontSize: 11, fontFamily: 'Inter,system-ui,sans-serif',
+                  color: face === f ? '#c47c5a' : '#8a9299',
+                }}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+          <span style={{ fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif', color: '#5a6068' }}>
+            Ctrl+Click delete · R rotate · Esc cancel
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          {/* Palette */}
+          <div style={{
+            width: 160, flexShrink: 0,
+            maxHeight: MAX_EDITOR_H, overflowY: 'auto',
+            background: '#0e1012', border: '1px solid #2a3038', borderRadius: 4,
+            padding: '10px 8px',
+          }}>
+            {paletteGroups.map(group => (
+              <div key={group.label} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 9, fontFamily: 'Inter,system-ui,sans-serif', color: '#5a6068', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4, paddingLeft: 8 }}>
+                  {group.label}
+                </div>
+                {group.defs.map(def => (
+                  <PaletteItem
+                    key={def.type}
+                    def={def}
+                    active={pendingType === def.type}
+                    onClick={() => handlePaletteClick(def.type)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Grid + toolbar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pendingType && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontFamily: 'Inter,system-ui,sans-serif', color: '#8a9299' }}>
+                <span>Placing: <strong style={{ color: '#d4d9dd' }}>{BLOCK_DEF_MAP.get(pendingType)?.label}</strong></span>
+                {pendingRotated && <span style={{ color: '#c47c5a' }}>(rotated)</span>}
+                {BLOCK_DEF_MAP.get(pendingType)?.canRotate && (
+                  <button
+                    onClick={() => setPendingRotated(prev => !prev)}
+                    style={{
+                      background: pendingRotated ? '#c47c5a20' : '#1a1e22',
+                      border: `1px solid ${pendingRotated ? '#c47c5a' : '#2a3038'}`,
+                      borderRadius: 3, padding: '2px 8px', cursor: 'pointer',
+                      fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif',
+                      color: pendingRotated ? '#c47c5a' : '#8a9299',
+                    }}
+                    title="Toggle rotation (R)"
+                  >
+                    ↻ Rotate
+                  </button>
+                )}
+              </div>
+            )}
+
+            <GridEditor
+              blocks={currentBlocks}
+              gridCols={gridCols}
+              gridRows={gridRows}
+              pendingType={pendingType}
+              pendingRotated={pendingRotated}
+              selectedId={selectedId}
+              onPlace={handlePlace}
+              onSelect={setSelectedId}
+              onDelete={handleDelete}
+            />
+            <div style={{ fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif', color: '#3a4248', textAlign: 'right' }}>
+              {gridCols}×{gridRows} grid · {template.uHeight}U · {currentBlocks.length} block{currentBlocks.length !== 1 ? 's' : ''} placed
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button style={BTN_SEC} onClick={onClose}>Cancel</button>
+          <button style={BTN_PRI} onClick={() => onSave({ front: frontBlocks, rear: rearBlocks })}>
+            Save Layout
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PCIe Layout Editor ────────────────────────────────────────────────────────
+// Simpler editor for PCIe card templates — rear-only, filtered palette.
+
+const PCIE_PALETTE_GROUPS: { label: string; types: string[] }[] = [
+  { label: 'Network', types: ['rj45', 'sfp', 'sfp+', 'sfp28', 'qsfp', 'qsfp28'] },
+  { label: 'I/O Ports', types: ['usb-a', 'usb-c', 'serial', 'hdmi', 'displayport', 'vga', 'misc-port'] },
+  { label: 'Misc', types: ['misc-small', 'misc-med', 'misc-large'] },
+];
+
+const PCIE_GRID_DIMS: Record<string, { cols: number; rows: number }> = {
+  fh: { cols: 32, rows: 10 },
+  lp: { cols: 32, rows: 6 },
+  dw: { cols: 32, rows: 20 },
+};
+
+interface PcieLayoutEditorProps {
+  open: boolean;
+  formFactor: string;
+  initialBlocks: PlacedBlock[];
+  title: string;
+  onSave: (blocks: PlacedBlock[]) => void;
+  onClose: () => void;
+}
+
+export function PcieLayoutEditor({ open, formFactor, initialBlocks, title, onSave, onClose }: PcieLayoutEditorProps) {
+  const [blocks, setBlocks] = useState<PlacedBlock[]>([]);
+  const [pendingType, setPendingType] = useState<string | null>(null);
+  const [pendingRotated, setPendingRotated] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const dims = PCIE_GRID_DIMS[formFactor] ?? PCIE_GRID_DIMS.fh;
+
+  useEffect(() => {
+    if (!open) return;
+    setBlocks(initialBlocks);
+    setPendingType(null); setPendingRotated(false); setSelectedId(null);
+  }, [open, initialBlocks]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && pendingType) { setPendingType(null); setPendingRotated(false); return; }
+      if (e.key === 'r' || e.key === 'R') {
+        if (pendingType) {
+          const def = BLOCK_DEF_MAP.get(pendingType);
+          if (def?.canRotate) setPendingRotated(prev => !prev);
+        }
+        return;
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId && !pendingType) {
+        setBlocks(prev => prev.filter(b => b.id !== selectedId));
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [open, pendingType, selectedId]);
+
+  if (!open) return null;
+
+  const paletteGroups = PCIE_PALETTE_GROUPS.map(group => ({
+    ...group,
+    defs: group.types
+      .map(t => BLOCK_DEF_MAP.get(t))
+      .filter((d): d is BlockDef => !!d),
+  })).filter(g => g.defs.length > 0);
+
+  function handlePaletteClick(type: string) {
+    if (pendingType === type) { setPendingType(null); setPendingRotated(false); }
+    else { setPendingType(type); setPendingRotated(false); }
+    setSelectedId(null);
+  }
+
+  function hasCollision(col: number, row: number, w: number, h: number): boolean {
+    return blocks.some(b => {
+      const bd = BLOCK_DEF_MAP.get(b.type);
+      if (!bd) return false;
+      const bw = b.rotated ? bd.h : bd.w;
+      const bh = b.rotated ? bd.w : bd.h;
+      return !(col + w <= b.col || col >= b.col + bw || row + h <= b.row || row >= b.row + bh);
+    });
+  }
+
+  function handlePlace(col: number, row: number) {
+    if (!pendingType) return;
+    const def = BLOCK_DEF_MAP.get(pendingType);
+    if (!def) return;
+    const rotated = pendingRotated && def.canRotate;
+    const w = rotated ? def.h : def.w;
+    const h = rotated ? def.w : def.h;
+    if (hasCollision(col, row, w, h)) return;
+    const block: PlacedBlock = { id: uid(), type: pendingType as PlacedBlock['type'], col, row, w: def.w, h: def.h, rotated: rotated || undefined };
+    setBlocks(prev => [...prev, block]);
+  }
+
+  function handleDelete(id: string) {
+    setBlocks(prev => prev.filter(b => b.id !== id));
+    setSelectedId(null);
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1010,
+    }}>
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: '#1a1e22', border: '1px solid #2a3038', borderRadius: 8,
+          width: 860, maxWidth: '96vw',
+          maxHeight: '92vh', overflowY: 'auto',
+          padding: '28px 32px', display: 'flex', flexDirection: 'column', gap: 16,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 13, fontWeight: 600, color: '#d4d9dd' }}>
+            {title}
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#5a6068', cursor: 'pointer', fontSize: 18, padding: '0 4px' }}>×</button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+          <span style={{ fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif', color: '#5a6068' }}>
+            Ctrl+Click delete · R rotate · Esc cancel
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+          {/* Palette */}
+          <div style={{
+            width: 160, flexShrink: 0,
+            maxHeight: MAX_EDITOR_H, overflowY: 'auto',
+            background: '#0e1012', border: '1px solid #2a3038', borderRadius: 4,
+            padding: '10px 8px',
+          }}>
+            {paletteGroups.map(group => (
+              <div key={group.label} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 9, fontFamily: 'Inter,system-ui,sans-serif', color: '#5a6068', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4, paddingLeft: 8 }}>
+                  {group.label}
+                </div>
+                {group.defs.map(def => (
+                  <PaletteItem
+                    key={def.type}
+                    def={def}
+                    active={pendingType === def.type}
+                    onClick={() => handlePaletteClick(def.type)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Grid + toolbar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {pendingType && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, fontFamily: 'Inter,system-ui,sans-serif', color: '#8a9299' }}>
+                <span>Placing: <strong style={{ color: '#d4d9dd' }}>{BLOCK_DEF_MAP.get(pendingType)?.label}</strong></span>
+                {pendingRotated && <span style={{ color: '#c47c5a' }}>(rotated)</span>}
+                {BLOCK_DEF_MAP.get(pendingType)?.canRotate && (
+                  <button
+                    onClick={() => setPendingRotated(prev => !prev)}
+                    style={{
+                      background: pendingRotated ? '#c47c5a20' : '#1a1e22',
+                      border: `1px solid ${pendingRotated ? '#c47c5a' : '#2a3038'}`,
+                      borderRadius: 3, padding: '2px 8px', cursor: 'pointer',
+                      fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif',
+                      color: pendingRotated ? '#c47c5a' : '#8a9299',
+                    }}
+                    title="Toggle rotation (R)"
+                  >
+                    ↻ Rotate
+                  </button>
+                )}
+              </div>
+            )}
+
+            <GridEditor
+              blocks={blocks}
+              gridCols={dims.cols}
+              gridRows={dims.rows}
+              pendingType={pendingType}
+              pendingRotated={pendingRotated}
+              selectedId={selectedId}
+              onPlace={handlePlace}
+              onSelect={setSelectedId}
+              onDelete={handleDelete}
+            />
+            <div style={{ fontSize: 10, fontFamily: 'Inter,system-ui,sans-serif', color: '#3a4248', textAlign: 'right' }}>
+              {dims.cols}×{dims.rows} grid · {blocks.length} block{blocks.length !== 1 ? 's' : ''} placed
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button style={BTN_SEC} onClick={onClose}>Cancel</button>
+          <button style={BTN_PRI} onClick={() => onSave(blocks)}>
+            Save Layout
+          </button>
+        </div>
       </div>
     </div>
   );
