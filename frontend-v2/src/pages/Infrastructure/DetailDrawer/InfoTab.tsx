@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { DeviceInstance, DeviceType, DeviceTemplate, Rack, Zone } from '@werkstack/shared';
+import { MonitoringSection } from '@/components/MonitoringSection';
 import styles from './InfoTab.module.css';
 
 interface InfoTabProps {
@@ -12,9 +13,10 @@ interface InfoTabProps {
   onDelete: (id: string) => void;
   onMoveToRack?: () => void;
   onMoveToUnassigned?: () => void;
+  onMonitorUpdate?: (deviceId: string, enabled: boolean, ip: string | null, intervalS?: number) => void;
 }
 
-export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, onDelete, onMoveToRack, onMoveToUnassigned }: InfoTabProps) {
+export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, onDelete, onMoveToRack, onMoveToUnassigned, onMonitorUpdate }: InfoTabProps) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(device.name);
   const [typeId, setTypeId] = useState(device.typeId);
@@ -120,6 +122,9 @@ export function InfoTab({ device, deviceTypes, templates, racks, zones, onSave, 
             </div>
             <button className={styles.btnPrimary} onClick={() => setEditing(true)}>Edit</button>
           </div>
+          {onMonitorUpdate && (
+            <MonitoringSection device={device} onMonitorUpdate={onMonitorUpdate} />
+          )}
         </>
       ) : (
         <div className={styles.form}>

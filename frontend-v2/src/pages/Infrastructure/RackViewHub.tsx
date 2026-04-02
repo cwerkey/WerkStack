@@ -8,6 +8,7 @@ import { useSiteStore } from '@/stores/siteStore';
 import { useGetZones } from '@/api/zones';
 import { useGetRacks } from '@/api/racks';
 import { useGetDevices, useUpdateDevice, useDeleteDevice, useUpdateDevicePosition } from '@/api/devices';
+import { useUpdateDeviceMonitor } from '@/api/activity';
 import { useGetDeviceTemplates, useGetPcieTemplates } from '@/api/templates';
 import {
   useGetDeviceConnections,
@@ -133,6 +134,7 @@ export default function RackViewHub() {
   const updateOsHost = useUpdateOsHost(siteId);
   const createOsApp = useCreateOsApp(siteId);
   const createContainer = useCreateContainer(siteId);
+  const updateMonitor = useUpdateDeviceMonitor(siteId);
 
   // Face toggle
   const [face, setFace] = useState<'front' | 'rear'>('front');
@@ -615,6 +617,9 @@ export default function RackViewHub() {
             onDelete={handleDeviceDelete}
             onMoveToRack={() => setRackPickerOpen(true)}
             onMoveToUnassigned={handleMoveToUnassigned}
+            onMonitorUpdate={(deviceId, enabled, monitorIp, intervalS) => {
+              updateMonitor.mutate({ deviceId, monitorEnabled: enabled, monitorIp, monitorIntervalS: intervalS });
+            }}
           />
         )}
         {selectedDevice && drawerTab === 'ports' && (
