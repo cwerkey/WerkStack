@@ -30,11 +30,12 @@ const ConnectionSchema = z.object({
 });
 
 const SubnetSchema = z.object({
-  cidr:    z.string().min(1).max(50).regex(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/, 'must be valid CIDR (e.g. 192.168.1.0/24)'),
-  name:    z.string().min(1).max(200),
-  vlan:    z.number().int().min(1).max(4094).optional().nullable(),
-  gateway: z.string().max(50).optional(),
-  notes:   z.string().max(2000).optional(),
+  cidr:     z.string().min(1).max(50).regex(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/, 'must be valid CIDR (e.g. 192.168.1.0/24)'),
+  name:     z.string().min(1).max(200),
+  vlan:     z.number().int().min(1).max(4094).optional().nullable(),
+  vlanName: z.string().min(1).max(200).optional(),
+  gateway:  z.string().max(50).optional(),
+  notes:    z.string().max(2000).optional(),
 });
 
 const IpAssignmentSchema = z.object({
@@ -303,17 +304,46 @@ module.exports = function networkRoutes(db) {
     async (req, res) => {
       const { orgId }  = req.user;
       const { siteId } = req.params;
-      const { cidr, name, vlan, gateway, notes } = req.body;
+      const { cidr, name, vlan, vlanName, gateway, notes } = req.body;
       try {
-        const result = await withOrg(db, orgId, c =>
-          c.query(
-            `INSERT INTO subnets (org_id, site_id, cidr, name, vlan, gateway, notes)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)
-             RETURNING *`,
-            [orgId, siteId, cidr, name, vlan ?? null, gateway ?? null, notes ?? null]
-          )
-        );
-        res.status(201).json(toSubnet(result.rows[0]));
+        const newSubnet = await withOrg(db, orgId, async c => {
+          await c.query('BEGIN');
+          try {
+            const subnetResult = await c.query(
+              `INSERT INTO subnets (org_id, site_id, cidr, name, vlan, gateway, notes)
+               VALUES ($1,$2,$3,$4,$5,$6,$7)
+               RETURNING *`,
+              [orgId, siteId, cidr, name, vlan ?? null, gateway ?? null, notes ?? null]
+            );
+            const subnet = subnetResult.rows[0];
+
+            if (vlan != null) {
+              const existingVlan = await c.query(
+                `SELECT id FROM vlans WHERE site_id=$1 AND org_id=$2 AND vlan_id=$3`,
+                [siteId, orgId, vlan]
+              );
+              if (existingVlan.rows.length > 0) {
+                await c.query(
+                  `UPDATE vlans SET subnet_id=$1 WHERE id=$2`,
+                  [subnet.id, existingVlan.rows[0].id]
+                );
+              } else if (vlanName) {
+                await c.query(
+                  `INSERT INTO vlans (org_id, site_id, vlan_id, name, color, subnet_id)
+                   VALUES ($1,$2,$3,$4,$5,$6)`,
+                  [orgId, siteId, vlan, vlanName, '#888888', subnet.id]
+                );
+              }
+            }
+
+            await c.query('COMMIT');
+            return subnet;
+          } catch (err) {
+            await c.query('ROLLBACK');
+            throw err;
+          }
+        });
+        res.status(201).json(toSubnet(newSubnet));
       } catch (err) {
         console.error(`[POST /subnets]`, err);
         res.status(500).json({ error: 'server error' });

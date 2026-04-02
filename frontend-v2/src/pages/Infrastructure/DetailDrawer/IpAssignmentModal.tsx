@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { Subnet, IpAssignment } from '@werkstack/shared';
-import { useCreateIpAssignment, useGetNextAvailableIp } from '@/api/network';
+import { useCreateIpAssignment, useCreateSubnet, useGetNextAvailableIp } from '@/api/network';
 import styles from './IpAssignmentModal.module.css';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -71,6 +71,13 @@ function checkCollision(
   return allIpAssignments.find(a => a.subnetId === subnetId && a.ip === ip);
 }
 
+/** Derive a /24 CIDR suggestion from a given IP address. */
+function suggestCidr(ip: string): string | null {
+  const parts = ip.split('.');
+  if (parts.length !== 4 || parts.some(p => isNaN(parseInt(p, 10)))) return null;
+  return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function IpAssignmentModal({
@@ -90,6 +97,11 @@ export function IpAssignmentModal({
   const [hostname, setHostname] = useState('');
   const [error, setError] = useState('');
 
+  // Inline subnet creation state
+  const [creatingSubnet, setCreatingSubnet] = useState(false);
+  const [newSubnetName, setNewSubnetName] = useState('');
+  const [newSubnetGateway, setNewSubnetGateway] = useState('');
+
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
@@ -99,17 +111,31 @@ export function IpAssignmentModal({
       setAssignmentType('static');
       setHostname('');
       setError('');
+      setCreatingSubnet(false);
+      setNewSubnetName('');
+      setNewSubnetGateway('');
     }
   }, [open, subnets]);
 
   // Auto-detect subnet when IP changes
+  const detectedSubnet = useMemo(
+    () => (ip ? detectSubnet(ip, subnets) : undefined),
+    [ip, subnets],
+  );
+
   useEffect(() => {
     if (!ip) return;
-    const detected = detectSubnet(ip, subnets);
-    if (detected) {
-      setSubnetId(detected.id);
+    if (detectedSubnet) {
+      setSubnetId(detectedSubnet.id);
+      setCreatingSubnet(false);
     }
-  }, [ip, subnets]);
+  }, [ip, subnets, detectedSubnet]);
+
+  // Derived CIDR suggestion when no subnet matches
+  const derivedCidr = useMemo(() => {
+    if (!ip || detectedSubnet) return null;
+    return suggestCidr(ip);
+  }, [ip, detectedSubnet]);
 
   // Derived: selected subnet
   const selectedSubnet = useMemo(
@@ -126,8 +152,34 @@ export function IpAssignmentModal({
   // Next available IP query (only when a subnet is selected)
   const nextIpQuery = useGetNextAvailableIp(siteId, subnetId);
 
-  // Create mutation
+  // Create mutations
   const createIp = useCreateIpAssignment(siteId, subnetId);
+  const createSubnet = useCreateSubnet(siteId);
+
+  function handleStartCreateSubnet() {
+    if (!derivedCidr) return;
+    const parts = ip.split('.');
+    setNewSubnetName(`subnet-${parts[0]}.${parts[1]}.${parts[2]}`);
+    setNewSubnetGateway(`${parts[0]}.${parts[1]}.${parts[2]}.1`);
+    setCreatingSubnet(true);
+  }
+
+  async function handleCreateSubnet() {
+    if (!derivedCidr) return;
+    try {
+      const created = await createSubnet.mutateAsync({
+        cidr: derivedCidr,
+        name: newSubnetName.trim() || `subnet-${derivedCidr}`,
+        gateway: newSubnetGateway.trim() || undefined,
+      });
+      setSubnetId(created.id);
+      setCreatingSubnet(false);
+      setError('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create subnet';
+      setError(msg);
+    }
+  }
 
   function handleNextAvailable() {
     if (nextIpQuery.data?.ip) {
@@ -215,6 +267,71 @@ export function IpAssignmentModal({
               ))}
             </select>
           </div>
+
+          {/* Subnet auto-match indicator */}
+          {ip && detectedSubnet && (
+            <div className={styles.subnetHintMatch}>
+              Auto-matched to {detectedSubnet.name} ({detectedSubnet.cidr})
+            </div>
+          )}
+          {ip && !detectedSubnet && derivedCidr && !creatingSubnet && (
+            <div className={styles.subnetHintNoMatch}>
+              No matching subnet.{' '}
+              <button
+                className={styles.createSubnetBtn}
+                onClick={handleStartCreateSubnet}
+              >
+                Create {derivedCidr}?
+              </button>
+            </div>
+          )}
+          {creatingSubnet && derivedCidr && (
+            <div className={styles.inlineForm}>
+              <div className={styles.inlineFormRow}>
+                <div className={styles.field} style={{ flex: 1 }}>
+                  <label className={styles.label}>Subnet Name</label>
+                  <input
+                    className={styles.input}
+                    type="text"
+                    value={newSubnetName}
+                    onChange={e => setNewSubnetName(e.target.value)}
+                    placeholder="e.g. management-lan"
+                  />
+                </div>
+              </div>
+              <div className={styles.inlineFormRow}>
+                <div className={styles.field} style={{ flex: 1 }}>
+                  <label className={styles.label}>CIDR</label>
+                  <span className={styles.readOnly}>{derivedCidr}</span>
+                </div>
+                <div className={styles.field} style={{ flex: 1 }}>
+                  <label className={styles.label}>Gateway (optional)</label>
+                  <input
+                    className={styles.inputMono}
+                    type="text"
+                    value={newSubnetGateway}
+                    onChange={e => setNewSubnetGateway(e.target.value)}
+                    placeholder="e.g. 10.0.1.1"
+                  />
+                </div>
+              </div>
+              <div className={styles.inlineFormActions}>
+                <button
+                  className={styles.cancelBtn}
+                  onClick={() => setCreatingSubnet(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={styles.submitBtn}
+                  onClick={handleCreateSubnet}
+                  disabled={createSubnet.isPending}
+                >
+                  {createSubnet.isPending ? 'Creating...' : 'Create Subnet'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* IP Address */}
           <div className={styles.field}>

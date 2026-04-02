@@ -25,12 +25,13 @@ interface SubnetFormState {
   cidr: string;
   name: string;
   vlan: string;
+  vlanName: string;
   gateway: string;
   notes: string;
 }
 
 function blankForm(): SubnetFormState {
-  return { id: uid(), cidr: '', name: '', vlan: '', gateway: '', notes: '' };
+  return { id: uid(), cidr: '', name: '', vlan: '', vlanName: '', gateway: '', notes: '' };
 }
 
 function subnetToForm(s: Subnet): SubnetFormState {
@@ -39,6 +40,7 @@ function subnetToForm(s: Subnet): SubnetFormState {
     cidr: s.cidr,
     name: s.name,
     vlan: s.vlan != null ? String(s.vlan) : '',
+    vlanName: '',
     gateway: s.gateway ?? '',
     notes: s.notes ?? '',
   };
@@ -132,6 +134,17 @@ function SubnetFormPanel({ initial, onSave, onCancel, saving }: SubnetFormPanelP
             onChange={e => set('vlan', e.target.value)}
           />
         </div>
+        {f.vlan.trim() !== '' && (
+          <div>
+            <label style={labelStyle}>VLAN Name</label>
+            <input
+              style={inputStyle}
+              placeholder="e.g. Management"
+              value={f.vlanName}
+              onChange={e => set('vlanName', e.target.value)}
+            />
+          </div>
+        )}
         <div>
           <label style={labelStyle}>Gateway</label>
           <input
@@ -453,6 +466,7 @@ export default function SubnetsPage() {
       cidr: f.cidr.trim(),
       name: f.name.trim(),
       ...(f.vlan.trim() !== '' ? { vlan: Number(f.vlan) } : {}),
+      ...(f.vlanName.trim() !== '' ? { vlanName: f.vlanName.trim() } : {}),
       ...(f.gateway.trim() !== '' ? { gateway: f.gateway.trim() } : {}),
       ...(f.notes.trim() !== '' ? { notes: f.notes.trim() } : {}),
     };

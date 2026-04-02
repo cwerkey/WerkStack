@@ -15,7 +15,7 @@ import { BLOCK_DEF_MAP } from '@werkstack/shared';
 import { TemplateOverlay } from '@/components/TemplateOverlay';
 import { BlockContextMenu } from '@/components/BlockContextMenu';
 import type { ContextMenuItem } from '@/components/BlockContextMenu';
-import { useCreateDrive, useAssignDrive, useUnassignDrive } from '@/api/storage';
+import { useCreateDrive, useAssignDrive, useUnassignDrive, useCreateShare } from '@/api/storage';
 import styles from './StorageTab.module.css';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -583,6 +583,144 @@ function AddDriveModal({ device, siteId, onClose }: AddDriveModalProps) {
   );
 }
 
+// ─── Create Share Modal ──────────────────────────────────────────────────────
+
+interface CreateShareModalProps {
+  pools:   StoragePool[];
+  siteId:  string;
+  onClose: () => void;
+}
+
+function CreateShareModal({ pools, siteId, onClose }: CreateShareModalProps) {
+  const createShare = useCreateShare(siteId);
+  const [form, setForm] = useState({
+    name:       '',
+    protocol:   'smb' as 'smb' | 'nfs' | 'iscsi',
+    poolId:     pools.length > 0 ? pools[0].id : '',
+    path:       '',
+    accessMode: 'auth' as 'public' | 'auth' | 'list',
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim() || !form.poolId) return;
+    createShare.mutate(
+      {
+        poolId:     form.poolId,
+        name:       form.name.trim(),
+        protocol:   form.protocol,
+        path:       form.path.trim() || undefined,
+        accessMode: form.accessMode,
+        accessList: [],
+      },
+      { onSuccess: () => onClose() },
+    );
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width:       '100%',
+    padding:     '5px 8px',
+    fontSize:    12,
+    background:  'var(--color-surface-2, #1a1e22)',
+    border:      '1px solid var(--color-border, #2a3038)',
+    borderRadius: 4,
+    color:       'var(--color-text, #d4d9dd)',
+    fontFamily:  "'Inter', system-ui, sans-serif",
+    boxSizing:   'border-box',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize:      10,
+    color:         'var(--color-text-dim, #5a6068)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  };
+
+  return (
+    <div className={styles.editOverlay}>
+      <form onSubmit={handleSubmit} className={styles.editForm} style={{ minWidth: 340 }}>
+        <div className={styles.editFormTitle}>Create Share</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <label style={labelStyle}>Name *</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              placeholder="e.g. media, backups"
+              style={inputStyle}
+              autoFocus
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Protocol</label>
+              <select
+                value={form.protocol}
+                onChange={e => setForm(p => ({ ...p, protocol: e.target.value as typeof form.protocol }))}
+                style={{ ...inputStyle, cursor: 'pointer' }}
+              >
+                <option value="smb">SMB</option>
+                <option value="nfs">NFS</option>
+                <option value="iscsi">iSCSI</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Access Mode</label>
+              <select
+                value={form.accessMode}
+                onChange={e => setForm(p => ({ ...p, accessMode: e.target.value as typeof form.accessMode }))}
+                style={{ ...inputStyle, cursor: 'pointer' }}
+              >
+                <option value="public">Public</option>
+                <option value="auth">Authenticated</option>
+                <option value="list">Access List</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Pool *</label>
+            <select
+              value={form.poolId}
+              onChange={e => setForm(p => ({ ...p, poolId: e.target.value }))}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              {pools.length === 0 && <option value="">No pools available</option>}
+              {pools.map(pool => (
+                <option key={pool.id} value={pool.id}>
+                  {pool.name} ({pool.poolType.toUpperCase()})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Path / Dataset</label>
+            <input
+              type="text"
+              value={form.path}
+              onChange={e => setForm(p => ({ ...p, path: e.target.value }))}
+              placeholder="e.g. /mnt/tank/media"
+              style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace" }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button type="button" onClick={onClose} className={styles.cancelBtn}>Cancel</button>
+          <button
+            type="submit"
+            className={styles.saveBtn}
+            disabled={!form.name.trim() || !form.poolId || createShare.isPending}
+          >
+            {createShare.isPending ? 'Creating…' : 'Create Share'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function StorageTab({
@@ -599,6 +737,7 @@ export function StorageTab({
 }: StorageTabProps) {
   const [expandedPoolId, setExpandedPoolId] = useState<string | null>(null);
   const [addDriveOpen, setAddDriveOpen] = useState(false);
+  const [createShareOpen, setCreateShareOpen] = useState(false);
 
   // ── Context menu state ─────────────────────────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{ block: PlacedBlock; x: number; y: number } | null>(null);
@@ -886,6 +1025,9 @@ export function StorageTab({
           <span className={styles.sectionTitle}>
             Shares ({poolShares.length})
           </span>
+          <button className={styles.addBtn} onClick={() => setCreateShareOpen(true)}>
+            + Create Share
+          </button>
         </div>
 
         {poolShares.length === 0 && (
@@ -935,6 +1077,15 @@ export function StorageTab({
           device={device}
           siteId={siteId}
           onClose={() => setAddDriveOpen(false)}
+        />
+      )}
+
+      {/* ── Create Share Modal ────────────────────────────────────────── */}
+      {createShareOpen && (
+        <CreateShareModal
+          pools={devicePools}
+          siteId={siteId}
+          onClose={() => setCreateShareOpen(false)}
         />
       )}
     </div>

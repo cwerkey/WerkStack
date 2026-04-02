@@ -6,12 +6,15 @@ import type {
   PoolType,
   VdevGroup,
   VdevType,
+  DriveInterfaceType,
 } from '@werkstack/shared';
+import { useCreateDrive } from '@/api/storage';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface PoolWizardProps {
   open:              boolean;
+  siteId:            string;
   deviceId:          string;
   localDrives:       Drive[];
   externalDrives:    ExternalDrive[];
@@ -137,6 +140,7 @@ const RAID_LEVELS: { value: string; label: string; minDrives: number }[] = [
 
 export function PoolWizard({
   open,
+  siteId,
   deviceId,
   localDrives,
   externalDrives,
@@ -153,11 +157,22 @@ export function PoolWizard({
   // Step 2 state
   const [selectedDriveIds, setSelectedDriveIds] = useState<Set<string>>(new Set());
 
+  // Step 2 inline create state
+  const [showCreateDrive, setShowCreateDrive] = useState(false);
+  const [newDrive, setNewDrive] = useState({
+    label: '',
+    driveType: 'ssd' as 'hdd' | 'ssd' | 'nvme' | 'flash' | 'tape',
+    capacity: '',
+    interfaceType: '' as DriveInterfaceType | '',
+  });
+
   // Step 3 state (ZFS)
   const [vdevType, setVdevType]       = useState<VdevType>('mirror');
   const [vdevGroups, setVdevGroups]   = useState<VdevGroup[]>([]);
   // Step 3 state (RAID)
   const [raidLevel, setRaidLevel]     = useState('raid5');
+
+  const createDrive = useCreateDrive(siteId);
 
   // Reset on open
   useEffect(() => {
@@ -166,6 +181,8 @@ export function PoolWizard({
       setPoolName('');
       setPoolType('zfs');
       setSelectedDriveIds(new Set());
+      setShowCreateDrive(false);
+      setNewDrive({ label: '', driveType: 'ssd', capacity: '', interfaceType: '' });
       setVdevType('mirror');
       setVdevGroups([]);
       setRaidLevel('raid5');
@@ -193,6 +210,29 @@ export function PoolWizard({
       else next.add(driveId);
       return next;
     });
+  }
+
+  // ── Inline drive creation ────────────────────────────────────────────────
+
+  function handleCreateDrive() {
+    if (!newDrive.capacity.trim()) return;
+    createDrive.mutate(
+      {
+        deviceId,
+        label: newDrive.label || undefined,
+        driveType: newDrive.driveType,
+        capacity: newDrive.capacity,
+        interfaceType: newDrive.interfaceType || undefined,
+        isBoot: false,
+      },
+      {
+        onSuccess: (drive) => {
+          setSelectedDriveIds(prev => new Set([...prev, drive.id]));
+          setShowCreateDrive(false);
+          setNewDrive({ label: '', driveType: 'ssd', capacity: '', interfaceType: '' });
+        },
+      },
+    );
   }
 
   // ── Advance to step 3: seed initial vdev group ──────────────────────────
@@ -493,6 +533,102 @@ export function PoolWizard({
                 onClick={onConnectExternal}
               >
                 Need external storage? <span style={{ color: '#c47c5a' }}>Connect an external device &rarr;</span>
+              </div>
+            )}
+
+            {/* Create Drive inline */}
+            {!showCreateDrive ? (
+              <div
+                style={{
+                  padding: '6px 10px',
+                  border: '1px dashed #2a3038',
+                  borderRadius: 4,
+                  fontSize: 11,
+                  color: '#5a6068',
+                  cursor: 'pointer',
+                  marginTop: 4,
+                }}
+                onClick={() => setShowCreateDrive(true)}
+              >
+                <span style={{ color: '#c47c5a' }}>+ Create a new drive</span>
+              </div>
+            ) : (
+              <div style={{
+                border: '1px solid #2a3038',
+                borderRadius: 4,
+                padding: '10px',
+                background: '#111417',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                marginTop: 4,
+              }}>
+                <span style={{ fontSize: 10, color: '#5a6068', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  New Drive
+                </span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Label</label>
+                    <input
+                      type="text"
+                      value={newDrive.label}
+                      onChange={e => setNewDrive(p => ({ ...p, label: e.target.value }))}
+                      placeholder="Optional"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Capacity *</label>
+                    <input
+                      type="text"
+                      value={newDrive.capacity}
+                      onChange={e => setNewDrive(p => ({ ...p, capacity: e.target.value }))}
+                      placeholder="e.g. 4T"
+                      style={inputStyle}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Type</label>
+                    <select
+                      value={newDrive.driveType}
+                      onChange={e => setNewDrive(p => ({ ...p, driveType: e.target.value as typeof newDrive.driveType }))}
+                      style={{ ...inputStyle, cursor: 'pointer' }}
+                    >
+                      <option value="hdd">HDD</option>
+                      <option value="ssd">SSD</option>
+                      <option value="nvme">NVMe</option>
+                      <option value="flash">Flash</option>
+                      <option value="tape">Tape</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Interface</label>
+                    <select
+                      value={newDrive.interfaceType}
+                      onChange={e => setNewDrive(p => ({ ...p, interfaceType: e.target.value as typeof newDrive.interfaceType }))}
+                      style={{ ...inputStyle, cursor: 'pointer' }}
+                    >
+                      <option value="">—</option>
+                      <option value="sata">SATA</option>
+                      <option value="sas">SAS</option>
+                      <option value="nvme">NVMe</option>
+                      <option value="u2">U.2</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button style={btnGhost} onClick={() => setShowCreateDrive(false)}>Cancel</button>
+                  <button
+                    style={{ ...btnPrimary, opacity: newDrive.capacity.trim() ? 1 : 0.4 }}
+                    disabled={!newDrive.capacity.trim() || createDrive.isPending}
+                    onClick={handleCreateDrive}
+                  >
+                    {createDrive.isPending ? 'Creating…' : 'Create & Select'}
+                  </button>
+                </div>
               </div>
             )}
           </div>

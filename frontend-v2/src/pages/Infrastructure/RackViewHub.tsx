@@ -764,6 +764,7 @@ export default function RackViewHub() {
       {poolWizardOpen && selectedDevice && (
         <PoolWizard
           open={poolWizardOpen}
+          siteId={siteId}
           deviceId={selectedDevice.id}
           localDrives={siteDrives}
           externalDrives={externalDrives}

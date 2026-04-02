@@ -221,6 +221,71 @@
   cursor: not-allowed;
 }
 
+/* ── Subnet hint indicators ─────────────────────────────────────────── */
+
+.subnetHint {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subnetHintMatch {
+  composes: subnetHint;
+  color: #6a9a6a;
+  background: #152015;
+  border: 1px solid #2a4a2a;
+}
+
+.subnetHintNoMatch {
+  composes: subnetHint;
+  color: #c4a43a;
+  background: #2a2515;
+  border: 1px solid #4a3a20;
+}
+
+.createSubnetBtn {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 0;
+  text-decoration: underline;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.createSubnetBtn:hover {
+  color: var(--color-accent-dark);
+}
+
+/* ── Inline subnet creation form ────────────────────────────────────── */
+
+.inlineForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: #161a1d;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.inlineFormRow {
+  display: flex;
+  gap: 8px;
+}
+
+.inlineFormActions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 /* ── Error state ─────────────────────────────────────────────────────── */
 
 .error {

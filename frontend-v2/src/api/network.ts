@@ -15,10 +15,11 @@ export function useGetSubnets(siteId: string) {
 export function useCreateSubnet(siteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Omit<Subnet, 'id' | 'orgId' | 'siteId' | 'createdAt'>) =>
+    mutationFn: (body: Omit<Subnet, 'id' | 'orgId' | 'siteId' | 'createdAt'> & { vlanName?: string }) =>
       api.post<Subnet>(`/api/sites/${siteId}/subnets`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['subnets', siteId] });
+      qc.invalidateQueries({ queryKey: ['vlans', siteId] });
     },
   });
 }
