@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/utils/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -11,8 +11,23 @@ export interface DeviceStatusEntry {
   deviceName: string;
   typeId: string;
   currentStatus: DeviceStatus;
+  monitorEnabled: boolean;
+  monitorIp: string | null;
+  monitorIntervalS: number;
   lastHeartbeat?: string;
   lastLatency?: number;
+}
+
+export interface MonitorConfig {
+  intervalS: number;
+  timeoutMs: number;
+  missedThreshold: number;
+}
+
+export interface DeviceMonitorUpdate {
+  monitorEnabled: boolean;
+  monitorIp?: string | null;
+  monitorIntervalS?: number;
 }
 
 export interface DeviceEvent {
@@ -87,5 +102,36 @@ export function usePostHeartbeat(siteId: string) {
   return useMutation({
     mutationFn: (body: HeartbeatPayload) =>
       api.post<Heartbeat>(`/api/sites/${siteId}/monitor/heartbeat`, body),
+  });
+}
+
+// ── Monitor Config Hooks ─────────────────────────────────────────────────────
+
+export function useGetMonitorConfig(siteId: string) {
+  return useQuery({
+    queryKey: ['monitor-config', siteId],
+    queryFn: () => api.get<MonitorConfig>(`/api/sites/${siteId}/monitor/config`),
+    enabled: !!siteId,
+  });
+}
+
+export function useUpdateMonitorConfig(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MonitorConfig) =>
+      api.put<MonitorConfig>(`/api/sites/${siteId}/monitor/config`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['monitor-config', siteId] }),
+  });
+}
+
+export function useUpdateDeviceMonitor(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ deviceId, ...body }: DeviceMonitorUpdate & { deviceId: string }) =>
+      api.put(`/api/sites/${siteId}/monitor/devices/${deviceId}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['monitor-status', siteId] });
+      qc.invalidateQueries({ queryKey: ['devices', siteId] });
+    },
   });
 }

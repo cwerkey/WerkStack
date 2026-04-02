@@ -12,6 +12,18 @@ const HeartbeatSchema = z.object({
   payload:   z.record(z.unknown()).optional(),
 });
 
+const MonitorConfigSchema = z.object({
+  intervalS:       z.number().int().min(10).max(3600).default(60),
+  timeoutMs:       z.number().int().min(500).max(30000).default(5000),
+  missedThreshold: z.number().int().min(1).max(10).default(2),
+});
+
+const DeviceMonitorSchema = z.object({
+  monitorEnabled:   z.boolean(),
+  monitorIp:        z.string().nullable().optional(),
+  monitorIntervalS: z.number().int().min(10).max(3600).optional(),
+});
+
 async function withOrg(db, orgId, fn) {
   const client = await db.connect();
   try {
@@ -119,7 +131,8 @@ module.exports = function monitorRoutes(db) {
     try {
       const result = await withOrg(db, orgId, async (c) => {
         const devicesRes = await c.query(
-          `SELECT di.id, di.name, di.type_id, di.current_status,
+          `SELECT di.id, di.name, di.type_id, di.current_status, di.monitor_enabled,
+                  di.monitor_ip, di.ip, di.monitor_interval_s,
                   h.received_at AS last_heartbeat, h.latency_ms AS last_latency
            FROM device_instances di
            LEFT JOIN LATERAL (
@@ -133,12 +146,15 @@ module.exports = function monitorRoutes(db) {
         );
 
         return devicesRes.rows.map(r => ({
-          deviceId:      r.id,
-          deviceName:    r.name,
-          typeId:        r.type_id,
-          currentStatus: r.current_status || 'unknown',
-          lastHeartbeat: r.last_heartbeat ?? undefined,
-          lastLatency:   r.last_latency   ?? undefined,
+          deviceId:         r.id,
+          deviceName:       r.name,
+          typeId:           r.type_id,
+          currentStatus:    r.current_status || 'unknown',
+          monitorEnabled:   r.monitor_enabled ?? false,
+          monitorIp:        r.monitor_ip ?? r.ip ?? null,
+          monitorIntervalS: r.monitor_interval_s ?? 60,
+          lastHeartbeat:    r.last_heartbeat ?? undefined,
+          lastLatency:      r.last_latency   ?? undefined,
         }));
       });
 
@@ -189,6 +205,103 @@ module.exports = function monitorRoutes(db) {
       res.status(500).json({ error: 'server error' });
     }
   });
+
+  // ── Site-level monitor config ─────────────────────────────────────────────
+
+  router.get('/config', async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId } = req.params;
+    try {
+      const result = await withOrg(db, orgId, c =>
+        c.query(
+          `SELECT monitor_config FROM sites WHERE id = $1 AND org_id = $2`,
+          [siteId, orgId]
+        )
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: 'site not found' });
+      res.json(result.rows[0].monitor_config || { intervalS: 60, timeoutMs: 5000, missedThreshold: 2 });
+    } catch (err) {
+      console.error('[GET /monitor/config]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
+  router.put(
+    '/config',
+    validate(MonitorConfigSchema),
+    async (req, res) => {
+      const { orgId }  = req.user;
+      const { siteId } = req.params;
+      const config = req.body;
+      try {
+        await withOrg(db, orgId, c =>
+          c.query(
+            `UPDATE sites SET monitor_config = $1 WHERE id = $2 AND org_id = $3`,
+            [JSON.stringify(config), siteId, orgId]
+          )
+        );
+        res.json(config);
+      } catch (err) {
+        console.error('[PUT /monitor/config]', err);
+        res.status(500).json({ error: 'server error' });
+      }
+    }
+  );
+
+  // ── Per-device monitoring toggle ────────────────────────────────────────────
+
+  router.put(
+    '/devices/:deviceId',
+    validate(DeviceMonitorSchema),
+    async (req, res) => {
+      const { orgId }  = req.user;
+      const { siteId, deviceId } = req.params;
+      const { monitorEnabled, monitorIp, monitorIntervalS } = req.body;
+      try {
+        const result = await withOrg(db, orgId, async (c) => {
+          const sets = ['monitor_enabled = $4'];
+          const params = [deviceId, siteId, orgId, monitorEnabled];
+          let idx = 5;
+
+          if (monitorIp !== undefined) {
+            sets.push(`monitor_ip = $${idx}`);
+            params.push(monitorIp);
+            idx++;
+          }
+          if (monitorIntervalS !== undefined) {
+            sets.push(`monitor_interval_s = $${idx}`);
+            params.push(monitorIntervalS);
+            idx++;
+          }
+
+          // If disabling, reset status to unknown
+          if (!monitorEnabled) {
+            sets.push(`current_status = 'unknown'`);
+          }
+
+          const r = await c.query(
+            `UPDATE device_instances SET ${sets.join(', ')}
+             WHERE id = $1 AND site_id = $2 AND org_id = $3
+             RETURNING id, monitor_enabled, monitor_ip, monitor_interval_s, current_status`,
+            params
+          );
+          return r.rows[0] || null;
+        });
+
+        if (!result) return res.status(404).json({ error: 'device not found' });
+        res.json({
+          id:               result.id,
+          monitorEnabled:   result.monitor_enabled,
+          monitorIp:        result.monitor_ip,
+          monitorIntervalS: result.monitor_interval_s,
+          currentStatus:    result.current_status,
+        });
+      } catch (err) {
+        console.error('[PUT /monitor/devices/:deviceId]', err);
+        res.status(500).json({ error: 'server error' });
+      }
+    }
+  );
 
   return router;
 };

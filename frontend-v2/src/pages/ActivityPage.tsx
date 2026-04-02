@@ -136,6 +136,12 @@ export default function ActivityPage() {
     return () => clearInterval(id);
   }, [dataUpdatedAt]);
 
+  // Only show devices with monitoring enabled in the status cards
+  const monitoredDevices = useMemo(
+    () => statusData.filter(d => d.monitorEnabled),
+    [statusData],
+  );
+
   // Device name lookup from status data
   const deviceNameMap = useMemo<Map<string, string>>(
     () => new Map(statusData.map(d => [d.deviceId, d.deviceName])),
@@ -198,16 +204,16 @@ export default function ActivityPage() {
           <div className={styles.sectionLabel}>Device Status</div>
           {statusLoading ? (
             <div className={styles.loadingText}>Loading device status...</div>
-          ) : statusData.length === 0 ? (
+          ) : monitoredDevices.length === 0 ? (
             <div className={styles.emptyState}>
               <div className={styles.emptyTitle}>No monitored devices</div>
               <div className={styles.emptySubtext}>
-                Devices will appear here once they send a heartbeat
+                Enable monitoring on devices in the Device Library to see their status here
               </div>
             </div>
           ) : (
             <div className={styles.cardsGrid}>
-              {statusData.map(entry => (
+              {monitoredDevices.map(entry => (
                 <DeviceCard
                   key={entry.deviceId}
                   entry={entry}

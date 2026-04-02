@@ -93,9 +93,12 @@ function toDevice(row) {
     shelfRow:       row.shelf_row ?? undefined,
     switchRole:     row.switch_role ?? 'unclassified',
     isGateway:      row.is_gateway ?? false,
-    portOverrides:  row.port_overrides ?? {},
-    slotOverrides:  row.slot_overrides ?? {},
-    createdAt:      row.created_at,
+    portOverrides:    row.port_overrides ?? {},
+    slotOverrides:    row.slot_overrides ?? {},
+    monitorEnabled:   row.monitor_enabled ?? false,
+    monitorIp:        row.monitor_ip ?? null,
+    monitorIntervalS: row.monitor_interval_s ?? 60,
+    createdAt:        row.created_at,
   };
 }
 

@@ -180,9 +180,12 @@ export interface DeviceInstance {
   shelfRow?:      number;
   switchRole?:    'core' | 'edge' | 'access' | 'unclassified';
   isGateway?:     boolean;
-  portOverrides?: Record<string, PortOverride>;
-  slotOverrides?: Record<string, SlotOverride>;
-  createdAt:      string;
+  portOverrides?:    Record<string, PortOverride>;
+  slotOverrides?:    Record<string, SlotOverride>;
+  monitorEnabled?:   boolean;
+  monitorIp?:        string | null;
+  monitorIntervalS?: number;
+  createdAt:         string;
 }
 
 export interface PortOverride {

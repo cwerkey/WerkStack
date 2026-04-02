@@ -18,6 +18,7 @@ import TemplatesSettings from './TemplatesSettings';
 import ZonesRacksSettings from './ZonesRacksSettings';
 import GitSyncSettings from './GitSyncSettings';
 import ThemeSettings from './ThemeSettings';
+import MonitoringSettings from './MonitoringSettings';
 import QueryErrorState from '@/components/QueryErrorState';
 import styles from './SettingsPage.module.css';
 
@@ -734,13 +735,14 @@ function GroupUsersList({ groupId, siteId }: { groupId: string; siteId: string }
 
 // ── Main Settings Page ────────────────────────────────────────────────────────
 
-type MainTab = 'users-permissions' | 'templates' | 'zones-racks' | 'git-sync' | 'theme';
+type MainTab = 'users-permissions' | 'templates' | 'zones-racks' | 'monitoring' | 'git-sync' | 'theme';
 type SubTab = 'users' | 'security-groups';
 
 const MAIN_TABS: { id: MainTab; label: string }[] = [
   { id: 'users-permissions', label: 'Users & Permissions' },
   { id: 'templates', label: 'Templates' },
   { id: 'zones-racks', label: 'Zones & Racks' },
+  { id: 'monitoring', label: 'Monitoring' },
   { id: 'git-sync', label: 'Git Sync' },
   { id: 'theme', label: 'Theme' },
 ];
@@ -806,6 +808,8 @@ export default function SettingsPage() {
             <ZonesRacksSettings siteId={siteId} />
           )
         )}
+
+        {mainTab === 'monitoring' && <MonitoringSettings siteId={siteId} />}
 
         {mainTab === 'git-sync' && <GitSyncSettings siteId={siteId} />}
 

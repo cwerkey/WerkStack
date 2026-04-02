@@ -202,5 +202,8 @@ module.exports = function startWorkers(db) {
   startDraftCleanup(db, cron);
   startGitSyncScheduler(db, cron);
 
+  const { startHeartbeatScheduler } = require('./services/heartbeatScheduler');
+  startHeartbeatScheduler(db, cron);
+
   console.log('[workers] all background workers started');
 };
