@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type {
   DeviceInstance,
   DeviceTemplate,
@@ -7,8 +7,15 @@ import type {
   StoragePool,
   Share,
   PlacedBlock,
+  SlotOverride,
+  InterfaceType,
+  DriveInterfaceType,
 } from '@werkstack/shared';
 import { BLOCK_DEF_MAP } from '@werkstack/shared';
+import { TemplateOverlay } from '@/components/TemplateOverlay';
+import { BlockContextMenu } from '@/components/BlockContextMenu';
+import type { ContextMenuItem } from '@/components/BlockContextMenu';
+import { useCreateDrive, useAssignDrive, useUnassignDrive } from '@/api/storage';
 import styles from './StorageTab.module.css';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -22,6 +29,8 @@ interface StorageTabProps {
   shares:           Share[];           // all site shares (filter to device pools locally)
   onCreatePool:     () => void;
   onConnectExternal:() => void;
+  onUpdateDevice:   (patch: Partial<DeviceInstance> & { id: string }) => void;
+  siteId:           string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -47,13 +56,13 @@ function hasPcieSlots(template?: DeviceTemplate): boolean {
   return allBlocks.some(b => b.type.startsWith('pcie-'));
 }
 
-function hasBaySlots(template?: DeviceTemplate): boolean {
-  if (!template) return false;
+function getAllBayBlocks(template?: DeviceTemplate): PlacedBlock[] {
+  if (!template) return [];
   const allBlocks: PlacedBlock[] = [
     ...(template.layout?.front ?? []),
     ...(template.layout?.rear ?? []),
   ];
-  return allBlocks.some(b => {
+  return allBlocks.filter(b => {
     const def = BLOCK_DEF_MAP.get(b.type);
     return def?.isSlot && b.type.startsWith('bay-');
   });
@@ -106,6 +115,474 @@ function formatVdevType(t: string): string {
   return labels[t] ?? t;
 }
 
+const INTERFACE_TYPES: InterfaceType[] = ['sata', 'sas', 'nvme', 'u2'];
+
+function isBayBlock(block: PlacedBlock): boolean {
+  const def = BLOCK_DEF_MAP.get(block.type);
+  return !!(def?.isSlot && block.type.startsWith('bay-'));
+}
+
+// ─── Slot Edit Form ─────────────────────────────────────────────────────────
+
+interface SlotEditFormProps {
+  block: PlacedBlock;
+  override: SlotOverride;
+  onSave: (override: SlotOverride) => void;
+  onCancel: () => void;
+}
+
+function SlotEditForm({ block, override, onSave, onCancel }: SlotEditFormProps) {
+  const [label, setLabel] = useState(override.label ?? '');
+  const [interfaceTypes, setInterfaceTypes] = useState<Set<InterfaceType>>(
+    new Set(override.interfaceTypes ?? []),
+  );
+
+  function toggleInterface(t: InterfaceType) {
+    setInterfaceTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const result: SlotOverride = {};
+    if (label.trim()) result.label = label.trim();
+    if (interfaceTypes.size > 0) result.interfaceTypes = [...interfaceTypes];
+    onSave(result);
+  }
+
+  const def = BLOCK_DEF_MAP.get(block.type);
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '5px 8px',
+    fontSize: 12,
+    background: 'var(--color-surface-2, #1a1e22)',
+    border: '1px solid var(--color-border, #2a3038)',
+    borderRadius: 4,
+    color: 'var(--color-text, #d4d9dd)',
+    fontFamily: "'Inter', system-ui, sans-serif",
+    boxSizing: 'border-box',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10,
+    color: 'var(--color-text-dim, #5a6068)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    marginBottom: 2,
+  };
+
+  return (
+    <div className={styles.editOverlay}>
+      <form onSubmit={handleSubmit} className={styles.editForm}>
+        <div className={styles.editFormTitle}>
+          Edit Bay — {def?.label ?? block.type}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={labelStyle}>Slot Label</label>
+            <input
+              type="text"
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+              placeholder={block.label || block.id}
+              style={inputStyle}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Interface Types</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+              {INTERFACE_TYPES.map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => toggleInterface(t)}
+                  className={interfaceTypes.has(t) ? styles.ifacePillOn : styles.ifacePill}
+                >
+                  {t.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button type="button" onClick={onCancel} className={styles.cancelBtn}>Cancel</button>
+          <button type="submit" className={styles.saveBtn}>Save</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ─── Drive Assignment Modal ──────────────────────────────────────────────────
+
+interface DriveAssignModalProps {
+  block: PlacedBlock;
+  device: DeviceInstance;
+  drives: Drive[];
+  slotOverride?: SlotOverride;
+  siteId: string;
+  onClose: () => void;
+}
+
+function DriveAssignModal({ block, device, drives, slotOverride, siteId, onClose }: DriveAssignModalProps) {
+  const [mode, setMode] = useState<'pick' | 'new'>('pick');
+  const createDrive = useCreateDrive(siteId);
+  const assignDrive = useAssignDrive(siteId);
+  const unassignDrive = useUnassignDrive(siteId);
+
+  // Find current drive in this slot
+  const currentDrive = drives.find(
+    d => d.deviceId === device.id && d.slotBlockId === block.id,
+  );
+
+  // Filter unassigned drives by interface compatibility
+  const slotInterfaces = slotOverride?.interfaceTypes;
+  const unassignedDrives = drives.filter(d => {
+    if (d.deviceId) return false; // already assigned
+    if (slotInterfaces && slotInterfaces.length > 0 && d.interfaceType) {
+      return slotInterfaces.includes(d.interfaceType as InterfaceType);
+    }
+    return true;
+  });
+
+  // New drive form state
+  const [newDrive, setNewDrive] = useState({
+    label: '',
+    driveType: 'ssd' as 'hdd' | 'ssd' | 'nvme' | 'flash' | 'tape',
+    capacity: '',
+    serial: '',
+    interfaceType: '' as DriveInterfaceType | '',
+  });
+
+  function handleAssign(driveId: string) {
+    assignDrive.mutate(
+      { driveId, deviceId: device.id, slotBlockId: block.id },
+      { onSuccess: () => onClose() },
+    );
+  }
+
+  function handleClear() {
+    if (!currentDrive) return;
+    unassignDrive.mutate(currentDrive.id, { onSuccess: () => onClose() });
+  }
+
+  function handleCreateAndAssign(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newDrive.capacity.trim()) return;
+    createDrive.mutate(
+      {
+        deviceId: device.id,
+        slotBlockId: block.id,
+        label: newDrive.label || undefined,
+        driveType: newDrive.driveType,
+        capacity: newDrive.capacity,
+        serial: newDrive.serial || undefined,
+        interfaceType: newDrive.interfaceType || undefined,
+        isBoot: false,
+      },
+      { onSuccess: () => onClose() },
+    );
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '5px 8px',
+    fontSize: 12,
+    background: 'var(--color-surface-2, #1a1e22)',
+    border: '1px solid var(--color-border, #2a3038)',
+    borderRadius: 4,
+    color: 'var(--color-text, #d4d9dd)',
+    fontFamily: "'Inter', system-ui, sans-serif",
+    boxSizing: 'border-box',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10,
+    color: 'var(--color-text-dim, #5a6068)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  };
+
+  const def = BLOCK_DEF_MAP.get(block.type);
+  const slotLabel = slotOverride?.label || block.label || def?.label || block.type;
+
+  return (
+    <div className={styles.editOverlay}>
+      <div className={styles.editForm} style={{ minWidth: 360, maxHeight: '70vh', overflow: 'auto' }}>
+        <div className={styles.editFormTitle}>
+          Assign Drive — {slotLabel}
+        </div>
+
+        {/* Current drive indicator */}
+        {currentDrive && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 8px', background: '#161a1d', borderRadius: 4,
+            fontSize: 11, color: 'var(--color-text)',
+          }}>
+            <div style={{
+              width: 14, height: 14, borderRadius: 3,
+              background: driveTypeColor(currentDrive.driveType),
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 8, fontWeight: 600, color: '#fff',
+            }}>
+              {currentDrive.driveType[0].toUpperCase()}
+            </div>
+            <span style={{ flex: 1 }}>
+              {currentDrive.model || currentDrive.label || currentDrive.driveType.toUpperCase()}
+              {' '}{currentDrive.capacity}
+            </span>
+            <button onClick={handleClear} className={styles.clearSlotBtn}>Clear Slot</button>
+          </div>
+        )}
+
+        {/* Tab row */}
+        {!currentDrive && (
+          <>
+            <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--color-border, #2a3038)' }}>
+              <button
+                onClick={() => setMode('pick')}
+                style={{
+                  flex: 1, padding: '6px 0', fontSize: 11, fontWeight: 500,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: mode === 'pick' ? 'var(--color-accent, #c47c5a)' : 'var(--color-text-muted)',
+                  borderBottom: mode === 'pick' ? '2px solid var(--color-accent, #c47c5a)' : '2px solid transparent',
+                }}
+              >
+                Pick Existing
+              </button>
+              <button
+                onClick={() => setMode('new')}
+                style={{
+                  flex: 1, padding: '6px 0', fontSize: 11, fontWeight: 500,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: mode === 'new' ? 'var(--color-accent, #c47c5a)' : 'var(--color-text-muted)',
+                  borderBottom: mode === 'new' ? '2px solid var(--color-accent, #c47c5a)' : '2px solid transparent',
+                }}
+              >
+                Create New
+              </button>
+            </div>
+
+            {mode === 'pick' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 200, overflowY: 'auto' }}>
+                {unassignedDrives.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--color-text-dim)', fontSize: 11, padding: 12 }}>
+                    No unassigned drives available
+                  </p>
+                ) : (
+                  unassignedDrives.map(d => (
+                    <div
+                      key={d.id}
+                      className={styles.drivePickRow}
+                      onClick={() => handleAssign(d.id)}
+                    >
+                      <div style={{
+                        width: 14, height: 14, borderRadius: 3,
+                        background: driveTypeColor(d.driveType),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 8, fontWeight: 600, color: '#fff', flexShrink: 0,
+                      }}>
+                        {d.driveType[0].toUpperCase()}
+                      </div>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {d.model || d.label || d.driveType.toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", color: 'var(--color-text-muted)' }}>
+                        {d.capacity}
+                      </span>
+                      {d.interfaceType && (
+                        <span style={{ fontSize: 9, padding: '1px 4px', borderRadius: 3, background: '#1a2020', color: '#6a9a8a' }}>
+                          {d.interfaceType.toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {mode === 'new' && (
+              <form onSubmit={handleCreateAndAssign} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div>
+                  <label style={labelStyle}>Name</label>
+                  <input type="text" value={newDrive.label} onChange={e => setNewDrive(p => ({ ...p, label: e.target.value }))} placeholder="Optional label" style={inputStyle} />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Type</label>
+                    <select value={newDrive.driveType} onChange={e => setNewDrive(p => ({ ...p, driveType: e.target.value as typeof newDrive.driveType }))} style={{ ...inputStyle, cursor: 'pointer' }}>
+                      <option value="hdd">HDD</option>
+                      <option value="ssd">SSD</option>
+                      <option value="nvme">NVMe</option>
+                      <option value="flash">Flash</option>
+                      <option value="tape">Tape</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Capacity *</label>
+                    <input type="text" value={newDrive.capacity} onChange={e => setNewDrive(p => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 4T" style={inputStyle} required />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Interface</label>
+                    <select value={newDrive.interfaceType} onChange={e => setNewDrive(p => ({ ...p, interfaceType: e.target.value as typeof newDrive.interfaceType }))} style={{ ...inputStyle, cursor: 'pointer' }}>
+                      <option value="">—</option>
+                      <option value="sata">SATA</option>
+                      <option value="sas">SAS</option>
+                      <option value="nvme">NVMe</option>
+                      <option value="u2">U.2</option>
+                    </select>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={labelStyle}>Serial</label>
+                    <input type="text" value={newDrive.serial} onChange={e => setNewDrive(p => ({ ...p, serial: e.target.value }))} placeholder="Optional" style={inputStyle} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                  <button type="button" onClick={onClose} className={styles.cancelBtn}>Cancel</button>
+                  <button type="submit" className={styles.saveBtn} disabled={!newDrive.capacity.trim()}>Create & Assign</button>
+                </div>
+              </form>
+            )}
+          </>
+        )}
+
+        {/* Close button for when current drive exists */}
+        {currentDrive && (
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={onClose} className={styles.cancelBtn}>Close</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Drive Modal (standalone, no bay assignment) ────────────────────────
+
+interface AddDriveModalProps {
+  device: DeviceInstance;
+  siteId: string;
+  onClose: () => void;
+}
+
+function AddDriveModal({ device, siteId, onClose }: AddDriveModalProps) {
+  const createDrive = useCreateDrive(siteId);
+  const [form, setForm] = useState({
+    label: '',
+    model: '',
+    driveType: 'ssd' as 'hdd' | 'ssd' | 'nvme' | 'flash' | 'tape',
+    capacity: '',
+    serial: '',
+    interfaceType: '' as DriveInterfaceType | '',
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.capacity.trim()) return;
+    createDrive.mutate(
+      {
+        deviceId: device.id,
+        label: form.label || undefined,
+        model: form.model || undefined,
+        driveType: form.driveType,
+        capacity: form.capacity,
+        serial: form.serial || undefined,
+        interfaceType: form.interfaceType || undefined,
+        isBoot: false,
+      },
+      { onSuccess: () => onClose() },
+    );
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '5px 8px',
+    fontSize: 12,
+    background: 'var(--color-surface-2, #1a1e22)',
+    border: '1px solid var(--color-border, #2a3038)',
+    borderRadius: 4,
+    color: 'var(--color-text, #d4d9dd)',
+    fontFamily: "'Inter', system-ui, sans-serif",
+    boxSizing: 'border-box',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10,
+    color: 'var(--color-text-dim, #5a6068)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  };
+
+  return (
+    <div className={styles.editOverlay}>
+      <form onSubmit={handleSubmit} className={styles.editForm} style={{ minWidth: 340 }}>
+        <div className={styles.editFormTitle}>Add Drive — {device.name}</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Label</label>
+              <input type="text" value={form.label} onChange={e => setForm(p => ({ ...p, label: e.target.value }))} placeholder="Optional" style={inputStyle} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Model</label>
+              <input type="text" value={form.model} onChange={e => setForm(p => ({ ...p, model: e.target.value }))} placeholder="Optional" style={inputStyle} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Type</label>
+              <select value={form.driveType} onChange={e => setForm(p => ({ ...p, driveType: e.target.value as typeof form.driveType }))} style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="hdd">HDD</option>
+                <option value="ssd">SSD</option>
+                <option value="nvme">NVMe</option>
+                <option value="flash">Flash</option>
+                <option value="tape">Tape</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Capacity *</label>
+              <input type="text" value={form.capacity} onChange={e => setForm(p => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 4T, 960G" style={inputStyle} required />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Interface</label>
+              <select value={form.interfaceType} onChange={e => setForm(p => ({ ...p, interfaceType: e.target.value as typeof form.interfaceType }))} style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="">—</option>
+                <option value="sata">SATA</option>
+                <option value="sas">SAS</option>
+                <option value="nvme">NVMe</option>
+                <option value="u2">U.2</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Serial</label>
+              <input type="text" value={form.serial} onChange={e => setForm(p => ({ ...p, serial: e.target.value }))} placeholder="Optional" style={inputStyle} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button type="button" onClick={onClose} className={styles.cancelBtn}>Cancel</button>
+          <button type="submit" className={styles.saveBtn} disabled={!form.capacity.trim()}>Add Drive</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function StorageTab({
@@ -117,8 +594,104 @@ export function StorageTab({
   shares,
   onCreatePool,
   onConnectExternal,
+  onUpdateDevice,
+  siteId,
 }: StorageTabProps) {
   const [expandedPoolId, setExpandedPoolId] = useState<string | null>(null);
+  const [addDriveOpen, setAddDriveOpen] = useState(false);
+
+  // ── Context menu state ─────────────────────────────────────────────────
+  const [ctxMenu, setCtxMenu] = useState<{ block: PlacedBlock; x: number; y: number } | null>(null);
+  const [editingSlot, setEditingSlot] = useState<PlacedBlock | null>(null);
+  const [assigningBay, setAssigningBay] = useState<PlacedBlock | null>(null);
+
+  const slotOverrides = device.slotOverrides ?? {};
+
+  // ── Bay rendering ──────────────────────────────────────────────────────
+
+  const faceContainerRef = useRef<HTMLDivElement>(null);
+  const [faceWidth, setFaceWidth] = useState(0);
+
+  useEffect(() => {
+    const el = faceContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      setFaceWidth(entries[0].contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const bayBlocks = useMemo(() => getAllBayBlocks(template), [template]);
+  const hasBays = bayBlocks.length > 0;
+
+  // Build bay-only view: filter template blocks to only bays
+  const frontBays = useMemo(
+    () => (template?.layout?.front ?? []).filter(isBayBlock),
+    [template],
+  );
+  const rearBays = useMemo(
+    () => (template?.layout?.rear ?? []).filter(isBayBlock),
+    [template],
+  );
+
+  // Compute grid dimensions for bay view
+  const gridCols = template?.gridCols ?? 96;
+  const gridRows = (template?.uHeight ?? 1) * 12;
+  const faceHeight = faceWidth > 0 ? (faceWidth / gridCols) * gridRows : 0;
+
+  // Bay color/label maps
+  const { bayColors, bayLabels, bayBorderColors } = useMemo(() => {
+    const colors: Record<string, string> = {};
+    const labels: Record<string, string> = {};
+    const borders: Record<string, string> = {};
+    for (const block of bayBlocks) {
+      const drive = drives.find(
+        d => d.deviceId === device.id && d.slotBlockId === block.id,
+      );
+      const ov = slotOverrides[block.id];
+      if (drive) {
+        colors[block.id] = driveTypeColor(drive.driveType);
+        labels[block.id] = ov?.label || drive.model || drive.label || drive.capacity;
+        borders[block.id] = driveTypeColor(drive.driveType);
+      } else {
+        colors[block.id] = '#1a1e22';
+        labels[block.id] = ov?.label || block.label || '';
+        borders[block.id] = '#3a4248';
+      }
+    }
+    return { bayColors: colors, bayLabels: labels, bayBorderColors: borders };
+  }, [bayBlocks, drives, device.id, slotOverrides]);
+
+  // Context menu handler (right-click on bay)
+  const handleBayContextMenu = useCallback((block: PlacedBlock, e: React.MouseEvent) => {
+    if (!isBayBlock(block)) return;
+    setCtxMenu({ block, x: e.clientX, y: e.clientY });
+  }, []);
+
+  // Double-click handler (assign drive)
+  const handleBayDoubleClick = useCallback((block: PlacedBlock) => {
+    if (!isBayBlock(block)) return;
+    setAssigningBay(block);
+  }, []);
+
+  const ctxItems: ContextMenuItem[] = ctxMenu ? [
+    { label: 'Rename Slot', onClick: () => setEditingSlot(ctxMenu.block) },
+    { label: 'Set Interface', onClick: () => setEditingSlot(ctxMenu.block) },
+    { label: 'Assign Drive', onClick: () => setAssigningBay(ctxMenu.block) },
+  ] : [];
+
+  function handleSlotSave(override: SlotOverride) {
+    if (!editingSlot) return;
+    const updated = { ...slotOverrides };
+    if (Object.keys(override).length === 0) {
+      delete updated[editingSlot.id];
+    } else {
+      updated[editingSlot.id] = override;
+    }
+    onUpdateDevice({ id: device.id, slotOverrides: updated });
+    setEditingSlot(null);
+  }
 
   // ── Filter data to this device ──────────────────────────────────────────
 
@@ -168,15 +741,70 @@ export function StorageTab({
   return (
     <div className={styles.tab}>
 
+      {/* ── Bay Rendering ─────────────────────────────────────────────── */}
+      {hasBays && (
+        <div ref={faceContainerRef} className={styles.baySection}>
+          <div className={styles.sectionHeader}>
+            <span className={styles.sectionTitle}>Bay Layout</span>
+          </div>
+          {faceWidth > 0 && (
+            <>
+              {frontBays.length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <span className={styles.faceLabel}>Front</span>
+                  <div className={styles.faceCanvas} style={{ width: faceWidth, height: faceHeight }}>
+                    <TemplateOverlay
+                      blocks={frontBays}
+                      gridCols={gridCols}
+                      gridRows={gridRows}
+                      width={faceWidth}
+                      height={faceHeight}
+                      blockColors={bayColors}
+                      blockLabels={bayLabels}
+                      blockBorderColors={bayBorderColors}
+                      onBlockContextMenu={handleBayContextMenu}
+                      onBlockDoubleClick={handleBayDoubleClick}
+                      showLabels
+                      interactive
+                    />
+                  </div>
+                </div>
+              )}
+              {rearBays.length > 0 && (
+                <div>
+                  <span className={styles.faceLabel}>Rear</span>
+                  <div className={styles.faceCanvas} style={{ width: faceWidth, height: faceHeight }}>
+                    <TemplateOverlay
+                      blocks={rearBays}
+                      gridCols={gridCols}
+                      gridRows={gridRows}
+                      width={faceWidth}
+                      height={faceHeight}
+                      blockColors={bayColors}
+                      blockLabels={bayLabels}
+                      blockBorderColors={bayBorderColors}
+                      onBlockContextMenu={handleBayContextMenu}
+                      onBlockDoubleClick={handleBayDoubleClick}
+                      showLabels
+                      interactive
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Drives Section ─────────────────────────────────────────────── */}
       <div>
         <div className={styles.sectionHeader}>
           <span className={styles.sectionTitle}>
             Drives ({localDrives.length + externalDrives.length})
           </span>
-          {hasBaySlots(template) && (
-            <button className={styles.addBtn}>+ Add Drive</button>
-          )}
+          <button className={styles.addBtn} onClick={() => setAddDriveOpen(true)}>
+            + Add Drive
+          </button>
         </div>
 
         {/* Local drives */}
@@ -268,6 +896,47 @@ export function StorageTab({
           <ShareRow key={share.id} share={share} pools={devicePools} />
         ))}
       </div>
+
+      {/* ── Context Menu ──────────────────────────────────────────────── */}
+      {ctxMenu && (
+        <BlockContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={ctxItems}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
+
+      {/* ── Slot Edit Form ────────────────────────────────────────────── */}
+      {editingSlot && (
+        <SlotEditForm
+          block={editingSlot}
+          override={slotOverrides[editingSlot.id] ?? {}}
+          onSave={handleSlotSave}
+          onCancel={() => setEditingSlot(null)}
+        />
+      )}
+
+      {/* ── Drive Assignment Modal ────────────────────────────────────── */}
+      {assigningBay && (
+        <DriveAssignModal
+          block={assigningBay}
+          device={device}
+          drives={drives}
+          slotOverride={slotOverrides[assigningBay.id]}
+          siteId={siteId}
+          onClose={() => setAssigningBay(null)}
+        />
+      )}
+
+      {/* ── Add Drive Modal ───────────────────────────────────────────── */}
+      {addDriveOpen && (
+        <AddDriveModal
+          device={device}
+          siteId={siteId}
+          onClose={() => setAddDriveOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -302,6 +971,9 @@ function DriveRow({ drive, template, pools, isExternal }: DriveRowProps) {
       </span>
       <span className={styles.driveCapacity}>{drive.capacity}</span>
       <span className={styles.driveType}>{drive.driveType}</span>
+      {drive.interfaceType && (
+        <span className={styles.ifaceBadge}>{drive.interfaceType.toUpperCase()}</span>
+      )}
       {bayLabel && <span className={styles.driveBay}>{bayLabel}</span>}
       {pool && <span className={styles.drivePool}>{pool.name}</span>}
       {isExternal && <span className={styles.externalBadge}>External</span>}

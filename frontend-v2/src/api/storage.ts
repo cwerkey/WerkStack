@@ -42,6 +42,28 @@ export function useUpdateDrive(siteId: string) {
   });
 }
 
+export function useAssignDrive(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ driveId, deviceId, slotBlockId }: { driveId: string; deviceId: string; slotBlockId?: string }) =>
+      api.patch<Drive>(`/api/sites/${siteId}/drives/${driveId}/assign`, { deviceId, slotBlockId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['drives', siteId] });
+    },
+  });
+}
+
+export function useUnassignDrive(siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (driveId: string) =>
+      api.patch<Drive>(`/api/sites/${siteId}/drives/${driveId}/unassign`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['drives', siteId] });
+    },
+  });
+}
+
 export function useDeleteDrive(siteId: string) {
   const qc = useQueryClient();
   return useMutation({

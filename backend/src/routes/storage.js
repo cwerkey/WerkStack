@@ -15,7 +15,8 @@ const DriveSchema = z.object({
   serial:        z.string().max(200).optional(),
   poolId:        z.string().uuid().optional(),
   isBoot:        z.boolean().default(false),
-  vmPassthrough: z.string().max(200).optional(),
+  vmPassthrough:  z.string().max(200).optional(),
+  interfaceType:  z.enum(['sata', 'sas', 'nvme', 'u2']).optional().nullable(),
 });
 
 const VdevGroupSchema = z.object({
@@ -71,6 +72,7 @@ function toDrive(row) {
     serial:        row.serial ?? undefined,
     isBoot:        row.is_boot,
     vmPassthrough: row.vm_passthrough ?? undefined,
+    interfaceType: row.interface_type ?? undefined,
     createdAt:     row.created_at,
   };
 }
@@ -254,17 +256,18 @@ module.exports = function storageRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId } = req.params;
-      const { deviceId, slotBlockId, label, model, capacity, driveType, serial, poolId, isBoot, vmPassthrough } = req.body;
+      const { deviceId, slotBlockId, label, model, capacity, driveType, serial, poolId, isBoot, vmPassthrough, interfaceType } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
             `INSERT INTO drives
                (org_id, site_id, device_id, pool_id, slot_block_id, label, model,
-                capacity, drive_type, serial, is_boot, vm_passthrough)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+                capacity, drive_type, serial, is_boot, vm_passthrough, interface_type)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
              RETURNING *`,
             [orgId, siteId, deviceId, poolId ?? null, slotBlockId ?? null, label ?? null, model ?? null,
-             capacity, driveType, serial ?? null, isBoot ?? false, vmPassthrough ?? null]
+             capacity, driveType, serial ?? null, isBoot ?? false, vmPassthrough ?? null,
+             interfaceType ?? null]
           )
         );
         res.status(201).json(toDrive(result.rows[0]));
@@ -281,18 +284,19 @@ module.exports = function storageRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, driveId } = req.params;
-      const { deviceId, slotBlockId, label, model, capacity, driveType, serial, poolId, isBoot, vmPassthrough } = req.body;
+      const { deviceId, slotBlockId, label, model, capacity, driveType, serial, poolId, isBoot, vmPassthrough, interfaceType } = req.body;
       try {
         const result = await withOrg(db, orgId, c =>
           c.query(
             `UPDATE drives
              SET device_id = $1, pool_id = $2, slot_block_id = $3, label = $4, model = $5,
-                 capacity = $6, drive_type = $7, serial = $8, is_boot = $9, vm_passthrough = $10
-             WHERE id = $11 AND site_id = $12 AND org_id = $13
+                 capacity = $6, drive_type = $7, serial = $8, is_boot = $9, vm_passthrough = $10,
+                 interface_type = $11
+             WHERE id = $12 AND site_id = $13 AND org_id = $14
              RETURNING *`,
             [deviceId, poolId ?? null, slotBlockId ?? null, label ?? null, model ?? null,
              capacity, driveType, serial ?? null, isBoot ?? false, vmPassthrough ?? null,
-             driveId, siteId, orgId]
+             interfaceType ?? null, driveId, siteId, orgId]
           )
         );
         if (result.rows.length === 0) return res.status(404).json({ error: 'drive not found' });

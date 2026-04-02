@@ -179,8 +179,23 @@ export interface DeviceInstance {
   shelfRow?:      number;
   switchRole?:    'core' | 'edge' | 'access' | 'unclassified';
   isGateway?:     boolean;
+  portOverrides?: Record<string, PortOverride>;
+  slotOverrides?: Record<string, SlotOverride>;
   createdAt:      string;
 }
+
+export interface PortOverride {
+  label?: string;
+  speed?: string;
+  mac?:   string;
+}
+
+export interface SlotOverride {
+  label?:          string;
+  interfaceTypes?: InterfaceType[];
+}
+
+export type InterfaceType = 'sata' | 'sas' | 'nvme' | 'u2';
 
 // ─── Module Instances (PCIe cards installed in devices) ───────────────────────
 
@@ -262,6 +277,7 @@ export interface TypesData {
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
 export type DriveType = 'hdd' | 'ssd' | 'nvme' | 'flash' | 'tape';
+export type DriveInterfaceType = 'sata' | 'sas' | 'nvme' | 'u2';
 
 export interface Drive {
   id:             string;
@@ -277,6 +293,7 @@ export interface Drive {
   poolId?:        string;
   isBoot:         boolean;
   vmPassthrough?: string;   // VM name/id assigned to
+  interfaceType?: DriveInterfaceType;
   createdAt:      string;
 }
 

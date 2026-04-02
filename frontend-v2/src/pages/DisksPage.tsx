@@ -1,7 +1,7 @@
 // /Users/calebwerkmeister/Documents/WerkStack/app/frontend-v2/src/pages/DisksPage.tsx
 import React, { useState, useMemo } from 'react';
-import type { Drive, DriveType } from '@werkstack/shared';
-import { useGetSiteDrives, useGetSitePools } from '@/api/storage';
+import type { Drive, DriveType, DriveInterfaceType } from '@werkstack/shared';
+import { useGetSiteDrives, useGetSitePools, useCreateDrive } from '@/api/storage';
 import { useGetDevices } from '@/api/devices';
 import { useGetRacks } from '@/api/racks';
 import { useSiteStore } from '@/stores/siteStore';
@@ -69,12 +69,19 @@ export default function DisksPage() {
   const { data: pools = [] } = useGetSitePools(siteId);
   const { data: devices = [] } = useGetDevices(siteId);
   const { data: racks = [] } = useGetRacks(siteId);
+  const createDrive = useCreateDrive(siteId);
 
   const [sortCol, setSortCol] = useState<string>('model');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [filterType, setFilterType] = useState<string | null>(null);
   const [filterRack, setFilterRack] = useState<string | null>(null);
   const [filterAssigned, setFilterAssigned] = useState<string | null>(null);
+  const [addDiskOpen, setAddDiskOpen] = useState(false);
+  const [newDisk, setNewDisk] = useState({
+    label: '', model: '', capacity: '', serial: '',
+    driveType: 'ssd' as DriveType,
+    interfaceType: '' as DriveInterfaceType | '',
+  });
 
   const poolMap = useMemo(() => new Map(pools.map(p => [p.id, p])), [pools]);
   const deviceMap = useMemo(() => new Map(devices.map(d => [d.id, d])), [devices]);
@@ -223,7 +230,10 @@ export default function DisksPage() {
           />
           <button
             className="action-btn"
-            onClick={() => alert('Select a device in the Rack View to add a disk')}
+            onClick={() => {
+              setNewDisk({ label: '', model: '', capacity: '', serial: '', driveType: 'ssd', interfaceType: '' });
+              setAddDiskOpen(true);
+            }}
             style={{
               padding: '6px 14px',
               fontSize: 12,
@@ -373,9 +383,106 @@ export default function DisksPage() {
           </table>
         </div>
       )}
+      {/* Add Disk Modal */}
+      {addDiskOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newDisk.capacity.trim()) return;
+              createDrive.mutate(
+                {
+                  label: newDisk.label || undefined,
+                  model: newDisk.model || undefined,
+                  driveType: newDisk.driveType,
+                  capacity: newDisk.capacity,
+                  serial: newDisk.serial || undefined,
+                  interfaceType: newDisk.interfaceType || undefined,
+                  isBoot: false,
+                },
+                { onSuccess: () => setAddDiskOpen(false) },
+              );
+            }}
+            style={{
+              background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+              borderRadius: 8, padding: 16, minWidth: 380, display: 'flex', flexDirection: 'column', gap: 12,
+              boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>Add Disk to Inventory</div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={formLabelStyle}>Name</label>
+                <input type="text" value={newDisk.label} onChange={e => setNewDisk(p => ({ ...p, label: e.target.value }))} placeholder="Optional" style={formInputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={formLabelStyle}>Model</label>
+                <input type="text" value={newDisk.model} onChange={e => setNewDisk(p => ({ ...p, model: e.target.value }))} placeholder="Optional" style={formInputStyle} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={formLabelStyle}>Type</label>
+                <select value={newDisk.driveType} onChange={e => setNewDisk(p => ({ ...p, driveType: e.target.value as DriveType }))} style={{ ...formInputStyle, cursor: 'pointer' }}>
+                  <option value="hdd">HDD</option>
+                  <option value="ssd">SSD</option>
+                  <option value="nvme">NVMe</option>
+                  <option value="flash">Flash</option>
+                  <option value="tape">Tape</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={formLabelStyle}>Capacity *</label>
+                <input type="text" value={newDisk.capacity} onChange={e => setNewDisk(p => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 4T, 960G" style={formInputStyle} required />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={formLabelStyle}>Interface</label>
+                <select value={newDisk.interfaceType} onChange={e => setNewDisk(p => ({ ...p, interfaceType: e.target.value as DriveInterfaceType | '' }))} style={{ ...formInputStyle, cursor: 'pointer' }}>
+                  <option value="">—</option>
+                  <option value="sata">SATA</option>
+                  <option value="sas">SAS</option>
+                  <option value="nvme">NVMe</option>
+                  <option value="u2">U.2</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={formLabelStyle}>Serial</label>
+                <input type="text" value={newDisk.serial} onChange={e => setNewDisk(p => ({ ...p, serial: e.target.value }))} placeholder="Optional" style={formInputStyle} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button type="button" onClick={() => setAddDiskOpen(false)} style={{
+                padding: '5px 14px', fontSize: 12, border: '1px solid var(--color-border)',
+                borderRadius: 4, background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer',
+              }}>Cancel</button>
+              <button type="submit" disabled={!newDisk.capacity.trim()} style={{
+                padding: '5px 14px', fontSize: 12, fontWeight: 600, border: 'none',
+                borderRadius: 4, background: 'var(--color-accent)', color: '#fff', cursor: 'pointer',
+                opacity: newDisk.capacity.trim() ? 1 : 0.5,
+              }}>Add Disk</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
+
+const formLabelStyle: React.CSSProperties = {
+  fontSize: 10, color: 'var(--color-text-dim)', textTransform: 'uppercase',
+  letterSpacing: '0.5px', display: 'block', marginBottom: 2,
+};
+
+const formInputStyle: React.CSSProperties = {
+  width: '100%', padding: '5px 8px', fontSize: 12,
+  background: 'var(--color-surface-2)', border: '1px solid var(--color-border)',
+  borderRadius: 4, color: 'var(--color-text)', fontFamily: "'Inter', system-ui, sans-serif",
+  boxSizing: 'border-box',
+};
 
 const sortBtnStyle: React.CSSProperties = {
   background: 'none',

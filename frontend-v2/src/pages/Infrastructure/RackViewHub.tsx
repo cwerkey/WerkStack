@@ -575,6 +575,7 @@ export default function RackViewHub() {
             onAddConnection={handleAddConnection}
             onEditConnection={handleEditConnection}
             onDeleteConnection={handleDeleteConnection}
+            onUpdateDevice={handleDeviceSave}
           />
         )}
         {selectedDevice && drawerTab === 'storage' && (
@@ -587,6 +588,8 @@ export default function RackViewHub() {
             shares={siteShares}
             onCreatePool={() => setPoolWizardOpen(true)}
             onConnectExternal={() => setExtStorageWizardOpen(true)}
+            onUpdateDevice={handleDeviceSave}
+            siteId={siteId}
           />
         )}
         {selectedDevice && drawerTab === 'os' && (

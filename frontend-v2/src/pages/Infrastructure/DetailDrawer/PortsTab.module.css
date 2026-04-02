@@ -220,3 +220,81 @@
   border-color: var(--color-accent);
   color: var(--color-accent);
 }
+
+/* ── Port speed badge ────────────────────────────────────────────────── */
+
+.portSpeed {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #1a2a2a;
+  color: #4a9a8a;
+  font-weight: 500;
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── Edit overlay ────────────────────────────────────────────────────── */
+
+.editOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.editForm {
+  background: var(--color-surface, #1a1e22);
+  border: 1px solid var(--color-border, #2a3038);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.editFormTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text, #d4d9dd);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.cancelBtn {
+  appearance: none;
+  background: none;
+  border: 1px solid var(--color-border, #2a3038);
+  border-radius: 4px;
+  padding: 5px 14px;
+  font-size: 12px;
+  color: var(--color-text-muted, #888);
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.cancelBtn:hover {
+  border-color: var(--color-text-dim);
+  color: var(--color-text);
+}
+
+.saveBtn {
+  appearance: none;
+  background: var(--color-accent, #c47c5a);
+  border: none;
+  border-radius: 4px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.saveBtn:hover {
+  filter: brightness(1.1);
+}

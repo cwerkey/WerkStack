@@ -12,6 +12,7 @@ interface TemplateOverlayProps {
   selectedId?:    string | null;
   onBlockClick?:  (block: PlacedBlock) => void;
   onBlockContextMenu?: (block: PlacedBlock, e: React.MouseEvent) => void;
+  onBlockDoubleClick?: (block: PlacedBlock, e: React.MouseEvent) => void;
   onBlockMouseEnter?:  (block: PlacedBlock, e: React.MouseEvent) => void;
   onBlockMouseLeave?:  () => void;
   showLabels?:    boolean;
@@ -28,7 +29,7 @@ interface TemplateOverlayProps {
 
 export function TemplateOverlay({
   blocks, gridCols, gridRows, width, height: heightProp,
-  selectedId, onBlockClick, onBlockContextMenu, onBlockMouseEnter, onBlockMouseLeave,
+  selectedId, onBlockClick, onBlockContextMenu, onBlockDoubleClick, onBlockMouseEnter, onBlockMouseLeave,
   showLabels = true, interactive = false,
   blockColors, blockBorderColors, blockOpacity, blockLabels,
   blockBadge, blockBorderStyle,
@@ -61,6 +62,7 @@ export function TemplateOverlay({
           data-block-id={block.id}
           onClick={onBlockClick ? () => onBlockClick(block) : undefined}
           onContextMenu={onBlockContextMenu ? (e) => { e.preventDefault(); onBlockContextMenu(block, e); } : undefined}
+          onDoubleClick={onBlockDoubleClick ? (e) => onBlockDoubleClick(block, e) : undefined}
           onMouseEnter={onBlockMouseEnter ? (e) => onBlockMouseEnter(block, e) : undefined}
           onMouseLeave={onBlockMouseLeave || undefined}
           style={{
@@ -114,7 +116,7 @@ export function TemplateOverlay({
         </div>
       );
     }),
-  [blocks, cellW, cellH, selectedId, onBlockClick, onBlockContextMenu, onBlockMouseEnter, onBlockMouseLeave, showLabels, interactive, blockColors, blockBorderColors, blockOpacity, blockLabels, blockBadge, blockBorderStyle]);
+  [blocks, cellW, cellH, selectedId, onBlockClick, onBlockContextMenu, onBlockDoubleClick, onBlockMouseEnter, onBlockMouseLeave, showLabels, interactive, blockColors, blockBorderColors, blockOpacity, blockLabels, blockBadge, blockBorderStyle]);
 
   return (
     <div ref={containerRef} className={styles.container} style={{ width, height }}>

@@ -105,6 +105,15 @@ export const DeviceInstanceSchema = z.object({
   shelfDeviceId: z.string().uuid().optional(),
   shelfCol:      z.number().int().min(0).optional(),
   shelfRow:      z.number().int().min(0).optional(),
+  portOverrides: z.record(z.string(), z.object({
+    label: z.string().max(200).optional(),
+    speed: z.string().max(50).optional(),
+    mac:   z.string().max(50).optional(),
+  })).optional(),
+  slotOverrides: z.record(z.string(), z.object({
+    label:          z.string().max(200).optional(),
+    interfaceTypes: z.array(z.enum(['sata', 'sas', 'nvme', 'u2'])).optional(),
+  })).optional(),
 });
 
 // ─── VPN Tunnel ─────────────────────────────────────────────────────────────

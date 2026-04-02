@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type {
   DeviceInstance,
   DeviceTemplate,
@@ -7,9 +7,12 @@ import type {
   Connection,
   PlacedBlock,
   CableType,
+  PortOverride,
 } from '@werkstack/shared';
 import { BLOCK_DEF_MAP } from '@werkstack/shared';
 import { TemplateOverlay } from '@/components/TemplateOverlay';
+import { BlockContextMenu } from '@/components/BlockContextMenu';
+import type { ContextMenuItem } from '@/components/BlockContextMenu';
 import { buildVirtualFaceplateWithMeta } from '@/components/portAggregator';
 import styles from './PortsTab.module.css';
 
@@ -26,7 +29,12 @@ interface PortsTabProps {
   onAddConnection:   (block: PlacedBlock) => void;
   onEditConnection:  (conn: Connection) => void;
   onDeleteConnection:(connId: string) => void;
+  onUpdateDevice:    (patch: Partial<DeviceInstance> & { id: string }) => void;
 }
+
+// ─── Speed options ───────────────────────────────────────────────────────────
+
+const SPEED_OPTIONS = ['1G', '2.5G', '10G', '25G', '40G', '100G'] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +71,105 @@ function shortLabel(block: PlacedBlock): string {
   return def?.label ?? block.type;
 }
 
+// ─── Port Edit Form (inline modal) ──────────────────────────────────────────
+
+interface PortEditFormProps {
+  block: PlacedBlock;
+  override: PortOverride;
+  onSave: (override: PortOverride) => void;
+  onCancel: () => void;
+}
+
+function PortEditForm({ block, override, onSave, onCancel }: PortEditFormProps) {
+  const [label, setLabel] = useState(override.label ?? '');
+  const [speed, setSpeed] = useState(override.speed ?? '');
+  const [mac, setMac] = useState(override.mac ?? '');
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const result: PortOverride = {};
+    if (label.trim()) result.label = label.trim();
+    if (speed) result.speed = speed;
+    if (mac.trim()) result.mac = mac.trim();
+    onSave(result);
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '5px 8px',
+    fontSize: 12,
+    background: 'var(--color-surface-2, #1a1e22)',
+    border: '1px solid var(--color-border, #2a3038)',
+    borderRadius: 4,
+    color: 'var(--color-text, #d4d9dd)',
+    fontFamily: "'Inter', system-ui, sans-serif",
+    boxSizing: 'border-box',
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10,
+    color: 'var(--color-text-dim, #5a6068)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  };
+
+  return (
+    <div className={styles.editOverlay}>
+      <form onSubmit={handleSubmit} className={styles.editForm}>
+        <div className={styles.editFormTitle}>
+          Edit Port — {shortLabel(block)}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div>
+            <label style={labelStyle}>Name / Label</label>
+            <input
+              type="text"
+              value={label}
+              onChange={e => setLabel(e.target.value)}
+              placeholder={block.label || block.id}
+              style={inputStyle}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Speed</label>
+            <select
+              value={speed}
+              onChange={e => setSpeed(e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="">—</option>
+              {SPEED_OPTIONS.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>MAC Address</label>
+            <input
+              type="text"
+              value={mac}
+              onChange={e => setMac(e.target.value)}
+              placeholder="AA:BB:CC:DD:EE:FF"
+              style={{ ...inputStyle, fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button type="button" onClick={onCancel} className={styles.cancelBtn}>
+            Cancel
+          </button>
+          <button type="submit" className={styles.saveBtn}>
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ─── Port row ─────────────────────────────────────────────────────────────────
 
 interface PortRowProps {
@@ -71,6 +178,7 @@ interface PortRowProps {
   connections:        Connection[];
   allDevices:         DeviceInstance[];
   selected:           boolean;
+  portOverride?:      PortOverride;
   onMouseEnter:       (id: string) => void;
   onMouseLeave:       () => void;
   onAddConnection:    (block: PlacedBlock) => void;
@@ -83,6 +191,7 @@ function PortRow({
   deviceId,
   connections,
   allDevices,
+  portOverride,
   onMouseEnter,
   onMouseLeave,
   onAddConnection,
@@ -92,7 +201,7 @@ function PortRow({
   const conn = getConnectionForBlock(block, deviceId, connections);
   const connected = !!conn;
   const peerName = conn ? getPeerName(conn, deviceId, allDevices) : null;
-  const portDisplayLabel = block.label || block.id;
+  const displayLabel = portOverride?.label || block.label || block.id;
 
   function handleRowClick() {
     if (conn) {
@@ -126,7 +235,10 @@ function PortRow({
         }`}
       />
       <span className={styles.portType}>{shortLabel(block)}</span>
-      <span className={styles.portLabel}>{portDisplayLabel}</span>
+      <span className={styles.portLabel}>{displayLabel}</span>
+      {portOverride?.speed && (
+        <span className={styles.portSpeed}>{portOverride.speed}</span>
+      )}
       {peerName && <span className={styles.portPeer}>{peerName}</span>}
       {connected ? (
         <button
@@ -158,6 +270,7 @@ interface PcieGroupProps {
   connections:        Connection[];
   allDevices:         DeviceInstance[];
   selectedPortId:     string | null;
+  portOverrides:      Record<string, PortOverride>;
   onMouseEnter:       (id: string) => void;
   onMouseLeave:       () => void;
   onAddConnection:    (block: PlacedBlock) => void;
@@ -172,6 +285,7 @@ function PcieGroup({
   connections,
   allDevices,
   selectedPortId,
+  portOverrides,
   onMouseEnter,
   onMouseLeave,
   onAddConnection,
@@ -198,6 +312,7 @@ function PcieGroup({
             connections={connections}
             allDevices={allDevices}
             selected={selectedPortId === block.id}
+            portOverride={portOverrides[block.id]}
             onMouseEnter={onMouseEnter}
             onMouseLeave={onMouseLeave}
             onAddConnection={onAddConnection}
@@ -221,8 +336,40 @@ export function PortsTab({
   onAddConnection,
   onEditConnection,
   onDeleteConnection,
+  onUpdateDevice,
 }: PortsTabProps) {
   const [selectedPortId, setSelectedPortId] = useState<string | null>(null);
+
+  // ── Context menu state ─────────────────────────────────────────────────────
+  const [ctxMenu, setCtxMenu] = useState<{ block: PlacedBlock; x: number; y: number } | null>(null);
+  const [editingBlock, setEditingBlock] = useState<PlacedBlock | null>(null);
+
+  const portOverrides = device.portOverrides ?? {};
+
+  const handleContextMenu = useCallback((block: PlacedBlock, e: React.MouseEvent) => {
+    const def = BLOCK_DEF_MAP.get(block.type);
+    if (!(def?.isPort || def?.isNet)) return;
+    setCtxMenu({ block, x: e.clientX, y: e.clientY });
+  }, []);
+
+  const ctxItems: ContextMenuItem[] = ctxMenu ? [
+    {
+      label: 'Edit Port',
+      onClick: () => setEditingBlock(ctxMenu.block),
+    },
+  ] : [];
+
+  function handlePortSave(override: PortOverride) {
+    if (!editingBlock) return;
+    const updated = { ...portOverrides };
+    if (Object.keys(override).length === 0) {
+      delete updated[editingBlock.id];
+    } else {
+      updated[editingBlock.id] = override;
+    }
+    onUpdateDevice({ id: device.id, portOverrides: updated });
+    setEditingBlock(null);
+  }
 
   // ── Measure container width for responsive faceplate ───────────────────────
 
@@ -289,6 +436,16 @@ export function PortsTab({
     return { blockColors: colors, blockOpacity: opacity };
   }, [frontMeta, rearMeta, device.id, connections, selectedPortId]);
 
+  // ── blockLabels for port overrides ─────────────────────────────────────────
+
+  const blockLabels = useMemo(() => {
+    const labels: Record<string, string> = {};
+    for (const [blockId, ov] of Object.entries(portOverrides)) {
+      if (ov.label) labels[blockId] = ov.label;
+    }
+    return labels;
+  }, [portOverrides]);
+
   // ── Derive port lists ───────────────────────────────────────────────────────
 
   const frontPortBlocks = useMemo(
@@ -339,6 +496,7 @@ export function PortsTab({
     connections,
     allDevices,
     selectedPortId,
+    portOverrides,
     onMouseEnter:       handleMouseEnter,
     onMouseLeave:       handleMouseLeave,
     onAddConnection,
@@ -367,6 +525,8 @@ export function PortsTab({
                   selectedId={selectedPortId}
                   blockColors={blockColors}
                   blockOpacity={blockOpacity}
+                  blockLabels={blockLabels}
+                  onBlockContextMenu={handleContextMenu}
                   showLabels={false}
                   interactive={false}
                 />
@@ -385,6 +545,8 @@ export function PortsTab({
                   selectedId={selectedPortId}
                   blockColors={blockColors}
                   blockOpacity={blockOpacity}
+                  blockLabels={blockLabels}
+                  onBlockContextMenu={handleContextMenu}
                   showLabels={false}
                   interactive={false}
                 />
@@ -429,6 +591,7 @@ export function PortsTab({
               key={block.id}
               block={block}
               selected={selectedPortId === block.id}
+              portOverride={portOverrides[block.id]}
               {...rowProps}
             />
           ))}
@@ -444,6 +607,7 @@ export function PortsTab({
               key={block.id}
               block={block}
               selected={selectedPortId === block.id}
+              portOverride={portOverrides[block.id]}
               {...rowProps}
             />
           ))}
@@ -459,6 +623,26 @@ export function PortsTab({
           {...rowProps}
         />
       ))}
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <BlockContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={ctxItems}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
+
+      {/* Port edit form */}
+      {editingBlock && (
+        <PortEditForm
+          block={editingBlock}
+          override={portOverrides[editingBlock.id] ?? {}}
+          onSave={handlePortSave}
+          onCancel={() => setEditingBlock(null)}
+        />
+      )}
     </div>
   );
 }

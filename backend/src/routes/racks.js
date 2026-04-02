@@ -31,6 +31,15 @@ const DeviceInstanceSchema = z.object({
   shelfRow:      z.number().int().min(0).optional(),
   switchRole:    z.enum(['core', 'edge', 'access', 'unclassified']).optional(),
   isGateway:     z.boolean().optional(),
+  portOverrides: z.record(z.string(), z.object({
+    label: z.string().max(200).optional(),
+    speed: z.string().max(50).optional(),
+    mac:   z.string().max(50).optional(),
+  })).optional(),
+  slotOverrides: z.record(z.string(), z.object({
+    label:          z.string().max(200).optional(),
+    interfaceTypes: z.array(z.enum(['sata', 'sas', 'nvme', 'u2'])).optional(),
+  })).optional(),
 });
 
 async function withOrg(db, orgId, fn) {
@@ -80,6 +89,8 @@ function toDevice(row) {
     shelfRow:       row.shelf_row ?? undefined,
     switchRole:     row.switch_role ?? 'unclassified',
     isGateway:      row.is_gateway ?? false,
+    portOverrides:  row.port_overrides ?? {},
+    slotOverrides:  row.slot_overrides ?? {},
     createdAt:      row.created_at,
   };
 }
@@ -236,7 +247,7 @@ module.exports = function racksRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId } = req.params;
-      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow, switchRole, isGateway } = req.body;
+      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow, switchRole, isGateway, portOverrides, slotOverrides } = req.body;
 
       try {
         if (rackId && rackU && uHeight) {
@@ -256,14 +267,15 @@ module.exports = function racksRoutes(db) {
         const result = await withOrg(db, orgId, (c) =>
           c.query(
             `INSERT INTO device_instances
-               (org_id, site_id, zone_id, rack_id, template_id, type_id, name, rack_u, u_height, face, ip, serial, asset_tag, notes, is_draft, shelf_device_id, shelf_col, shelf_row, switch_role, is_gateway)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+               (org_id, site_id, zone_id, rack_id, template_id, type_id, name, rack_u, u_height, face, ip, serial, asset_tag, notes, is_draft, shelf_device_id, shelf_col, shelf_row, switch_role, is_gateway, port_overrides, slot_overrides)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
              RETURNING *`,
             [orgId, siteId, zoneId ?? null, rackId ?? null, templateId ?? null,
              typeId, name, rackU ?? null, uHeight ?? null, face || 'front',
              ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false,
              shelfDeviceId ?? null, shelfCol ?? null, shelfRow ?? null,
-             switchRole ?? 'unclassified', isGateway ?? false]
+             switchRole ?? 'unclassified', isGateway ?? false,
+             JSON.stringify(portOverrides ?? {}), JSON.stringify(slotOverrides ?? {})]
           )
         );
         res.status(201).json(toDevice(result.rows[0]));
@@ -283,7 +295,7 @@ module.exports = function racksRoutes(db) {
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, deviceId } = req.params;
-      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow, switchRole, isGateway } = req.body;
+      const { templateId, typeId, name, rackId, zoneId, rackU, uHeight, face, ip, serial, assetTag, notes, isDraft, shelfDeviceId, shelfCol, shelfRow, switchRole, isGateway, portOverrides, slotOverrides } = req.body;
 
       try {
         if (rackId && rackU && uHeight) {
@@ -307,14 +319,16 @@ module.exports = function racksRoutes(db) {
                  rack_u = $6, u_height = $7, face = $8, ip = $9, serial = $10,
                  asset_tag = $11, notes = $12, is_draft = $13,
                  shelf_device_id = $14, shelf_col = $15, shelf_row = $16,
-                 switch_role = $17, is_gateway = $18
-             WHERE id = $19 AND site_id = $20 AND org_id = $21
+                 switch_role = $17, is_gateway = $18,
+                 port_overrides = $19, slot_overrides = $20
+             WHERE id = $21 AND site_id = $22 AND org_id = $23
              RETURNING *`,
             [templateId ?? null, typeId, name, rackId ?? null, zoneId ?? null,
              rackU ?? null, uHeight ?? null, face || 'front',
              ip ?? null, serial ?? null, assetTag ?? null, notes ?? null, isDraft ?? false,
              shelfDeviceId ?? null, shelfCol ?? null, shelfRow ?? null,
              switchRole ?? 'unclassified', isGateway ?? false,
+             JSON.stringify(portOverrides ?? {}), JSON.stringify(slotOverrides ?? {}),
              deviceId, siteId, orgId]
           )
         );
