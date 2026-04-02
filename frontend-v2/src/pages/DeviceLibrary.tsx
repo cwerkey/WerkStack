@@ -259,9 +259,7 @@ function DeviceInfoPanel({
       </div>
 
       {/* Monitoring Section */}
-      {!device.isDraft && (
-        <MonitoringSection device={device} onMonitorUpdate={onMonitorUpdate} />
-      )}
+      <MonitoringSection device={device} onMonitorUpdate={onMonitorUpdate} />
     </div>
   );
 }
