@@ -87,6 +87,8 @@ function toContainer(row) {
     upstreamDependencyId: row.upstream_dependency_id ?? undefined,
     notes:                row.notes ?? undefined,
     monitorEnabled:       row.monitor_enabled ?? false,
+    monitorIp:            row.monitor_ip ?? undefined,
+    monitorIntervalS:     row.monitor_interval_s ?? 60,
     createdAt:            row.created_at,
   };
 }
@@ -413,24 +415,33 @@ module.exports = function containersRoutes(db) {
     }
   );
 
-  // PATCH /:siteId/containers/:containerId/monitor — toggle monitoring on/off
+  // PATCH /:siteId/containers/:containerId/monitor — update monitoring settings
   router.patch(
     '/:siteId/containers/:containerId/monitor',
     requireAuth, requireSiteAccess(db), requireRole('member'),
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, containerId } = req.params;
-      const { monitorEnabled } = req.body;
+      const { monitorEnabled, monitorIp, monitorIntervalS } = req.body;
       if (typeof monitorEnabled !== 'boolean') {
         return res.status(400).json({ error: 'monitorEnabled must be boolean' });
       }
       try {
+        const extraSets = [];
+        const extraParams = [];
+        let idx = 5;
+        if (monitorIp !== undefined) { extraSets.push(`monitor_ip = $${idx++}`); extraParams.push(monitorIp || null); }
+        if (monitorIntervalS !== undefined) { extraSets.push(`monitor_interval_s = $${idx++}`); extraParams.push(monitorIntervalS); }
+
+        const setClauses = ['monitor_enabled = $1', ...extraSets].join(', ');
+        const params = [monitorEnabled, containerId, siteId, orgId, ...extraParams];
+
         const result = await withOrg(db, orgId, c =>
           c.query(
-            `UPDATE containers SET monitor_enabled = $1
+            `UPDATE containers SET ${setClauses}
              WHERE id = $2 AND site_id = $3 AND org_id = $4
              RETURNING *`,
-            [monitorEnabled, containerId, siteId, orgId]
+            params
           )
         );
         if (result.rows.length === 0) return res.status(404).json({ error: 'container not found' });

@@ -418,9 +418,11 @@ export interface OsApp {
   url?:           string;
   ip?:            string;
   extraIps:        OsExtraIp[];
-  notes?:          string;
-  monitorEnabled?: boolean;
-  createdAt:       string;
+  notes?:           string;
+  monitorEnabled?:  boolean;
+  monitorIp?:       string;
+  monitorIntervalS?: number;
+  createdAt:        string;
 }
 
 // ─── Cable Map / Connections ──────────────────────────────────────────────────
@@ -868,6 +870,8 @@ export interface Container {
   upstreamDependencyId?: string;
   notes?:                string;
   monitorEnabled?:       boolean;
+  monitorIp?:            string;
+  monitorIntervalS?:     number;
   createdAt:             string;
 }
 

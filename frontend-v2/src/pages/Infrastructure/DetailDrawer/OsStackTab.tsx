@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import type {
   DeviceInstance,
   OsHost,
@@ -23,6 +23,11 @@ interface OsStackTabProps {
   onAddApp:              () => void;
   onToggleContainerMonitor?: (containerId: string, enabled: boolean) => void;
   onToggleAppMonitor?:       (appId: string, enabled: boolean) => void;
+  onEditVm?:                 (vm: OsVm) => void;
+  onEditContainer?:          (container: Container) => void;
+  onEditApp?:                (app: OsApp) => void;
+  onConfigContainerMonitor?: (container: Container) => void;
+  onConfigAppMonitor?:       (app: OsApp) => void;
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -74,6 +79,11 @@ export function OsStackTab({
   onAddApp,
   onToggleContainerMonitor,
   onToggleAppMonitor,
+  onEditVm,
+  onEditContainer,
+  onEditApp,
+  onConfigContainerMonitor,
+  onConfigAppMonitor,
 }: OsStackTabProps) {
   const [expandedVmId, setExpandedVmId] = useState<string | null>(null);
   const [expandedContainerId, setExpandedContainerId] = useState<string | null>(null);
@@ -206,6 +216,7 @@ export function OsStackTab({
               vm={vm}
               expanded={expandedVmId === vm.id}
               onClick={() => toggleVm(vm.id)}
+              onEdit={onEditVm ? () => onEditVm(vm) : undefined}
             />
             {expandedVmId === vm.id && (
               <VmDetail
@@ -264,6 +275,8 @@ export function OsStackTab({
                     expanded={expandedContainerId === c.id}
                     onClick={() => toggleContainer(c.id)}
                     onToggleMonitor={onToggleContainerMonitor ? (en) => onToggleContainerMonitor(c.id, en) : undefined}
+                    onEdit={onEditContainer ? () => onEditContainer(c) : undefined}
+                    onConfigMonitor={onConfigContainerMonitor ? () => onConfigContainerMonitor(c) : undefined}
                   />
                   {expandedContainerId === c.id && (
                     <ContainerDetail container={c} />
@@ -282,6 +295,8 @@ export function OsStackTab({
               expanded={expandedContainerId === c.id}
               onClick={() => toggleContainer(c.id)}
               onToggleMonitor={onToggleContainerMonitor ? (en) => onToggleContainerMonitor(c.id, en) : undefined}
+              onEdit={onEditContainer ? () => onEditContainer(c) : undefined}
+              onConfigMonitor={onConfigContainerMonitor ? () => onConfigContainerMonitor(c) : undefined}
             />
             {expandedContainerId === c.id && (
               <ContainerDetail container={c} />
@@ -312,6 +327,8 @@ export function OsStackTab({
             key={app.id}
             app={app}
             onToggleMonitor={onToggleAppMonitor ? (en) => onToggleAppMonitor(app.id, en) : undefined}
+            onEdit={onEditApp ? () => onEditApp(app) : undefined}
+            onConfigMonitor={onConfigAppMonitor ? () => onConfigAppMonitor(app) : undefined}
           />
         ))}
       </div>
@@ -335,17 +352,90 @@ export function OsStackTab({
   );
 }
 
+// -- Inline context menu -------------------------------------------------------
+
+interface CtxMenuState { x: number; y: number }
+
+interface RowCtxMenuProps {
+  pos: CtxMenuState;
+  items: { label: string; onClick: () => void; danger?: boolean }[];
+  onClose: () => void;
+}
+
+function RowCtxMenu({ pos, items, onClose }: RowCtxMenuProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: 'fixed',
+        top: pos.y,
+        left: pos.x,
+        zIndex: 1200,
+        background: 'var(--color-surface, #161a1d)',
+        border: '1px solid var(--color-border, #2a3038)',
+        borderRadius: 6,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        padding: '4px 0',
+        minWidth: 160,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {items.map((item, i) => (
+        <button
+          key={i}
+          style={{
+            appearance: 'none',
+            background: 'none',
+            border: 'none',
+            color: item.danger ? '#ef4444' : 'var(--color-text, #d4d9dd)',
+            cursor: 'pointer',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontSize: 12,
+            padding: '6px 14px',
+            textAlign: 'left',
+            whiteSpace: 'nowrap',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--color-surface-2, #1e2328)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+          onClick={() => { item.onClick(); onClose(); }}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // -- VM Row -------------------------------------------------------------------
 
 interface VmRowProps {
   vm: OsVm;
   expanded: boolean;
   onClick: () => void;
+  onEdit?: () => void;
 }
 
-function VmRow({ vm, expanded, onClick }: VmRowProps) {
+function VmRow({ vm, expanded, onClick, onEdit }: VmRowProps) {
+  const [ctx, setCtx] = useState<CtxMenuState | null>(null);
+
+  const ctxItems = onEdit ? [{ label: 'Edit VM', onClick: () => onEdit() }] : [];
+
   return (
-    <div className={styles.row} onClick={onClick}>
+    <div
+      className={styles.row}
+      onClick={onClick}
+      onContextMenu={ctxItems.length > 0 ? e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); } : undefined}
+    >
       <span className={styles.rowName}>{vm.name}</span>
       {vm.cpus != null && (
         <span className={`${styles.badge} ${styles.badgeCpu}`}>
@@ -359,6 +449,9 @@ function VmRow({ vm, expanded, onClick }: VmRowProps) {
       )}
       {vm.ip && <span className={styles.badgeIp}>{vm.ip}</span>}
       <span className={styles.expandArrow}>{expanded ? '\u25BE' : '\u25B8'}</span>
+      {ctx && ctxItems.length > 0 && (
+        <RowCtxMenu pos={ctx} items={ctxItems} onClose={() => setCtx(null)} />
+      )}
     </div>
   );
 }
@@ -451,13 +544,25 @@ interface ContainerRowProps {
   expanded: boolean;
   onClick: () => void;
   onToggleMonitor?: (enabled: boolean) => void;
+  onEdit?: () => void;
+  onConfigMonitor?: () => void;
 }
 
-function ContainerRow({ container, expanded, onClick, onToggleMonitor }: ContainerRowProps) {
+function ContainerRow({ container, expanded, onClick, onToggleMonitor, onEdit, onConfigMonitor }: ContainerRowProps) {
   const summary = portsSummary(container.ports);
+  const [ctx, setCtx] = useState<CtxMenuState | null>(null);
+
+  const ctxItems = [
+    ...(onEdit ? [{ label: 'Edit Container', onClick: onEdit }] : []),
+    ...(onConfigMonitor ? [{ label: 'Monitor Config', onClick: onConfigMonitor }] : []),
+  ];
 
   return (
-    <div className={styles.row} onClick={onClick}>
+    <div
+      className={styles.row}
+      onClick={onClick}
+      onContextMenu={ctxItems.length > 0 ? e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); } : undefined}
+    >
       <span className={styles.rowName}>{container.name}</span>
       <span className={styles.imageTag}>
         {container.image}:{container.tag}
@@ -476,6 +581,9 @@ function ContainerRow({ container, expanded, onClick, onToggleMonitor }: Contain
         </button>
       )}
       <span className={styles.expandArrow}>{expanded ? '\u25BE' : '\u25B8'}</span>
+      {ctx && ctxItems.length > 0 && (
+        <RowCtxMenu pos={ctx} items={ctxItems} onClose={() => setCtx(null)} />
+      )}
     </div>
   );
 }
@@ -543,11 +651,28 @@ function ContainerDetail({ container }: { container: Container }) {
 
 // -- App Row ------------------------------------------------------------------
 
-function AppRow({ app, onToggleMonitor }: { app: OsApp; onToggleMonitor?: (enabled: boolean) => void }) {
+interface AppRowProps {
+  app: OsApp;
+  onToggleMonitor?: (enabled: boolean) => void;
+  onEdit?: () => void;
+  onConfigMonitor?: () => void;
+}
+
+function AppRow({ app, onToggleMonitor, onEdit, onConfigMonitor }: AppRowProps) {
   const href = safeHref(app.url);
+  const [ctx, setCtx] = useState<CtxMenuState | null>(null);
+
+  const ctxItems = [
+    ...(onEdit ? [{ label: 'Edit App', onClick: onEdit }] : []),
+    ...(onConfigMonitor ? [{ label: 'Monitor Config', onClick: onConfigMonitor }] : []),
+  ];
 
   return (
-    <div className={styles.row} style={{ cursor: 'default' }}>
+    <div
+      className={styles.row}
+      style={{ cursor: 'default' }}
+      onContextMenu={ctxItems.length > 0 ? e => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); } : undefined}
+    >
       <span className={styles.rowName}>{app.name}</span>
       {app.version && (
         <span className={styles.appVersion}>v{app.version}</span>
@@ -572,6 +697,9 @@ function AppRow({ app, onToggleMonitor }: { app: OsApp; onToggleMonitor?: (enabl
         >
           mon
         </button>
+      )}
+      {ctx && ctxItems.length > 0 && (
+        <RowCtxMenu pos={ctx} items={ctxItems} onClose={() => setCtx(null)} />
       )}
     </div>
   );

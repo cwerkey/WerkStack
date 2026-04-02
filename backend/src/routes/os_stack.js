@@ -116,8 +116,10 @@ function toApp(row) {
     ip:        row.ip ?? undefined,
     extraIps:       parseJson(row.extra_ips, []),
     notes:          row.notes ?? undefined,
-    monitorEnabled: row.monitor_enabled ?? false,
-    createdAt:      row.created_at,
+    monitorEnabled:   row.monitor_enabled ?? false,
+    monitorIp:        row.monitor_ip ?? undefined,
+    monitorIntervalS: row.monitor_interval_s ?? 60,
+    createdAt:        row.created_at,
   };
 }
 
@@ -409,24 +411,33 @@ module.exports = function osStackRoutes(db) {
     }
   );
 
-  // PATCH /:siteId/os-apps/:appId/monitor — toggle monitoring on/off
+  // PATCH /:siteId/os-apps/:appId/monitor — update monitoring settings
   router.patch(
     '/:siteId/os-apps/:appId/monitor',
     requireAuth, requireSiteAccess(db), requireRole('member'),
     async (req, res) => {
       const { orgId } = req.user;
       const { siteId, appId } = req.params;
-      const { monitorEnabled } = req.body;
+      const { monitorEnabled, monitorIp, monitorIntervalS } = req.body;
       if (typeof monitorEnabled !== 'boolean') {
         return res.status(400).json({ error: 'monitorEnabled must be boolean' });
       }
       try {
+        const extraSets = [];
+        const extraParams = [];
+        let idx = 5;
+        if (monitorIp !== undefined) { extraSets.push(`monitor_ip = $${idx++}`); extraParams.push(monitorIp || null); }
+        if (monitorIntervalS !== undefined) { extraSets.push(`monitor_interval_s = $${idx++}`); extraParams.push(monitorIntervalS); }
+
+        const setClauses = ['monitor_enabled = $1', ...extraSets].join(', ');
+        const params = [monitorEnabled, appId, siteId, orgId, ...extraParams];
+
         const result = await withOrg(db, orgId, c =>
           c.query(
-            `UPDATE os_apps SET monitor_enabled = $1
+            `UPDATE os_apps SET ${setClauses}
              WHERE id = $2 AND site_id = $3 AND org_id = $4
              RETURNING *`,
-            [monitorEnabled, appId, siteId, orgId]
+            params
           )
         );
         if (result.rows.length === 0) return res.status(404).json({ error: 'app not found' });

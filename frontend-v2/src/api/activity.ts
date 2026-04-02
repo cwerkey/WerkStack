@@ -19,6 +19,21 @@ export interface DeviceStatusEntry {
   lastLatency?: number;
 }
 
+export interface StackStatusEntry {
+  kind: 'container' | 'app';
+  id: string;
+  name: string;
+  image?: string;   // container only
+  typeId?: string;  // app only
+  currentStatus: string;
+  monitorEnabled: boolean;
+  monitorIp: string | null;
+  monitorIntervalS: number;
+  hostId: string | null;
+  vmId?: string | null;    // app only
+  deviceId: string | null;
+}
+
 export interface MonitorConfig {
   intervalS: number;
   timeoutMs: number;
@@ -64,6 +79,15 @@ export interface HeartbeatPayload {
 }
 
 // ── Query Hooks ───────────────────────────────────────────────────────────────
+
+export function useGetStackStatus(siteId: string) {
+  return useQuery({
+    queryKey: ['monitor-stack-status', siteId],
+    queryFn: () => api.get<StackStatusEntry[]>(`/api/sites/${siteId}/monitor/stack-status`),
+    enabled: !!siteId,
+    refetchInterval: 120_000,
+  });
+}
 
 export function useGetActivityStatus(siteId: string) {
   return useQuery({

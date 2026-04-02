@@ -94,10 +94,20 @@ export function useCommitDockerCompose(siteId: string) {
 export function useToggleContainerMonitor(siteId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ containerId, monitorEnabled }: { containerId: string; monitorEnabled: boolean }) =>
-      api.patch<Container>(`/api/sites/${siteId}/containers/${containerId}/monitor`, { monitorEnabled }),
+    mutationFn: ({ containerId, monitorEnabled, monitorIp, monitorIntervalS }: {
+      containerId: string;
+      monitorEnabled: boolean;
+      monitorIp?: string | null;
+      monitorIntervalS?: number;
+    }) =>
+      api.patch<Container>(`/api/sites/${siteId}/containers/${containerId}/monitor`, {
+        monitorEnabled,
+        ...(monitorIp !== undefined ? { monitorIp } : {}),
+        ...(monitorIntervalS !== undefined ? { monitorIntervalS } : {}),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['containers', siteId] });
+      qc.invalidateQueries({ queryKey: ['monitor-stack-status', siteId] });
     },
   });
 }

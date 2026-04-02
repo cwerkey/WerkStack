@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import type { DrawerTab, DeviceInstance, DeviceTemplate, Connection, PlacedBlock, OsVm, Container } from '@werkstack/shared';
+import type { DrawerTab, DeviceInstance, DeviceTemplate, Connection, PlacedBlock, OsVm, OsApp, Container } from '@werkstack/shared';
 import { BLOCK_DEF_MAP } from '@werkstack/shared';
 import { useNavStore } from '@/stores/navStore';
 import { useTypesStore } from '@/stores/typesStore';
@@ -32,11 +32,13 @@ import {
   useUpdateOsHost,
   useGetOsVms,
   useCreateOsVm,
+  useUpdateOsVm,
   useGetOsApps,
   useCreateOsApp,
+  useUpdateOsApp,
   useToggleAppMonitor,
 } from '@/api/os-stack';
-import { useGetDeviceContainers, useCreateContainer, useToggleContainerMonitor } from '@/api/containers';
+import { useGetDeviceContainers, useCreateContainer, useUpdateContainer, useToggleContainerMonitor } from '@/api/containers';
 import { useGetSubnets, useGetSiteIps } from '@/api/network';
 import { ZoneSidebar } from './ZoneSidebar';
 import { RackView } from './RackView';
@@ -60,6 +62,7 @@ import { DockerComposeImport } from '@/wizards/DockerComposeImport';
 import { ContainerModal } from './DetailDrawer/ContainerModal';
 import { OsHostModal } from './DetailDrawer/OsHostModal';
 import { AppModal } from './DetailDrawer/AppModal';
+import { StackMonitorModal } from './DetailDrawer/StackMonitorModal';
 import { RackPickerModal } from './RackPickerModal';
 import { ShelfDetailModal } from './ShelfDetailModal';
 import { ExportDropdown } from '@/components/ExportDropdown';
@@ -131,10 +134,13 @@ export default function RackViewHub() {
   const createPool = useCreatePool(siteId);
   const installModule = useInstallModule(siteId, selectedDeviceId ?? '');
   const createOsVm = useCreateOsVm(siteId);
+  const updateOsVm = useUpdateOsVm(siteId);
   const createOsHost = useCreateOsHost(siteId);
   const updateOsHost = useUpdateOsHost(siteId);
   const createOsApp = useCreateOsApp(siteId);
+  const updateOsApp = useUpdateOsApp(siteId);
   const createContainer = useCreateContainer(siteId);
+  const updateContainer = useUpdateContainer(siteId);
   const toggleContainerMonitor = useToggleContainerMonitor(siteId);
   const toggleAppMonitor = useToggleAppMonitor(siteId);
   const updateMonitor = useUpdateDeviceMonitor(siteId);
@@ -176,6 +182,7 @@ export default function RackViewHub() {
 
   // Container modal state
   const [containerModalOpen, setContainerModalOpen] = useState(false);
+  const [editingContainer, setEditingContainer] = useState<Container | null>(null);
 
   // OS host modal state
   const [osHostModalOpen, setOsHostModalOpen] = useState(false);
@@ -183,6 +190,12 @@ export default function RackViewHub() {
 
   // App modal state
   const [appModalOpen, setAppModalOpen] = useState(false);
+  const [editingApp, setEditingApp] = useState<OsApp | null>(null);
+
+  // Stack monitor config modal
+  const [stackMonitorOpen, setStackMonitorOpen] = useState(false);
+  const [stackMonitorItem, setStackMonitorItem] = useState<Container | OsApp | null>(null);
+  const [stackMonitorKind, setStackMonitorKind] = useState<'container' | 'app'>('container');
 
   // Toast state
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -675,19 +688,37 @@ export default function RackViewHub() {
               setVmWizardHostId(hostId);
               setVmWizardOpen(true);
             }}
-            onAddContainer={() => setContainerModalOpen(true)}
+            onAddContainer={() => { setEditingContainer(null); setContainerModalOpen(true); }}
             onImportCompose={() => setComposeImportOpen(true)}
             onConfigureOs={(host) => {
               setOsHostModalInitial(host);
               setOsHostModalOpen(true);
             }}
-            onAddApp={() => setAppModalOpen(true)}
+            onAddApp={() => { setEditingApp(null); setAppModalOpen(true); }}
             onToggleContainerMonitor={(containerId, enabled) =>
               toggleContainerMonitor.mutate({ containerId, monitorEnabled: enabled })
             }
             onToggleAppMonitor={(appId, enabled) =>
               toggleAppMonitor.mutate({ appId, monitorEnabled: enabled })
             }
+            onEditContainer={(container) => {
+              setEditingContainer(container);
+              setContainerModalOpen(true);
+            }}
+            onEditApp={(app) => {
+              setEditingApp(app);
+              setAppModalOpen(true);
+            }}
+            onConfigContainerMonitor={(container) => {
+              setStackMonitorItem(container);
+              setStackMonitorKind('container');
+              setStackMonitorOpen(true);
+            }}
+            onConfigAppMonitor={(app) => {
+              setStackMonitorItem(app);
+              setStackMonitorKind('app');
+              setStackMonitorOpen(true);
+            }}
           />
         )}
         {selectedDevice && drawerTab === 'network' && (
@@ -872,12 +903,19 @@ export default function RackViewHub() {
           <ContainerModal
             open={containerModalOpen}
             hostId={host.id}
+            initial={editingContainer ?? undefined}
             onSubmit={(payload) => {
-              createContainer.mutate(payload, {
-                onSuccess: () => setContainerModalOpen(false),
-              });
+              if (editingContainer) {
+                updateContainer.mutate({ id: editingContainer.id, ...payload }, {
+                  onSuccess: () => { setContainerModalOpen(false); setEditingContainer(null); },
+                });
+              } else {
+                createContainer.mutate(payload, {
+                  onSuccess: () => setContainerModalOpen(false),
+                });
+              }
             }}
-            onClose={() => setContainerModalOpen(false)}
+            onClose={() => { setContainerModalOpen(false); setEditingContainer(null); }}
           />
         );
       })()}
@@ -922,15 +960,50 @@ export default function RackViewHub() {
             open={appModalOpen}
             host={host}
             vms={deviceVms}
+            initial={editingApp ?? undefined}
             onSubmit={(payload) => {
-              createOsApp.mutate(payload, {
-                onSuccess: () => setAppModalOpen(false),
-              });
+              if (editingApp) {
+                updateOsApp.mutate({ id: editingApp.id, ...payload }, {
+                  onSuccess: () => { setAppModalOpen(false); setEditingApp(null); },
+                });
+              } else {
+                createOsApp.mutate(payload, {
+                  onSuccess: () => setAppModalOpen(false),
+                });
+              }
             }}
-            onClose={() => setAppModalOpen(false)}
+            onClose={() => { setAppModalOpen(false); setEditingApp(null); }}
           />
         );
       })()}
+
+      {/* Stack Monitor Config Modal */}
+      <StackMonitorModal
+        open={stackMonitorOpen}
+        item={stackMonitorItem}
+        kind={stackMonitorKind}
+        onSave={(monitorEnabled, monitorIp, monitorIntervalS) => {
+          if (!stackMonitorItem) return;
+          if (stackMonitorKind === 'container') {
+            toggleContainerMonitor.mutate({
+              containerId: stackMonitorItem.id,
+              monitorEnabled,
+              monitorIp,
+              monitorIntervalS,
+            });
+          } else {
+            toggleAppMonitor.mutate({
+              appId: stackMonitorItem.id,
+              monitorEnabled,
+              monitorIp,
+              monitorIntervalS,
+            });
+          }
+          setStackMonitorOpen(false);
+          setStackMonitorItem(null);
+        }}
+        onClose={() => { setStackMonitorOpen(false); setStackMonitorItem(null); }}
+      />
 
       {/* Toast */}
       {toastMsg && (

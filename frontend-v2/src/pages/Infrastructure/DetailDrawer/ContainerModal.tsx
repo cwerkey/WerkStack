@@ -6,6 +6,7 @@ import type { Container } from '@werkstack/shared';
 interface ContainerModalProps {
   open: boolean;
   hostId: string;
+  initial?: Container;
   onSubmit: (body: Omit<Container, 'id' | 'orgId' | 'siteId' | 'createdAt'>) => void;
   onClose: () => void;
 }
@@ -122,7 +123,7 @@ const blankVolume = (): VolumeRow => ({ hostPath: '', containerPath: '', readOnl
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function ContainerModal({ open, hostId, onSubmit, onClose }: ContainerModalProps) {
+export function ContainerModal({ open, hostId, initial, onSubmit, onClose }: ContainerModalProps) {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
   const [tag, setTag] = useState('latest');
@@ -132,19 +133,30 @@ export function ContainerModal({ open, hostId, onSubmit, onClose }: ContainerMod
   const [restartPolicy, setRestartPolicy] = useState<Container['restartPolicy']>('no');
   const [notes, setNotes] = useState('');
 
-  // Reset state when modal opens
+  // Reset/populate state when modal opens
   useEffect(() => {
     if (open) {
-      setName('');
-      setImage('');
-      setTag('latest');
-      setPorts([]);
-      setVolumes([]);
-      setNetwork('');
-      setRestartPolicy('no');
-      setNotes('');
+      if (initial) {
+        setName(initial.name);
+        setImage(initial.image);
+        setTag(initial.tag);
+        setPorts(initial.ports.map(p => ({ hostPort: p.hostPort, containerPort: p.containerPort, protocol: p.protocol })));
+        setVolumes(initial.volumes.map(v => ({ hostPath: v.hostPath, containerPath: v.containerPath, readOnly: v.readOnly })));
+        setNetwork(initial.networks[0] ?? '');
+        setRestartPolicy(initial.restartPolicy);
+        setNotes(initial.notes ?? '');
+      } else {
+        setName('');
+        setImage('');
+        setTag('latest');
+        setPorts([]);
+        setVolumes([]);
+        setNetwork('');
+        setRestartPolicy('no');
+        setNotes('');
+      }
     }
-  }, [open]);
+  }, [open, initial]);
 
   if (!open) return null;
 
@@ -221,7 +233,7 @@ export function ContainerModal({ open, hostId, onSubmit, onClose }: ContainerMod
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 13, fontWeight: 600, color: '#d4d9dd' }}>
-            Add Container
+            {initial ? 'Edit Container' : 'Add Container'}
           </span>
           <button style={removeRowBtnStyle} onClick={onClose} aria-label="Close">×</button>
         </div>
@@ -385,7 +397,7 @@ export function ContainerModal({ open, hostId, onSubmit, onClose }: ContainerMod
             onClick={handleSubmit}
             disabled={!canSubmit}
           >
-            Create Container
+            {initial ? 'Save Changes' : 'Create Container'}
           </button>
         </div>
       </div>

@@ -5,6 +5,7 @@ interface AppModalProps {
   open: boolean;
   host: OsHost | null;
   vms: OsVm[];
+  initial?: OsApp;
   onSubmit: (body: Omit<OsApp, 'id' | 'orgId' | 'siteId' | 'createdAt'>) => void;
   onClose: () => void;
 }
@@ -36,7 +37,7 @@ const APP_TYPE_SUGGESTIONS = [
   'at-media', 'at-storage', 'at-database', 'at-gaming', 'at-automation',
 ];
 
-export function AppModal({ open, host, vms, onSubmit, onClose }: AppModalProps) {
+export function AppModal({ open, host, vms, initial, onSubmit, onClose }: AppModalProps) {
   const [parent, setParent] = useState<ParentSelection>('');
   const [name, setName] = useState('');
   const [typeId, setTypeId] = useState('');
@@ -47,15 +48,30 @@ export function AppModal({ open, host, vms, onSubmit, onClose }: AppModalProps) 
 
   useEffect(() => {
     if (open) {
-      setParent('');
-      setName('');
-      setTypeId('');
-      setVersion('');
-      setIp('');
-      setUrl('');
-      setNotes('');
+      if (initial) {
+        const p: ParentSelection = initial.vmId
+          ? { type: 'vm', id: initial.vmId }
+          : initial.hostId
+            ? { type: 'host', id: initial.hostId }
+            : '';
+        setParent(p);
+        setName(initial.name);
+        setTypeId(initial.typeId ?? '');
+        setVersion(initial.version ?? '');
+        setIp(initial.ip ?? '');
+        setUrl(initial.url ?? '');
+        setNotes(initial.notes ?? '');
+      } else {
+        setParent('');
+        setName('');
+        setTypeId('');
+        setVersion('');
+        setIp('');
+        setUrl('');
+        setNotes('');
+      }
     }
-  }, [open]);
+  }, [open, initial]);
 
   if (!open) return null;
 
@@ -110,7 +126,7 @@ export function AppModal({ open, host, vms, onSubmit, onClose }: AppModalProps) 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontFamily: 'Inter,system-ui,sans-serif', fontSize: 14, fontWeight: 600, color: '#d4d9dd' }}>
-            Add Application
+            {initial ? 'Edit Application' : 'Add Application'}
           </span>
           <button
             onClick={onClose}
@@ -226,7 +242,7 @@ export function AppModal({ open, host, vms, onSubmit, onClose }: AppModalProps) 
             disabled={!canSubmit}
             onClick={handleSubmit}
           >
-            Create App
+            {initial ? 'Save Changes' : 'Create App'}
           </button>
         </div>
       </div>

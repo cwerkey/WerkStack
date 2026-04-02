@@ -170,6 +170,71 @@ module.exports = function monitorRoutes(db) {
     }
   });
 
+  // GET /stack-status — monitored containers and apps for the Activity page
+  router.get('/stack-status', async (req, res) => {
+    const { orgId }  = req.user;
+    const { siteId } = req.params;
+    try {
+      const result = await withOrg(db, orgId, async (c) => {
+        const containersRes = await c.query(
+          `SELECT c.id, c.name, c.status, c.image, c.tag, c.host_id,
+                  c.monitor_enabled, c.monitor_ip, c.monitor_interval_s,
+                  oh.device_id
+           FROM containers c
+           LEFT JOIN os_hosts oh ON oh.id = c.host_id
+           WHERE c.site_id = $1 AND c.org_id = $2 AND c.monitor_enabled = true
+           ORDER BY c.name`,
+          [siteId, orgId]
+        );
+
+        const appsRes = await c.query(
+          `SELECT a.id, a.name, a.type_id, a.ip, a.vm_id, a.host_id,
+                  a.monitor_enabled, a.monitor_ip, a.monitor_interval_s,
+                  oh.device_id
+           FROM os_apps a
+           LEFT JOIN os_hosts oh ON oh.id = a.host_id
+           WHERE a.site_id = $1 AND a.org_id = $2 AND a.monitor_enabled = true
+           ORDER BY a.name`,
+          [siteId, orgId]
+        );
+
+        const containers = containersRes.rows.map(r => ({
+          kind:             'container',
+          id:               r.id,
+          name:             r.name,
+          image:            `${r.image}:${r.tag}`,
+          currentStatus:    r.status,
+          monitorEnabled:   true,
+          monitorIp:        r.monitor_ip ?? null,
+          monitorIntervalS: r.monitor_interval_s ?? 60,
+          hostId:           r.host_id ?? null,
+          deviceId:         r.device_id ?? null,
+        }));
+
+        const apps = appsRes.rows.map(r => ({
+          kind:             'app',
+          id:               r.id,
+          name:             r.name,
+          typeId:           r.type_id,
+          currentStatus:    'unknown',
+          monitorEnabled:   true,
+          monitorIp:        r.monitor_ip ?? r.ip ?? null,
+          monitorIntervalS: r.monitor_interval_s ?? 60,
+          hostId:           r.host_id ?? null,
+          vmId:             r.vm_id ?? null,
+          deviceId:         r.device_id ?? null,
+        }));
+
+        return [...containers, ...apps];
+      });
+
+      res.json(result);
+    } catch (err) {
+      console.error('[GET /monitor/stack-status]', err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
+
   router.get('/heartbeats/:deviceId', async (req, res) => {
     const { orgId }  = req.user;
     const { siteId, deviceId } = req.params;

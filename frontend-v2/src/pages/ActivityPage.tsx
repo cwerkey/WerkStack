@@ -5,12 +5,16 @@ import { useNavStore } from '@/stores/navStore';
 import {
   useGetActivityStatus,
   useGetActivityEvents,
+  useGetStackStatus,
   useUpdateDeviceMonitor,
   type DeviceStatus,
   type EventType,
   type DeviceEvent,
   type DeviceStatusEntry,
+  type StackStatusEntry,
 } from '@/api/activity';
+import { useToggleContainerMonitor } from '@/api/containers';
+import { useToggleAppMonitor } from '@/api/os-stack';
 import QueryErrorState from '@/components/QueryErrorState';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { exportToCSV } from '@/utils/exportUtils';
@@ -204,6 +208,141 @@ function DeviceCard({ entry, siteId, onClick, onNavigate }: DeviceCardProps) {
   );
 }
 
+// ── Stack Card (containers + apps) ────────────────────────────────────────────
+
+const CONTAINER_STATUS_COLOR: Record<string, string> = {
+  running: '#22c55e',
+  stopped: '#ef4444',
+  paused:  '#f59e0b',
+  unknown: '#6b7280',
+};
+
+interface StackCardProps {
+  entry: StackStatusEntry;
+  siteId: string;
+  onClick: () => void;
+}
+
+function StackCard({ entry, siteId, onClick }: StackCardProps) {
+  const dotColor = entry.kind === 'container'
+    ? (CONTAINER_STATUS_COLOR[entry.currentStatus] ?? '#6b7280')
+    : '#6b7280';
+  const textColor = dotColor;
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [configIp, setConfigIp] = useState(entry.monitorIp ?? '');
+  const [configInterval, setConfigInterval] = useState(String(entry.monitorIntervalS ?? 60));
+  const editorRef = useRef<HTMLDivElement>(null);
+  const toggleContainerMonitor = useToggleContainerMonitor(siteId);
+  const toggleAppMonitor = useToggleAppMonitor(siteId);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (editorRef.current && !editorRef.current.contains(e.target as Node)) {
+        setEditorOpen(false);
+        setConfigOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [editorOpen]);
+
+  function handleToggleMonitor() {
+    if (entry.kind === 'container') {
+      toggleContainerMonitor.mutate({ containerId: entry.id, monitorEnabled: !entry.monitorEnabled });
+    } else {
+      toggleAppMonitor.mutate({ appId: entry.id, monitorEnabled: !entry.monitorEnabled });
+    }
+    setEditorOpen(false);
+  }
+
+  function handleSaveConfig() {
+    if (entry.kind === 'container') {
+      toggleContainerMonitor.mutate({
+        containerId: entry.id,
+        monitorEnabled: entry.monitorEnabled,
+        monitorIp: configIp || null,
+        monitorIntervalS: parseInt(configInterval, 10) || 60,
+      });
+    } else {
+      toggleAppMonitor.mutate({
+        appId: entry.id,
+        monitorEnabled: entry.monitorEnabled,
+        monitorIp: configIp || null,
+        monitorIntervalS: parseInt(configInterval, 10) || 60,
+      });
+    }
+    setConfigOpen(false);
+    setEditorOpen(false);
+  }
+
+  const subtitle = entry.kind === 'container' ? (entry.image ?? '') : (entry.typeId ?? 'app');
+
+  return (
+    <div className={styles.deviceCard} onClick={onClick}>
+      <div className={styles.cardOverlay} onClick={e => e.stopPropagation()}>
+        <div className={styles.cardEditorWrap} ref={editorRef}>
+          <button
+            className={styles.cardEditorBtn}
+            title="Quick settings"
+            onClick={e => { e.stopPropagation(); setEditorOpen(v => !v); setConfigOpen(false); }}
+          >
+            ⋯
+          </button>
+          {editorOpen && (
+            <div className={styles.editorDropdown}>
+              <button className={styles.editorItem} onClick={handleToggleMonitor}>
+                {entry.monitorEnabled ? 'Disable monitoring' : 'Enable monitoring'}
+              </button>
+              <button className={styles.editorItem} onClick={() => setConfigOpen(v => !v)}>
+                Configure...
+              </button>
+              {configOpen && (
+                <div className={styles.configPopup}>
+                  <label className={styles.configLabel}>
+                    Ping IP
+                    <input
+                      className={styles.configInput}
+                      value={configIp}
+                      onChange={e => setConfigIp(e.target.value)}
+                      placeholder={entry.monitorIp ?? 'IP address'}
+                    />
+                  </label>
+                  <label className={styles.configLabel}>
+                    Interval (s)
+                    <input
+                      className={styles.configInput}
+                      type="number"
+                      min={10}
+                      value={configInterval}
+                      onChange={e => setConfigInterval(e.target.value)}
+                    />
+                  </label>
+                  <button className={styles.configSaveBtn} onClick={handleSaveConfig}>
+                    Save
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className={styles.cardTop}>
+        <span className={styles.statusDot} style={{ background: dotColor }} />
+        <span className={styles.cardName}>{entry.name}</span>
+      </div>
+      <div className={styles.cardMeta}>
+        <span className={styles.statusText} style={{ color: textColor }}>
+          {entry.currentStatus}
+        </span>
+        <span className={styles.cardDetail}>{subtitle}</span>
+      </div>
+    </div>
+  );
+}
+
 function EventBadge({ type }: { type: EventType }) {
   return (
     <span className={`${styles.badge} ${EVENT_BADGE_CLASS[type] ?? styles.badgeManual}`}>
@@ -226,6 +365,8 @@ export default function ActivityPage() {
     dataUpdatedAt,
     isFetching,
   } = statusQ;
+
+  const { data: stackStatus = [], isLoading: stackLoading } = useGetStackStatus(siteId);
 
   const { data: allEvents = [], isLoading: eventsLoading } = useGetActivityEvents(siteId);
 
@@ -338,6 +479,31 @@ export default function ActivityPage() {
             </div>
           )}
         </div>
+
+        {/* Apps & Containers Status Cards */}
+        {(stackLoading || stackStatus.length > 0) && (
+          <div className={styles.cardsSection}>
+            <div className={styles.sectionLabel}>Apps &amp; Containers</div>
+            {stackLoading ? (
+              <div className={styles.loadingText}>Loading...</div>
+            ) : (
+              <div className={styles.cardsGrid}>
+                {stackStatus.map(entry => (
+                  <StackCard
+                    key={`${entry.kind}-${entry.id}`}
+                    entry={entry}
+                    siteId={siteId}
+                    onClick={() => {
+                      if (entry.deviceId) {
+                        setDeviceFilter(prev => prev === entry.deviceId! ? '' : entry.deviceId!);
+                      }
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Activity Log */}
         <div className={styles.logSection}>
